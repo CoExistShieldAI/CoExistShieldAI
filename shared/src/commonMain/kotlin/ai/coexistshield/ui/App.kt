@@ -118,7 +118,7 @@ fun App() {
         }
         var mapSelectedEntity by remember { mutableStateOf<ai.coexistshield.ui.map.SelectedEntityDetails?>(null) }
         val mapState = GisMapUiState(
-            userLocation = GeoLocation(38.256, 140.321),
+            userLocation = GeoLocation(39.702, 141.152),
             activeLayers = mapLayers,
             selectedEntity = mapSelectedEntity,
             userRole = currentRole

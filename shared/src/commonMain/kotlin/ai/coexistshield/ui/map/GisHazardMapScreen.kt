@@ -74,7 +74,7 @@ data class SelectedEntityDetails(
 )
 
 data class GisMapUiState(
-    val userLocation: GeoLocation? = GeoLocation(38.256, 140.321),
+    val userLocation: GeoLocation? = GeoLocation(39.702, 141.152),
     val activeGeofences: List<GeofenceZone> = emptyList(),
     val activeLayers: Set<MapLayerType> = setOf(
         MapLayerType.ROADKILL,

@@ -18,7 +18,7 @@ class GeminiTriageService(
         longitude: Double
     ): Result<GeminiTriageResult> {
         return runCatching {
-            val response: ForensicTriageResponse = httpClient.post("http://localhost/api/v1/forensics/triage") {
+            val response: ForensicTriageResponse = httpClient.post("/api/v1/forensics/triage") {
                 contentType(ContentType.Application.Json)
                 setBody(
                     ForensicTriageRequest(

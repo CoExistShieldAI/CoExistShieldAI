@@ -61,7 +61,7 @@ import androidx.compose.ui.unit.sp
 
 data class IncidentReportUiState(
     val photoCount: Int = 1,
-    val location: GeoLocation = GeoLocation(38.256, 140.321),
+    val location: GeoLocation = GeoLocation(39.702, 141.152),
     val selectedCategory: ReportCategory = ReportCategory.ATTRACTANT_FRUIT_TREE,
     val geminiTriageResult: GeminiTriageResult? = GeminiTriageResult(
         detectedLabel = "Diospyros kaki (Persimmon)",
