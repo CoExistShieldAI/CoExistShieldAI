@@ -114,3 +114,49 @@ data class GeneratePlumeGeofencesResponse(
     val createdAt: String
 )
 
+@Serializable
+data class IncidentMemoryRecordDto(
+    val memoryId: String,
+    val region: String,
+    val species: String,
+    val category: String,
+    val severityTier: AlertTier,
+    val narrative: String,
+    val outcome: String,
+    val cosineSimilarity: Double = 0.0
+)
+
+@Serializable
+data class MemorySearchRequestDto(
+    val queryText: String,
+    val region: String? = null,
+    val species: String? = null,
+    val topK: Int = 3,
+    val minSimilarity: Double = 0.50
+)
+
+@Serializable
+data class MemorySearchResponseDto(
+    val queryVectorGenerated: Boolean = true,
+    val matches: List<IncidentMemoryRecordDto> = emptyList(),
+    val elevatedTier: AlertTier? = null,
+    val elevationReason: String? = null
+)
+
+@Serializable
+data class CausalAlertExplanationRequestDto(
+    val tier: AlertTier,
+    val targetSpecies: String,
+    val region: String = "JAPAN",
+    val retrieveMemory: Boolean = true
+)
+
+@Serializable
+data class CausalAlertExplanationResponseDto(
+    val explanation: String,
+    val historicalAnalogs: List<IncidentMemoryRecordDto> = emptyList(),
+    val elevatedFromTier: AlertTier? = null,
+    val effectiveTier: AlertTier
+)
+
+

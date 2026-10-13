@@ -162,5 +162,90 @@ class ApiClientTest {
         assertEquals(0.88, zone.activeRiskScore)
         assertEquals("Polygon", zone.polygonGeoJson?.type)
     }
+
+    @Test
+    fun testEpisodicMemorySearchApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "queryVectorGenerated": true,
+                "matches": [
+                    {
+                        "memoryId": "mem_jp_01",
+                        "region": "JAPAN",
+                        "species": "BEAR",
+                        "category": "ATTACK",
+                        "severityTier": "TIER_3_DANGER",
+                        "narrative": "Backyard Incursion near school route",
+                        "outcome": "Severe human injury",
+                        "cosineSimilarity": 0.912
+                    }
+                ],
+                "elevatedTier": "TIER_3_DANGER",
+                "elevationReason": "Elevated to Tier 3 Danger: Conditions match severe historical attack pattern."
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.searchEpisodicMemory(
+            MemorySearchRequestDto(
+                queryText = "Asian Black Bear incursion near unharvested persimmon trees in Iwate valley with West wind",
+                region = "JAPAN",
+                species = "BEAR",
+                minSimilarity = 0.50
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertTrue(data.queryVectorGenerated)
+        assertEquals(1, data.matches.size)
+        assertEquals("mem_jp_01", data.matches.first().memoryId)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_3_DANGER, data.elevatedTier)
+    }
+
+    @Test
+    fun testExplainAlertApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "explanation": "Tier 2 Warning: Conditions match 1 historical bear incident with attack attractants; elevated caution advised.",
+                "historicalAnalogs": [
+                    {
+                        "memoryId": "mem_jp_01",
+                        "region": "JAPAN",
+                        "species": "BEAR",
+                        "category": "ATTACK",
+                        "severityTier": "TIER_3_DANGER",
+                        "narrative": "Backyard Incursion",
+                        "outcome": "Severe injury",
+                        "cosineSimilarity": 0.89
+                    }
+                ],
+                "elevatedFromTier": "TIER_1_NOTICE",
+                "effectiveTier": "TIER_2_WARNING"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.explainAlert(
+            CausalAlertExplanationRequestDto(
+                tier = ai.coexistshield.model.AlertTier.TIER_1_NOTICE,
+                targetSpecies = "Asian Black Bear",
+                region = "JAPAN",
+                retrieveMemory = true
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, data.effectiveTier)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_1_NOTICE, data.elevatedFromTier)
+        assertEquals(1, data.historicalAnalogs.size)
+        assertTrue(data.explanation.contains("Tier 2 Warning"))
+    }
 }
+
 

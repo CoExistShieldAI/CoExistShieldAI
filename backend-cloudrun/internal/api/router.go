@@ -9,6 +9,7 @@ import (
 
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
+	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/model"
 )
 
@@ -16,13 +17,15 @@ type Router struct {
 	mux            *http.ServeMux
 	geminiClient   *gemini.Client
 	geofenceEngine *geofence.Engine
+	memoryBank     *memory.Bank
 }
 
-func NewRouter(geminiClient *gemini.Client, geofenceEngine *geofence.Engine) *Router {
+func NewRouter(geminiClient *gemini.Client, geofenceEngine *geofence.Engine, memoryBank *memory.Bank) *Router {
 	r := &Router{
 		mux:            http.NewServeMux(),
 		geminiClient:   geminiClient,
 		geofenceEngine: geofenceEngine,
+		memoryBank:     memoryBank,
 	}
 	r.registerRoutes()
 	return r
@@ -49,6 +52,8 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
 	r.mux.HandleFunc("/api/v1/analytics/japan-kaki/top-hazards", r.handleTopHazards)
 	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.handleRspoExport)
+	r.mux.HandleFunc("/api/v1/memory/search", r.handleMemorySearch)
+	r.mux.HandleFunc("/api/v1/alerts/explain", r.handleAlertExplanation)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -154,6 +159,71 @@ AUD-2026-001,%s,2026,0,18,342
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(csvData))
+}
+
+func (r *Router) handleMemorySearch(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var searchReq model.MemorySearchRequest
+	if err := json.NewDecoder(req.Body).Decode(&searchReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	resp := r.memoryBank.SearchAnalogousIncidents(searchReq)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleAlertExplanation(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var explainReq model.CausalAlertExplanationRequest
+	if err := json.NewDecoder(req.Body).Decode(&explainReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	effectiveTier := explainReq.Tier
+	elevatedFrom := ""
+	var analogs []model.IncidentMemoryRecord
+
+	// Retrieve historical analogs if requested
+	if explainReq.RetrieveMemory {
+		queryText := fmt.Sprintf("Species: %s | Region: %s | Weather: %+v | Attractants: %+v",
+			explainReq.TargetSpecies, explainReq.Region, explainReq.Weather, explainReq.NearbyAttractants)
+		searchResp := r.memoryBank.SearchAnalogousIncidents(model.MemorySearchRequest{
+			QueryText: queryText,
+			Region:    explainReq.Region,
+			Species:   explainReq.TargetSpecies,
+			TopK:      3,
+		})
+
+		analogs = searchResp.Matches
+		if searchResp.ElevatedTier != "" && searchResp.ElevatedTier != explainReq.Tier {
+			elevatedFrom = explainReq.Tier
+			effectiveTier = searchResp.ElevatedTier
+		}
+	}
+
+	explainReq.Tier = effectiveTier
+	explanation, err := r.geminiClient.GenerateExplainableAlert(req.Context(), explainReq, analogs)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Explanation synthesis error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, model.CausalAlertExplanationResponse{
+		Explanation:       explanation,
+		HistoricalAnalogs: analogs,
+		ElevatedFromTier:  elevatedFrom,
+		EffectiveTier:     effectiveTier,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

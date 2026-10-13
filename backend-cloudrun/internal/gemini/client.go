@@ -195,3 +195,92 @@ func mockTriage(req model.ForensicTriageRequest) *model.ForensicTriageResponse {
 		Notes:           "Verified wildlife sighting in suburban fringe zone.",
 	}
 }
+
+// GenerateExplainableAlert synthesizes causal weather, attractants, and historical episodic analogs
+// into an urgent, transparent natural language justification displayed on the Main HUD.
+func (c *Client) GenerateExplainableAlert(ctx context.Context, req model.CausalAlertExplanationRequest, analogs []model.IncidentMemoryRecord) (string, error) {
+	if c.apiKey == "" {
+		return mockExplanation(req, analogs), nil
+	}
+
+	var analogContext string
+	if len(analogs) > 0 {
+		analogContext = fmt.Sprintf("Historical Analogs: %d past incident(s) under similar causal signature. Primary analog: %s (Outcome: %s)", len(analogs), analogs[0].Narrative, analogs[0].Outcome)
+	}
+
+	prompt := fmt.Sprintf(`You are an autonomous wildlife protection AI.
+Synthesize a single, urgent but calm sentence in English (max 25 words) explaining why this specific risk tier was triggered based on causal drivers and historical memory.
+
+Target Tier: %s
+Species: %s
+Weather: %+v
+Nearby Attractants: %+v
+%s
+
+Direct output: Only the single sentence without quotes or preamble.`, req.Tier, req.TargetSpecies, req.Weather, req.NearbyAttractants, analogContext)
+
+	gReq := geminiRequest{
+		Contents: []geminiContent{
+			{
+				Parts: []geminiPart{
+					{
+						Text: prompt,
+					},
+				},
+			},
+		},
+		GenerationConfig: &geminiGenerationConfig{
+			Temperature: 0.2,
+		},
+	}
+
+	bodyBytes, err := json.Marshal(gReq)
+	if err != nil {
+		return mockExplanation(req, analogs), nil
+	}
+
+	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%s", c.apiKey)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return mockExplanation(req, analogs), nil
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return mockExplanation(req, analogs), nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return mockExplanation(req, analogs), nil
+	}
+
+	var gResp geminiResponse
+	if err := json.NewDecoder(resp.Body).Decode(&gResp); err != nil {
+		return mockExplanation(req, analogs), nil
+	}
+
+	if len(gResp.Candidates) > 0 && len(gResp.Candidates[0].Content.Parts) > 0 {
+		text := strings.TrimSpace(gResp.Candidates[0].Content.Parts[0].Text)
+		if text != "" {
+			return text, nil
+		}
+	}
+
+	return mockExplanation(req, analogs), nil
+}
+
+func mockExplanation(req model.CausalAlertExplanationRequest, analogs []model.IncidentMemoryRecord) string {
+	if len(analogs) > 0 {
+		return fmt.Sprintf("%s: Conditions match %d historical %s incident(s) with %s attractants; elevated caution advised.", req.Tier, len(analogs), strings.ToLower(req.TargetSpecies), strings.ToLower(analogs[0].Category))
+	}
+
+	if req.Tier == "TIER_3_DANGER" {
+		return fmt.Sprintf("IMMEDIATE DANGER: Fresh %s kill-site identified within striking corridor; probability of predator return within 72h is critical.", strings.ToLower(req.TargetSpecies))
+	} else if req.Tier == "TIER_2_WARNING" {
+		return fmt.Sprintf("Tier 2 Warning: New Moon darkness combined with prevailing wind toward unharvested %s attractants elevates intrusion risk.", strings.ToLower(req.TargetSpecies))
+	}
+	return "Clear Zone: Continuous causal sensors indicate safe passage within regional radius."
+}
+

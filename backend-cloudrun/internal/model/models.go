@@ -58,16 +58,49 @@ type TopHazardsResponse struct {
 	PriorityTrees                []PriorityKakiTreeDto `json:"priorityTrees"`
 }
 
+type IncidentMemoryRecord struct {
+	MemoryId        string    `json:"memoryId"`
+	Region          string    `json:"region"`   // JAPAN, THAILAND, INDONESIA
+	Species         string    `json:"species"`  // BEAR, ELEPHANT, TIGER
+	Category        string    `json:"category"` // SIGHTING, ATTACK, CROP_RAID, ROADKILL
+	SeverityTier    string    `json:"severityTier"`
+	Narrative       string    `json:"narrative"`
+	Outcome         string    `json:"outcome"`
+	EmbeddingVector []float64 `json:"embeddingVector,omitempty"` // 768-dim vector
+	CosineSimilarity float64  `json:"cosineSimilarity,omitempty"`
+}
+
+type MemorySearchRequest struct {
+	QueryText     string   `json:"queryText"`
+	Region        string   `json:"region,omitempty"`
+	Species       string   `json:"species,omitempty"`
+	TopK          int      `json:"topK,omitempty"`
+	MinSimilarity float64  `json:"minSimilarity,omitempty"` // default 0.85
+}
+
+type MemorySearchResponse struct {
+	QueryVectorGenerated bool                   `json:"queryVectorGenerated"`
+	Matches              []IncidentMemoryRecord `json:"matches"`
+	ElevatedTier         string                 `json:"elevatedTier,omitempty"`
+	ElevationReason      string                 `json:"elevationReason,omitempty"`
+}
+
 type CausalAlertExplanationRequest struct {
 	Tier              string                 `json:"tier"`
 	TargetSpecies     string                 `json:"targetSpecies"`
+	Region            string                 `json:"region,omitempty"`
 	Weather           map[string]interface{} `json:"weather"`
 	NearbyAttractants []map[string]interface{} `json:"nearbyAttractants"`
+	RetrieveMemory    bool                   `json:"retrieveMemory,omitempty"`
 }
 
 type CausalAlertExplanationResponse struct {
-	Explanation string `json:"explanation"`
+	Explanation          string                 `json:"explanation"`
+	HistoricalAnalogs    []IncidentMemoryRecord `json:"historicalAnalogs,omitempty"`
+	ElevatedFromTier     string                 `json:"elevatedFromTier,omitempty"`
+	EffectiveTier        string                 `json:"effectiveTier"`
 }
+
 
 // GeoJSON Types adhering to RFC 7946
 

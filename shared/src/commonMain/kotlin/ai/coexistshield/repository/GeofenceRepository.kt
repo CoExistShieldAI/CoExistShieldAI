@@ -74,5 +74,28 @@ class GeofenceRepository(
             }.body()
         }
     }
+
+    suspend fun searchEpisodicMemory(
+        request: ai.coexistshield.network.MemorySearchRequestDto
+    ): Result<ai.coexistshield.network.MemorySearchResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/memory/search") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
+
+    suspend fun explainAlert(
+        request: ai.coexistshield.network.CausalAlertExplanationRequestDto
+    ): Result<ai.coexistshield.network.CausalAlertExplanationResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/alerts/explain") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
 }
+
 

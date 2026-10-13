@@ -9,13 +9,15 @@ import (
 
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
+	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/model"
 )
 
 func setupTestServer() *Router {
 	geminiClient := gemini.NewClient()
 	geofenceEngine := geofence.NewEngine()
-	return NewRouter(geminiClient, geofenceEngine)
+	memoryBank := memory.NewBank()
+	return NewRouter(geminiClient, geofenceEngine, memoryBank)
 }
 
 func TestHealthz(t *testing.T) {
@@ -238,4 +240,96 @@ func TestScentPlumeGeofencesEndpoint(t *testing.T) {
 		t.Errorf("scent plume should elongate eastward (downwind). eastSpread=%f, westSpread=%f", eastSpread, westSpread)
 	}
 }
+
+func TestMemorySearchEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := model.MemorySearchRequest{
+		QueryText:     "Asian Black Bear incursion near unharvested persimmon trees in Iwate valley with West wind",
+		Region:        "JAPAN",
+		Species:       "BEAR",
+		MinSimilarity: 0.50,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/memory/search", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp model.MemorySearchResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !resp.QueryVectorGenerated {
+		t.Errorf("expected QueryVectorGenerated to be true")
+	}
+	if len(resp.Matches) == 0 {
+		t.Fatalf("expected at least 1 historical analog match, got 0")
+	}
+
+	primary := resp.Matches[0]
+	if primary.Species != "BEAR" || primary.Region != "JAPAN" {
+		t.Errorf("expected BEAR in JAPAN, got %s in %s", primary.Species, primary.Region)
+	}
+	if resp.ElevatedTier == "" {
+		t.Errorf("expected autonomous elevated tier recommendation")
+	}
+}
+
+func TestAlertExplanationEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := model.CausalAlertExplanationRequest{
+		Tier:          "TIER_1_NOTICE",
+		TargetSpecies: "Asian Black Bear",
+		Region:        "JAPAN",
+		Weather: map[string]interface{}{
+			"windSpeedKmh":     14.0,
+			"windDirection":    "W",
+			"moonIllumination": 0.02,
+		},
+		NearbyAttractants: []map[string]interface{}{
+			{
+				"type":      "abandoned_persimmon",
+				"distanceM": 620,
+				"fruitLoad": "ABUNDANT",
+			},
+		},
+		RetrieveMemory: true,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/alerts/explain", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp model.CausalAlertExplanationResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Explanation == "" {
+		t.Errorf("expected non-empty explanation")
+	}
+	if len(resp.HistoricalAnalogs) == 0 {
+		t.Errorf("expected retrieved historical analogs")
+	}
+	if resp.EffectiveTier == "" {
+		t.Errorf("expected effective tier")
+	}
+}
+
 

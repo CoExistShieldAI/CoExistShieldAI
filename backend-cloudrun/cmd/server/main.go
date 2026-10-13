@@ -9,6 +9,7 @@ import (
 	"ai.coexistshield/backend/internal/api"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
+	"ai.coexistshield/backend/internal/memory"
 )
 
 func main() {
@@ -19,8 +20,9 @@ func main() {
 
 	geminiClient := gemini.NewClient()
 	geofenceEngine := geofence.NewEngine()
+	memoryBank := memory.NewBank()
 
-	router := api.NewRouter(geminiClient, geofenceEngine)
+	router := api.NewRouter(geminiClient, geofenceEngine, memoryBank)
 
 	server := &http.Server{
 		Addr:         ":" + port,
