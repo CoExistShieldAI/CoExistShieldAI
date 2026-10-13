@@ -6,11 +6,13 @@
 
 ## 1. Executive Summary & Vision
 
-**CoExist Shield AI** is an intelligent early-warning and autonomous incident response platform engineered to eliminate fatal human-wildlife encounters and safeguard biodiversity.
+**CoExist Shield AI** is an intelligent early-warning and autonomous incident response platform engineered to eliminate fatal human-wildlife encounters, safeguard biodiversity, and reinforce global public health.
 
-At the core of the platform is **Dynamic Predictive Geofencing**. Autonomous AI agents continuously ingest and correlate multi-source environmental and causal data streams to forecast the probability of dangerous wildlife appearances. Based on these predictive models, the system dynamically establishes geofences and delivers a **3-tier early warning notification system** via the **CoExist Shield Mobile Application**, ensuring citizens and field personnel receive actionable notice before entering hazardous zones.
+The platform is designed primarily to resolve high-stakes ecological and economic crises across **Southeast Asia and the broader APAC region**—where aggressive agricultural expansion (palm oil, rubber, sugarcane) directly intersects with critical habitats of endangered megafauna (Asian elephants, tigers), while roadkill and bushmeat trade expose human populations to catastrophic zoonotic disease spillovers. 
 
-In addition, the platform uniquely bridges **wildlife tracking** and **roadkill incident management**, transforming routine municipal carcass disposal into a vital global **"One Health"** safety barrier.
+At the core of the platform is **Dynamic Predictive Geofencing**. Autonomous AI agents continuously ingest and correlate multi-source environmental and causal data streams to forecast the probability of dangerous wildlife appearances. Based on these predictive models, the system dynamically establishes geofences and delivers a **3-tier early warning notification system** via the **CoExist Shield Mobile Application**, ensuring plantation workers, rural villagers, and field rangers receive actionable notice before entering hazardous zones.
+
+Furthermore, the platform demonstrates **cross-border scalability** by expanding its proven algorithms from tropical APAC frontiers to depopulated temperate regions like **Japan**, converting unmanaged agricultural risks into prioritized municipal decision support.
 
 ---
 
@@ -19,38 +21,38 @@ In addition, the platform uniquely bridges **wildlife tracking** and **roadkill 
 ### 2.1 Why Unify Wildlife Tracking and Roadkill Reporting?
 Conventional approaches treat wildlife encounters and roadkill management as disconnected domains. CoExist Shield AI unifies them based on deep ecological and epidemiological connections:
 
-1. **Ecological Corridors:** High-incidence roadkill zones pinpoint natural wildlife movement corridors and migration routes.
-2. **Carcasses as Predatory Magnets (Leading Indicator of Attacks):** Decomposing carcasses left on roadways act as an open buffet, directly attracting apex predators (such as bears, tigers, and leopards) into proximity with human settlements. Roadkill data is a critical **leading indicator** of imminent human-wildlife conflict. Prompt carcass removal neutralizes the attractant before dangerous predators are lured in.
+1. **Ecological Corridors:** High-incidence roadkill zones pinpoint natural wildlife movement corridors and migration routes intersected by modern infrastructure.
+2. **Carcasses as Predatory Magnets (Leading Indicator of Attacks):** Decomposing carcasses left on roadways act as an open buffet, directly attracting apex predators (such as tigers, leopards, and bears) into close proximity with human settlements. Roadkill data is a critical **leading indicator** of imminent human-wildlife conflict. Rapid carcass removal neutralizes the attractant before dangerous carnivores are lured in.
 3. **Global One Health Barrier:**
-   - **Japan:** Modernizes and streamlines carcass collection and road infrastructure management for municipal health and public works departments through AI-driven DX.
-   - **APAC & Tropical Regions:** Serves as an autonomous surveillance net that rapidly identifies breeding grounds for infectious diseases and shuts down illegal, dangerous bushmeat supply chains, preventing the next zoonotic pandemic.
+   - **APAC & Tropical Regions (Primary):** Serves as an autonomous surveillance net that rapidly identifies breeding grounds for infectious pathogens and shuts down illegal, dangerous bushmeat supply chains, erecting an international defense barrier against the next zoonotic pandemic.
+   - **Japan & Developed Infrastructure (Secondary / Validation):** Modernizes and streamlines carcass collection and road infrastructure maintenance for municipal public health centers through AI-driven DX, proving the operational portability of the system.
 
 ### 2.2 Addressing Root Causes: Ecological Attractants
 
-#### A. Japan: The Abandoned Persimmon (*Kaki*) Myth
-For decades, public consensus assumed that bears invade human settlements primarily because they starve in mountainous habitats. Modern empirical data—derived from the analysis of over 650 bears—disproves this assumption:
-- **The Real Driver:** Bears enter towns predominantly drawn by **unharvested and abandoned persimmon (*kaki*) trees** and fruit groves in depopulated, aging rural communities. These neglected, nutrient-dense fruits act as an irresistible lure directly into human backyards.
-- **Proactive AI Mitigation:** Rather than merely tracking bear coordinates after an encounter occurs, CoExist Shield AI cross-references regional vegetation, crop phenology, and municipal demographic data to evaluate the hazard score of abandoned fruit trees. The system charts optimized harvesting and clearing routes for local community action, extinguishing the root incentive for bears to encroach upon residential areas.
+#### A. Thailand & APAC: Asian Elephant Crop-Raiding Attractants (Sugarcane & Tropical Fruits)
+Human-Elephant Conflict (HEC) in Thailand and Southeast Asia is driven by clear agricultural causality:
+- **The Real Driver:** Wild Asian elephants leave protected forest reserves (e.g., Kaeng Krachan and Kui Buri national parks) not out of random wandering, but driven by acute olfactory attraction to high-calorie, intensely fragrant crops—specifically **sugarcane (*oi*), bananas, ripe jackfruit, and mangoes** cultivated along forest boundaries.
+- **Proactive AI Mitigation:** CoExist Shield AI models the harvest phenology, sugar ripening cycles, and spatial distribution of these attractant crops. The platform builds real-time **Crop Attractant Maps**, enabling plantation managers, farmers, and park rangers to anticipate elephant foraging raids, establish dynamic early-warning buffers, and coordinate harvest schedules before costly incursions occur.
 
-#### B. Thailand & APAC: Asian Elephant Crop-Raiding Attractants (Sugarcane & Tropical Fruits)
-A parallel causal phenomenon drives Human-Elephant Conflict (HEC) in Thailand and Southeast Asia:
-- **The Real Driver:** Wild Asian elephants leave forest boundaries not out of random aggression, but driven by acute olfactory attraction to high-calorie, intensely fragrant agricultural crops—specifically **sugarcane (*oi*), bananas, ripe jackfruit, and mangoes** cultivated along forest fringes.
-- **Proactive AI Mitigation:** CoExist Shield AI models the harvest phenology, sugar ripening cycles, and spatial distribution of these attractant crops. Just like the *Kaki* Map in Japan, the platform builds real-time **Crop Attractant Maps** for Thailand, enabling farmers, park rangers, and local authorities to anticipate elephant foraging raids, establish dynamic early-warning buffers, and coordinate harvest timing.
+#### B. Indonesia, India & Nepal: Tiger Predation Attractants (Livestock Grazing & Kill-Site Caching)
+Apex carnivore encounters (Sumatran and Bengal Tigers) follow distinct predatory prey-attraction dynamics across agricultural frontiers:
+- **The Real Driver:** Tigers are drawn to plantation edges and village fringes by concentrated domestic livestock—**cattle, water buffaloes, goats, and pigs** grazing in open forest-fringe pastures or kept in vulnerable night corrals. Combined with roadside carcasses, domestic herds represent an accessible prey base. Crucially, tigers exhibit **kill-site caching behavior**, returning to feed on a kill over 24 to 72 hours, creating acute flashpoints for fatal human encounters.
+- **Proactive AI Mitigation:** CoExist Shield AI establishes **Livestock Grazing Corrals Maps** and integrates **Livestock Depredation Reporting**. Tracking pasture locations and logging domestic kills enables the AI to project ambush corridors and designate active kill sites as immediate Tier 3 Danger Zones, preventing villagers and plantation workers from walking into returning tigers.
 
-#### C. Indonesia, India & Nepal: Tiger Predation Attractants (Livestock Grazing & Kill-Site Caching)
-Apex predator encounters (Sumatran and Bengal Tigers) follow distinct predatory prey-attraction dynamics:
-- **The Real Driver:** Tigers are drawn to village fringes and forest borders by concentrated domestic livestock—**cattle, water buffaloes, goats, and pigs** grazing in open pastures or kept in vulnerable night corrals. Combined with roadside animal carcasses, domestic herds represent an accessible prey base. Furthermore, tigers exhibit **kill-site caching behavior**, returning to a livestock carcass over 24 to 72 hours, creating acute flashpoints for fatal human encounters.
-- **Proactive AI Mitigation:** CoExist Shield AI establishes **Livestock Grazing Corrals Maps** and integrates **Livestock Depredation Reporting**. Tracking pasture locations and logging domestic kills enables the AI to project ambush corridors and designate active kill sites as immediate Tier 3 Danger Zones, preventing villagers and pastoralists from walking into returning tigers.
+#### C. Japan: Cross-Border Scalability and the Depopulation Factor (*Kaki* Map Decision-Support)
+To prove algorithmic portability across diverse ecosystems, CoExist Shield AI reverse-deploys its causal intelligence to temperate Japan:
+- **The Real Driver:** Analyzing 650+ bear incidents confirms bears enter residential communities predominantly drawn by **unharvested and abandoned persimmon (*kaki*) trees** in rapidly aging, depopulated rural valleys.
+- **Overcoming Legal and Resource Constraints (Decision-Support for Municipalities):** Japanese property laws strictly protect private land, and local governments face acute ranger and financial shortages. Instead of unrealistic volunteer foraging, CoExist Shield AI serves as an **official decision-support dashboard for Municipal Wildlife Control Teams (*Chōjū Higai Taisaku Jisshitai*)**. The AI pinpoints the **highest-risk top 5% of abandoned trees**, empowering local governments to legally target limited pruning budgets and utilize **Government Crowdfunding (GCF)** for targeted community tree removal.
 
 ---
 
 ## 3. Target Scope & Fauna (Phase 1)
 
-| Species | Primary Target Regions | Threat Profile & Interaction Dynamics |
-| :--- | :--- | :--- |
-| **Brown Bears & Asian Black Bears** (*Ursus arctos*, *Ursus thibetanus*) | Japan | Encroachment fueled by abandoned fruit trees and residential waste; pre-hibernation hyperphagia; roadkill attractants. |
-| **Asian Elephants** (*Elephas maximus*) | Thailand, India, Sri Lanka | Crop raiding along agricultural borders; migration corridor fragmentation; railway/road collisions. |
-| **Sumatran & Bengal Tigers** (*Panthera tigris sumatrae*, *P. t. tigris*) | Indonesia, India, Nepal | Habitat loss displacement (wildfires/deforestation); nocturnal village predation; attraction to livestock and roadkill. |
+| Species | Primary Target Regions | Threat Profile & Interaction Dynamics | Strategic Role |
+| :--- | :--- | :--- | :--- |
+| **Sumatran & Bengal Tigers** (*Panthera tigris sumatrae*, *P. t. tigris*) | Indonesia, India, Nepal | Habitat loss from palm oil/logging; livestock grazing attraction; nocturnal village predation; kill-site ambush. | **Primary APAC Core** (Commercial Plantations & High Fatality Risk) |
+| **Asian Elephants** (*Elephas maximus*) | Thailand, India, Sri Lanka | Crop raiding along forest-agriculture borders (sugarcane, fruits); corridor fragmentation; vehicle/train collisions. | **Primary APAC Core** (Crop Damage & Economic Loss) |
+| **Brown Bears & Asian Black Bears** (*Ursus arctos*, *Ursus thibetanus*) | Japan | Encroachment fueled by abandoned fruit trees and demographic decline; pre-hibernation hyperphagia; roadkill attractants. | **Secondary Validation** (Cross-Border Scalability & Municipal DX) |
 
 ---
 
@@ -90,31 +92,34 @@ Apex predator encounters (Sumatran and Bengal Tigers) follow distinct predatory 
 
 ### 4.1 CoExist Shield Mobile Application
 1. **3-Tier Dynamic Geofence Warning HUD:**
-   - **Level 1 (Notice / Green-Yellow):** Low-to-moderate probability zone. Informs users well in advance so they can stay alert, adjust travel, or prepare deterrents (e.g., bear bells, repellent).
+   - **Level 1 (Notice / Green-Yellow):** Low-to-moderate probability zone. Informs users well in advance so they can stay alert, adjust travel, or prepare deterrents.
    - **Level 2 (Warning / Amber):** High encounter likelihood. Advises detours and prompts heightened vigilance.
    - **Level 3 (Danger / Red):** Immediate threat or active apex predator presence. Sounds high-priority sirens/vibrations directing immediate evacuation.
 2. **Crowdsourced Environmental & Encounter Logging:**
    - Real-time logging of visual sightings, close encounters, or physical damage with high-accuracy GPS coordinates and timestamps.
-   - Forensic trace logging: Allows users and rangers to submit photos of tracks, scat, tree claw marks, and damaged crops.
-3. **Roadkill Incident Logging & Live Map:**
+   - Forensic trace logging: Allows plantation workers and rangers to submit photos of tracks, scat, tree claw marks, and damaged crops.
+3. **Roadkill Incident Logging & One Health Live Map:**
    - Rapid camera capture with automated GPS tagging.
-   - Interactive GIS map displaying confirmed roadkill locations, removal status, and correlated predator hazard zones.
-4. **Interactive Attractant Crop Maps (*Kaki* Map in Japan & Elephant Fruit/Cane Map in Thailand):**
-   - **Japan (*Kaki* Map):** Dedicated GIS layer pinpointing unharvested and abandoned persimmon (*kaki*) trees near residential zones, color-coded by bear attraction risk.
-   - **Thailand (Elephant Attractant Map):** GIS layer tracking high-threat elephant attractant crops—**sugarcane plantations, banana groves, jackfruit orchards, and mango clusters**—near forest borders and corridors.
-   - **Citizen Logging & AI Fruit Assessment:** Citizens/farmers photograph crops and neglected fruit trees; Gemini Vision automatically analyzes crop maturity, fruit load, and sugar ripening stage to estimate animal attraction intensity.
-   - **Proactive Risk Extinguishment:** When community volunteers or municipal crews mark a tree as "Harvested" or agricultural plots are cleared, the AI immediately recalculates and lowers the surrounding bear/elephant encroachment probability in real-time.
-5. **Livestock Grazing Corrals Map & Depredation Incident Logging (Tiger Mitigation):**
-   - **Livestock Pasture & Corrals Map:** GIS layer mapping domestic herds (**cattle, water buffaloes, goats, pigs**) and night corrals to identify high-density carnivore attractant hotspots.
+   - Interactive GIS map displaying confirmed roadkill locations, pathogen vector status, and correlated predator hazard zones.
+4. **Livestock Corrals Map & Depredation Incident Logging (Primary APAC / Tiger Mitigation):**
+   - **Livestock Pasture & Corrals Map:** GIS layer mapping domestic herds (**cattle, water buffaloes, goats, pigs**) and night corrals to identify high-density carnivore attractant hotspots across plantation edges.
    - **Livestock Depredation Reporting:** Streamlined reporting flow for pastoralists and rangers to submit domestic animal predation incidents with GPS, livestock type, and forensic bite/wound photos.
-   - **Kill-Site Caching Alert (Tier 3 Danger):** Because tigers exhibit carcass-caching behavior (returning to feed over 24 to 72 hours), verified kill sites immediately generate localized Tier 3 danger zones, preventing villagers from approaching ambush areas.
+   - **Kill-Site Caching Alert (Tier 3 Danger):** Verified kill sites immediately generate localized Tier 3 danger zones lasting 72 hours, preventing villagers from approaching ambush areas.
+5. **Interactive Elephant Crop Attractant Map (Thailand & APAC):**
+   - **Crop Attractant GIS Layer:** Tracks high-threat elephant attractant crops—**sugarcane plantations, banana groves, jackfruit orchards, and mango clusters**—near forest borders and corridors.
+   - **AI Fruit Assessment:** Farmers/rangers photograph crops; Gemini Vision automatically analyzes crop maturity, fruit load, and sugar ripening stage to estimate animal attraction intensity.
+   - **Dynamic Harvest Coordination:** Real-time updates lower threat levels once plots are harvested or cleared.
+6. **Municipal Decision-Support Dashboard & Kaki Map (Japan Scalability Validation):**
+   - **Prioritized Municipal Targeting:** Resolves Japanese private property and fiscal constraints by serving as an official decision-support tool for **Municipal Wildlife Control Teams (*Chōjū Higai Taisaku Jisshitai*)**.
+   - **High-Risk Top 5% Filtering:** Instead of relying on uncoordinated volunteer foraging, AI models pinpoint the top 5% most lethal abandoned persimmon trees near school routes and elderly homes.
+   - **GCF Integration:** Integrates with **Government Crowdfunding (GCF)** systems to allocate public budgets and subsidized tree felling/pruning contracts with maximum return on public safety.
 
 ### 4.2 Autonomous AI Agent: Multi-Source Causal Data Ingestion
 The AI Agent continuously gathers and learns from five critical causal data streams available via public APIs and real-time web scraping:
 
 1. **Agricultural Harvest & Crop Shipment Data:**
-   - *Causality:* Fruit harvest seasons (persimmons, chestnuts, apples) in Japan, oil palm harvesting peaks in Indonesia, and **sugarcane, banana, jackfruit, and mango ripening seasons** in Thailand emit intense scents and concentrated calories, strongly attracting herbivores (elephants) and opportunistic omnivores (bears).
-   - *Sources:* Government agricultural statistics APIs, municipal farming calendars, commodity crop market shipment feeds, and satellite vegetation indices (NDVI).
+   - *Causality:* **Oil palm fruit harvesting cycles in Indonesia/Malaysia**, **sugarcane, banana, jackfruit, and mango ripening seasons in Thailand**, followed by fruit harvest seasons (persimmons, chestnuts, apples) in Japan, emit intense scents and concentrated calories, strongly attracting mega-herbivores (elephants) and opportunistic carnivores/omnivores (tigers, bears).
+   - *Sources:* Government agricultural statistics APIs, commodity market shipment feeds, municipal farming calendars, and satellite vegetation indices (NDVI).
 2. **Municipal Waste & Refuse Schedules:**
    - *Causality:* Periodic garbage collection days (notably organic waste) and unmanaged waste around tourist campgrounds. Highly intelligent animals (bears, monkeys) memorize weekly collection cycles (e.g., Tuesday/Friday routines).
    - *Sources:* Municipal open-data portals (JSON/CSV) and campsite reservation/utilization indices.
@@ -172,10 +177,34 @@ To ensure the platform continuously adapts to changing ecological corridors and 
    - Vector embeddings of past encounters and environmental conditions are stored in Firestore/Vertex Vector Search.
    - When anomalous conditions arise, the AI Agent queries this memory bank to generate **explainable alerts** (e.g., *"Elevated to Tier 2: Current conditions match high bear intrusion risk — New Moon + 12 km/h downwind plume toward unharvested persimmon cluster 600m away"*).
    - Generates automated municipal patrol and harvest intervention proposals.
+4. **Cold-Start Solution: Open-to-Enterprise Data Strategy:**
+   - **Macro Pre-Training:** Baseline spatial probability models are pre-trained on globally accessible open macro datasets: NASA FIRMS (satellite fires and deforestation), NOAA & Open-Meteo (climatic patterns), and GBIF / WWF WildFinder (historical species occurrence baselines).
+   - **Micro Ground-Truth Acquisition (NGO Data Barter):** To overcome local data sparsity before commercial scale, CoExist Shield AI partners with under-resourced grassroots conservation NGOs and regional national park ranger stations. The platform provides them free, perpetual access to the software and GIS dispatch tools in exchange for digitizing and ingesting their historical offline patrol logs, incident records, and radio telemetry points. This immediately bootstraps localized model accuracy before commercial enterprise deployment.
 
 ---
 
-## 5. Development & Project Roadmap
+## 5. Business Model & Global ROI
+
+CoExist Shield AI bridges critical ecological defense with high-margin, scalable commercial sustainability through a dual-market monetization strategy:
+
+### 5.1 Primary Market: APAC Commercial Plantations (B2B SaaS)
+* **Target Enterprise Customers:** Large-scale palm oil, natural rubber, and timber conglomerates in Indonesia, Malaysia, and Thailand (e.g., Golden Agri-Resources, Sime Darby, Wilmar).
+* **Direct Commercial ROI:**
+  - **Worker Safety & Operational Continuity:** A single fatal tiger or elephant encounter can shut down harvesting across an entire plantation division for weeks due to labor strikes and fear. Predictive geofences protect field harvesters, slashing operational downtime and liability.
+  - **Crop & Infrastructure Protection:** A herd of wild elephants can destroy thousands of hectares of young oil palms and sugarcane in a single night (\$50,000–\$200,000+ loss per event). Predictive early warning enables non-lethal acoustic deterrence before herds enter cultivations.
+  - **ESG & Sustainable Certification Defense (RSPO / FSC):** Maintenance of **RSPO (Roundtable on Sustainable Palm Oil)** and FSC certification mandates strict compliance with High Conservation Value (HCV) and Zero-Harm wildlife policies. Breaches trigger certification suspension and exclusion from premium European and American markets. CoExist Shield AI provides auditable ESG compliance proof.
+* **Pricing Model:** Tiered annual B2B subscription per concession hectare, combined with enterprise API integration fees.
+
+### 5.2 Secondary Market: Japan Municipal Wildlife Defense (B2G & GCF)
+* **Target Public Sector:** Prefectural and municipal governments in rural Japan facing severe depopulation and acute bear incursions (e.g., Iwate, Akita, Nagano, Hokkaido).
+* **Revenue Mechanics:**
+  - **Municipal Decision Dashboard SaaS:** Annual software license for municipal environmental divisions and Wildlife Control Teams (*Chōjū Higai Taisaku Jisshitai*), replacing manual survey overhead.
+  - **Government Crowdfunding (GCF / Furusato Nozei):** AI-identified high-risk persimmon tree removal projects are packaged into targeted municipal crowdfunding campaigns, allowing urban donors to fund localized tree clearing without straining municipal general funds.
+  - **Public Works / Road DX Integration:** Cost-per-incident processing fees for automated roadkill removal dispatch.
+
+---
+
+## 6. Development & Project Roadmap
 
 The engineering tasks and requirements are managed on GitHub Projects:
 **[CoExistShieldAI Project Board #1](https://github.com/orgs/CoExistShieldAI/projects/1)**
@@ -189,7 +218,7 @@ All issues, pull requests, and git commit messages follow the **Conventional Com
 
 ---
 
-## 6. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
+## 7. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
 
 CoExist Shield AI is built on modern Google Cloud and Firebase serverless technologies, strategically leveraging the mandatory hackathon stack:
 
