@@ -140,6 +140,39 @@ The AI Agent models four crucial weather variables directly linked to animal beh
 4. **Wind Direction & Wind Speed:**
    - *Causality:* Wildlife rely heavily on olfaction. When prevailing winds blow from residential areas (dumpsters, unharvested orchards) toward forest ridges, predators follow scent plumes directly downhill.
 
+### 4.4 Automated Continuous Learning & Agent Evolution Pipeline
+
+To ensure the platform continuously adapts to changing ecological corridors and seasonal animal behaviors, CoExist Shield AI implements an end-to-end autonomous retraining and agent-grounding loop:
+
+```
+[ Field Ingestion ]                  [ Spatio-Temporal Lake ]             [ Continuous Learning ]
+- Sightings & Attacks   ----+                                        +--> [ Cloud Run Jobs / Vertex AI ]
+- Livestock Kills           |        +-------------------------+     |    - Spatial-Temporal Joins
+- Roadkill Carcasses        +------> | BigQuery GIS & Storage  | ----+    - Feature Engineering
+- Environmental Maps        |        | (Synchronized from      |          - Retraining Risk ML Models
+  (Kaki/Cane/Livestock) ----+        |  Firestore in Real-Time)|          - Model Evaluation & Deploy
+                                     +-------------------------+                     |
+                                                  |                                  v
+                                                  | Vector Search         +----------------------+
+                                                  +---------------------> | Autonomous AI Agent  |
+                                                                          | - Dynamic Geofencing |
+                                                                          | - Explainable Alerts |
+                                                                          | - Dispatch Actions   |
+                                                                          +----------------------+
+```
+
+1. **Spatio-Temporal Data Lake (Firestore to BigQuery GIS Stream):**
+   - Every confirmed incident (human encounter, livestock attack, roadkill, citizen trace) is automatically streamed from Cloud Firestore into BigQuery GIS.
+   - Each event is tagged with synchronized spatio-temporal features: distance to nearest unharvested fruit/corral/carcass, wind vector at incident time, moon illumination percentage, precipitation, and temperature.
+2. **Autonomous Retraining Pipeline (Cloud Run Jobs / Scheduled Pipelines):**
+   - Executes periodic and event-triggered retraining jobs as new ground-truth field data accumulates.
+   - Retrains geospatial gradient-boosted trees and neural probability surfaces, calibrating species-specific risk weights without human intervention.
+   - Validates candidate models against historical holdout data before promoting to production.
+3. **Agent Grounding & Vector Memory Retrieval:**
+   - Vector embeddings of past encounters and environmental conditions are stored in Firestore/Vertex Vector Search.
+   - When anomalous conditions arise, the AI Agent queries this memory bank to generate **explainable alerts** (e.g., *"Elevated to Tier 2: Current conditions match high bear intrusion risk — New Moon + 12 km/h downwind plume toward unharvested persimmon cluster 600m away"*).
+   - Generates automated municipal patrol and harvest intervention proposals.
+
 ---
 
 ## 5. Development & Project Roadmap
@@ -196,5 +229,7 @@ CoExist Shield AI is built on modern Google Cloud and Firebase serverless techno
 | :--- | :--- |
 | **Google Cloud Run** | Scalable, autoscaling container runtime executing the autonomous AI Agent, scheduled causal crawlers, and heavy geospatial calculation microservices. |
 | **Cloud Firestore** | Low-latency, offline-capable NoSQL database providing sub-second real-time listeners for instant roadkill warnings and dynamic geofence propagation. |
+| **BigQuery GIS** | Spatio-temporal analytical data lake streaming real-time incidents from Firestore for spatial joins against weather and vegetation datasets. |
 | **Firebase** | Rapid identity management with **Firebase Auth** and instant deployment of the public review prototype via **Firebase Hosting**. |
 | **Google Gemini** | Advanced multimodal analysis of citizen-uploaded incident photos (species + threat verification) and high-accuracy NLP parsing of social media alerts. |
+| **Cloud Run Jobs / Vertex AI** | Orchestrates scheduled autonomous retraining of species probability models, feeding updated weights back to the AI Agent. |
