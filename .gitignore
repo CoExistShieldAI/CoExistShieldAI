@@ -11,3 +11,5 @@ captures
 .cxx
 *.apk
 *.aab
+kotlin-js-store/
+.wireit/

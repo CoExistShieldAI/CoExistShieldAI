@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CoExist Shield AI — Early Warning & Geofence HUD</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #020617;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        #root {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Container canvas for Compose Multiplatform */
+        canvas {
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <canvas id="ComposeTarget"></canvas>
+    </div>
+    <script src="shared.js"></script>
+</body>
+</html>
