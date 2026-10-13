@@ -37,6 +37,11 @@ A parallel causal phenomenon drives Human-Elephant Conflict (HEC) in Thailand an
 - **The Real Driver:** Wild Asian elephants leave forest boundaries not out of random aggression, but driven by acute olfactory attraction to high-calorie, intensely fragrant agricultural crops—specifically **sugarcane (*oi*), bananas, ripe jackfruit, and mangoes** cultivated along forest fringes.
 - **Proactive AI Mitigation:** CoExist Shield AI models the harvest phenology, sugar ripening cycles, and spatial distribution of these attractant crops. Just like the *Kaki* Map in Japan, the platform builds real-time **Crop Attractant Maps** for Thailand, enabling farmers, park rangers, and local authorities to anticipate elephant foraging raids, establish dynamic early-warning buffers, and coordinate harvest timing.
 
+#### C. Indonesia, India & Nepal: Tiger Predation Attractants (Livestock Grazing & Kill-Site Caching)
+Apex predator encounters (Sumatran and Bengal Tigers) follow distinct predatory prey-attraction dynamics:
+- **The Real Driver:** Tigers are drawn to village fringes and forest borders by concentrated domestic livestock—**cattle, water buffaloes, goats, and pigs** grazing in open pastures or kept in vulnerable night corrals. Combined with roadside animal carcasses, domestic herds represent an accessible prey base. Furthermore, tigers exhibit **kill-site caching behavior**, returning to a livestock carcass over 24 to 72 hours, creating acute flashpoints for fatal human encounters.
+- **Proactive AI Mitigation:** CoExist Shield AI establishes **Livestock Grazing Corrals Maps** and integrates **Livestock Depredation Reporting**. Tracking pasture locations and logging domestic kills enables the AI to project ambush corridors and designate active kill sites as immediate Tier 3 Danger Zones, preventing villagers and pastoralists from walking into returning tigers.
+
 ---
 
 ## 3. Target Scope & Fauna (Phase 1)
@@ -77,9 +82,9 @@ A parallel causal phenomenon drives Human-Elephant Conflict (HEC) in Thailand an
 +-----------------------------------------------------------------------------------+
 |                        CoExist Shield Mobile Application                          |
 |                                                                                   |
-|  [ 3-Tier Alert HUD ]   [ Crowdsourced Ingestion ]  [ Roadkill Log ]  [ Kaki Map ] |
-|  - Level 1 / 2 / 3      - Direct Encounters/Traces  - Photo + GPS     - Fruit Load|
-|  - Progressive Warning  - Offline Queue             - Vector Status   - Clear Plan|
+|  [ 3-Tier Alert HUD ]   [ Encounters & Traces ]  [ Roadkill & Depredation ] [ Crop & Herd Map ] |
+|  - Level 1 / 2 / 3      - Direct Encounters      - Carcass Photo + GPS      - Kaki & Cane Map  |
+|  - Progressive Warning  - Offline Queue          - Kill-Site Return Warning - Livestock Corrals|
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -99,6 +104,10 @@ A parallel causal phenomenon drives Human-Elephant Conflict (HEC) in Thailand an
    - **Thailand (Elephant Attractant Map):** GIS layer tracking high-threat elephant attractant crops—**sugarcane plantations, banana groves, jackfruit orchards, and mango clusters**—near forest borders and corridors.
    - **Citizen Logging & AI Fruit Assessment:** Citizens/farmers photograph crops and neglected fruit trees; Gemini Vision automatically analyzes crop maturity, fruit load, and sugar ripening stage to estimate animal attraction intensity.
    - **Proactive Risk Extinguishment:** When community volunteers or municipal crews mark a tree as "Harvested" or agricultural plots are cleared, the AI immediately recalculates and lowers the surrounding bear/elephant encroachment probability in real-time.
+5. **Livestock Grazing Corrals Map & Depredation Incident Logging (Tiger Mitigation):**
+   - **Livestock Pasture & Corrals Map:** GIS layer mapping domestic herds (**cattle, water buffaloes, goats, pigs**) and night corrals to identify high-density carnivore attractant hotspots.
+   - **Livestock Depredation Reporting:** Streamlined reporting flow for pastoralists and rangers to submit domestic animal predation incidents with GPS, livestock type, and forensic bite/wound photos.
+   - **Kill-Site Caching Alert (Tier 3 Danger):** Because tigers exhibit carcass-caching behavior (returning to feed over 24 to 72 hours), verified kill sites immediately generate localized Tier 3 danger zones, preventing villagers from approaching ambush areas.
 
 ### 4.2 Autonomous AI Agent: Multi-Source Causal Data Ingestion
 The AI Agent continuously gathers and learns from five critical causal data streams available via public APIs and real-time web scraping:
