@@ -134,3 +134,48 @@ All issues, pull requests, and git commit messages follow the **Conventional Com
 - `docs(...)`: Architectural, specification, and onboarding documentation
 - `refactor(...)`: Code structuring without functional changes
 - `test(...)`: Unit, integration, and simulation tests
+
+---
+
+## 6. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
+
+CoExist Shield AI is built on modern Google Cloud and Firebase serverless technologies, strategically leveraging the mandatory hackathon stack:
+
+```
++-----------------------------------------------------------------------------------------+
+|                                    Client Layer                                         |
+|  - Android Application (Kotlin, Jetpack Compose, Background Location Services)           |
+|  - Web GIS Dashboard (Hosted on Firebase Hosting)                                       |
++--------------------------------------------+--------------------------------------------+
+                                             | Real-time Synchronization / Auth
+                                             v
++-----------------------------------------------------------------------------------------+
+|                                 Firebase & Firestore                                    |
+|  - Firebase Authentication (Anonymous & Role-based Ranger/Citizen login)               |
+|  - Cloud Firestore (High-throughput NoSQL real-time sync for incidents,                |
+|                     roadkill logs, and active dynamic geofence GeoJSON polygons)        |
++--------------------------------------------+--------------------------------------------+
+                                             | Events / Ingestion
+                                             v
++-----------------------------------------------------------------------------------------+
+|                                   Google Cloud Run                                      |
+|  - Autonomous AI Agent microservices (Docker containerized, auto-scaling)               |
+|  - Continuous web crawlers & API ingestors for 5 causal data streams                    |
+|  - Spatio-temporal dynamic geofence generator engine                                    |
++--------------------------------------------+--------------------------------------------+
+                                             | AI Reasoning & Computer Vision
+                                             v
++-----------------------------------------------------------------------------------------+
+|                                  Google Gemini API                                      |
+|  - Gemini Multimodal Vision: Forensic classification of species, carcass decay state,   |
+|                              and animal traces (tracks/scat/claws) from photos          |
+|  - Gemini NLP: Spatio-temporal entity extraction from unstructured social & local text |
++-----------------------------------------------------------------------------------------+
+```
+
+| Technology | Role & Strategic Justification |
+| :--- | :--- |
+| **Google Cloud Run** | Scalable, autoscaling container runtime executing the autonomous AI Agent, scheduled causal crawlers, and heavy geospatial calculation microservices. |
+| **Cloud Firestore** | Low-latency, offline-capable NoSQL database providing sub-second real-time listeners for instant roadkill warnings and dynamic geofence propagation. |
+| **Firebase** | Rapid identity management with **Firebase Auth** and instant deployment of the public review prototype via **Firebase Hosting**. |
+| **Google Gemini** | Advanced multimodal analysis of citizen-uploaded incident photos (species + threat verification) and high-accuracy NLP parsing of social media alerts. |
