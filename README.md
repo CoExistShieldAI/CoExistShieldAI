@@ -25,11 +25,17 @@ Conventional approaches treat wildlife encounters and roadkill management as dis
    - **Japan:** Modernizes and streamlines carcass collection and road infrastructure management for municipal health and public works departments through AI-driven DX.
    - **APAC & Tropical Regions:** Serves as an autonomous surveillance net that rapidly identifies breeding grounds for infectious diseases and shuts down illegal, dangerous bushmeat supply chains, preventing the next zoonotic pandemic.
 
-### 2.2 Addressing Root Causes: The Japan Bear Conflict Case Study
-For decades, public consensus assumed that bears invade human settlements primarily because they starve in mountainous habitats. Modern empirical data—derived from the analysis of over 650 bears—disproves this assumption:
+### 2.2 Addressing Root Causes: Ecological Attractants
 
+#### A. Japan: The Abandoned Persimmon (*Kaki*) Myth
+For decades, public consensus assumed that bears invade human settlements primarily because they starve in mountainous habitats. Modern empirical data—derived from the analysis of over 650 bears—disproves this assumption:
 - **The Real Driver:** Bears enter towns predominantly drawn by **unharvested and abandoned persimmon (*kaki*) trees** and fruit groves in depopulated, aging rural communities. These neglected, nutrient-dense fruits act as an irresistible lure directly into human backyards.
 - **Proactive AI Mitigation:** Rather than merely tracking bear coordinates after an encounter occurs, CoExist Shield AI cross-references regional vegetation, crop phenology, and municipal demographic data to evaluate the hazard score of abandoned fruit trees. The system charts optimized harvesting and clearing routes for local community action, extinguishing the root incentive for bears to encroach upon residential areas.
+
+#### B. Thailand & APAC: Asian Elephant Crop-Raiding Attractants (Sugarcane & Tropical Fruits)
+A parallel causal phenomenon drives Human-Elephant Conflict (HEC) in Thailand and Southeast Asia:
+- **The Real Driver:** Wild Asian elephants leave forest boundaries not out of random aggression, but driven by acute olfactory attraction to high-calorie, intensely fragrant agricultural crops—specifically **sugarcane (*oi*), bananas, ripe jackfruit, and mangoes** cultivated along forest fringes.
+- **Proactive AI Mitigation:** CoExist Shield AI models the harvest phenology, sugar ripening cycles, and spatial distribution of these attractant crops. Just like the *Kaki* Map in Japan, the platform builds real-time **Crop Attractant Maps** for Thailand, enabling farmers, park rangers, and local authorities to anticipate elephant foraging raids, establish dynamic early-warning buffers, and coordinate harvest timing.
 
 ---
 
@@ -88,17 +94,18 @@ For decades, public consensus assumed that bears invade human settlements primar
 3. **Roadkill Incident Logging & Live Map:**
    - Rapid camera capture with automated GPS tagging.
    - Interactive GIS map displaying confirmed roadkill locations, removal status, and correlated predator hazard zones.
-4. **Interactive Persimmon Tree Map (*Kaki* Map) & Community Harvest Registry:**
-   - **Visual Threat Indexing:** Dedicated GIS layer pinpointing unharvested and abandoned persimmon (*kaki*) trees near residential zones, color-coded by bear attraction risk.
-   - **Citizen Logging & AI Fruit Assessment:** Citizens photograph neglected trees; Gemini Vision automatically analyzes fruit load and ripeness stage to calculate harvest urgency.
-   - **Proactive Risk Extinguishment:** When community volunteers or municipal crews mark a tree as "Harvested" or "Pruned", the AI immediately recalculates and lowers the surrounding bear encroachment probability in real-time.
+4. **Interactive Attractant Crop Maps (*Kaki* Map in Japan & Elephant Fruit/Cane Map in Thailand):**
+   - **Japan (*Kaki* Map):** Dedicated GIS layer pinpointing unharvested and abandoned persimmon (*kaki*) trees near residential zones, color-coded by bear attraction risk.
+   - **Thailand (Elephant Attractant Map):** GIS layer tracking high-threat elephant attractant crops—**sugarcane plantations, banana groves, jackfruit orchards, and mango clusters**—near forest borders and corridors.
+   - **Citizen Logging & AI Fruit Assessment:** Citizens/farmers photograph crops and neglected fruit trees; Gemini Vision automatically analyzes crop maturity, fruit load, and sugar ripening stage to estimate animal attraction intensity.
+   - **Proactive Risk Extinguishment:** When community volunteers or municipal crews mark a tree as "Harvested" or agricultural plots are cleared, the AI immediately recalculates and lowers the surrounding bear/elephant encroachment probability in real-time.
 
 ### 4.2 Autonomous AI Agent: Multi-Source Causal Data Ingestion
 The AI Agent continuously gathers and learns from five critical causal data streams available via public APIs and real-time web scraping:
 
 1. **Agricultural Harvest & Crop Shipment Data:**
-   - *Causality:* Fruit harvest seasons (persimmons, chestnuts, apples) in Japan and oil palm fruit harvesting peaks in Southeast Asia emit intense scents and yield agricultural waste, strongly attracting herbivores and opportunistic carnivores.
-   - *Sources:* Government agricultural statistics APIs, municipal farming calendars, and wholesale market shipment feeds.
+   - *Causality:* Fruit harvest seasons (persimmons, chestnuts, apples) in Japan, oil palm harvesting peaks in Indonesia, and **sugarcane, banana, jackfruit, and mango ripening seasons** in Thailand emit intense scents and concentrated calories, strongly attracting herbivores (elephants) and opportunistic omnivores (bears).
+   - *Sources:* Government agricultural statistics APIs, municipal farming calendars, commodity crop market shipment feeds, and satellite vegetation indices (NDVI).
 2. **Municipal Waste & Refuse Schedules:**
    - *Causality:* Periodic garbage collection days (notably organic waste) and unmanaged waste around tourist campgrounds. Highly intelligent animals (bears, monkeys) memorize weekly collection cycles (e.g., Tuesday/Friday routines).
    - *Sources:* Municipal open-data portals (JSON/CSV) and campsite reservation/utilization indices.
