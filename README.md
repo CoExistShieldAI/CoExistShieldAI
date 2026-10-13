@@ -71,10 +71,9 @@ For decades, public consensus assumed that bears invade human settlements primar
 +-----------------------------------------------------------------------------------+
 |                        CoExist Shield Mobile Application                          |
 |                                                                                   |
-|  [ 3-Tier Geofence Alert HUD ]     [ Crowdsourced Ingestion ]   [ Roadkill Log ]  |
-|  - Level 1: Notice (Early Prep)    - Direct Sightings & Attacks - Photo + GPS Log |
-|  - Level 2: Warning (High Caution) - Traces (Scat, Prints, Claw)- Map Overlay     |
-|  - Level 3: Danger (Evacuate Now)  - Offline Sync Capability    - Status Workflow |
+|  [ 3-Tier Alert HUD ]   [ Crowdsourced Ingestion ]  [ Roadkill Log ]  [ Kaki Map ] |
+|  - Level 1 / 2 / 3      - Direct Encounters/Traces  - Photo + GPS     - Fruit Load|
+|  - Progressive Warning  - Offline Queue             - Vector Status   - Clear Plan|
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -89,6 +88,10 @@ For decades, public consensus assumed that bears invade human settlements primar
 3. **Roadkill Incident Logging & Live Map:**
    - Rapid camera capture with automated GPS tagging.
    - Interactive GIS map displaying confirmed roadkill locations, removal status, and correlated predator hazard zones.
+4. **Interactive Persimmon Tree Map (*Kaki* Map) & Community Harvest Registry:**
+   - **Visual Threat Indexing:** Dedicated GIS layer pinpointing unharvested and abandoned persimmon (*kaki*) trees near residential zones, color-coded by bear attraction risk.
+   - **Citizen Logging & AI Fruit Assessment:** Citizens photograph neglected trees; Gemini Vision automatically analyzes fruit load and ripeness stage to calculate harvest urgency.
+   - **Proactive Risk Extinguishment:** When community volunteers or municipal crews mark a tree as "Harvested" or "Pruned", the AI immediately recalculates and lowers the surrounding bear encroachment probability in real-time.
 
 ### 4.2 Autonomous AI Agent: Multi-Source Causal Data Ingestion
 The AI Agent continuously gathers and learns from five critical causal data streams available via public APIs and real-time web scraping:
