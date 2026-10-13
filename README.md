@@ -218,47 +218,121 @@ All issues, pull requests, and git commit messages follow the **Conventional Com
 
 ---
 
-## 7. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
+### 7. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
 
-CoExist Shield AI is built on modern Google Cloud and Firebase serverless technologies, strategically leveraging the mandatory hackathon stack:
+CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatform, and ultra-lightweight Go serverless technologies:
 
 ```
 +-----------------------------------------------------------------------------------------+
 |                                    Client Layer                                         |
-|  - Android Application (Kotlin, Jetpack Compose, Background Location Services)           |
-|  - Web GIS Dashboard (Hosted on Firebase Hosting)                                       |
+|  - Android Application (:composeApp: Kotlin 2.1, Compose Multiplatform, Jetpack)        |
+|  - Web Application (:shared: Kotlin/Wasm & JS, Skiko CanvasBasedWindow)                 |
 +--------------------------------------------+--------------------------------------------+
                                              | Real-time Synchronization / Auth
                                              v
 +-----------------------------------------------------------------------------------------+
 |                                 Firebase & Firestore                                    |
-|  - Firebase Authentication (Anonymous & Role-based Ranger/Citizen login)               |
+|  - Firebase Authentication (3-Role RBAC: CITIZEN, OFFICIAL, ADMIN)                      |
 |  - Cloud Firestore (High-throughput NoSQL real-time sync for incidents,                |
 |                     roadkill logs, and active dynamic geofence GeoJSON polygons)        |
+|  - 3-Role RBAC Security Rules (firestore.rules) & Privacy Geohash Protection            |
 +--------------------------------------------+--------------------------------------------+
-                                             | Events / Ingestion
+                                             | REST / JSON Structured Outputs
                                              v
 +-----------------------------------------------------------------------------------------+
-|                                   Google Cloud Run                                      |
-|  - Autonomous AI Agent microservices (Docker containerized, auto-scaling)               |
-|  - Continuous web crawlers & API ingestors for 5 causal data streams                    |
-|  - Spatio-temporal dynamic geofence generator engine                                    |
+|                      Google Cloud Run Microservice (Go 1.24)                            |
+|  - Ultra-lightweight Go HTTP backend (distroless container, sub-10ms cold start)        |
+|  - Multimodal photo forensics & structured prompt contracts                             |
+|  - Dynamic geofence recalculation & Japanese municipal Kaki hazard analytics            |
+|  - ESG RSPO audit reporting streaming engine                                            |
 +--------------------------------------------+--------------------------------------------+
-                                             | AI Reasoning & Computer Vision
+                                             | Multimodal Reasoning
                                              v
 +-----------------------------------------------------------------------------------------+
 |                                  Google Gemini API                                      |
-|  - Gemini Multimodal Vision: Forensic classification of species, carcass decay state,   |
-|                              and animal traces (tracks/scat/claws) from photos          |
-|  - Gemini NLP: Spatio-temporal entity extraction from unstructured social & local text |
-+-----------------------------------------------------------------------------------------+
+|  - Gemini 1.5/2.0 Flash: Multimodal classification of species, fruit load level,         |
+|                          ripeness stages, and carcass decay forensic analysis           |
+|  - Gemini Structured Outputs: Zero-syntax-error JSON response schema contracts          |
++--------------------------------------------+--------------------------------------------+
 ```
 
 | Technology | Role & Strategic Justification |
 | :--- | :--- |
-| **Google Cloud Run** | Scalable, autoscaling container runtime executing the autonomous AI Agent, scheduled causal crawlers, and heavy geospatial calculation microservices. |
-| **Cloud Firestore** | Low-latency, offline-capable NoSQL database providing sub-second real-time listeners for instant roadkill warnings and dynamic geofence propagation. |
-| **BigQuery GIS** | Spatio-temporal analytical data lake streaming real-time incidents from Firestore for spatial joins against weather and vegetation datasets. |
-| **Firebase** | Rapid identity management with **Firebase Auth** and instant deployment of the public review prototype via **Firebase Hosting**. |
-| **Google Gemini** | Advanced multimodal analysis of citizen-uploaded incident photos (species + threat verification) and high-accuracy NLP parsing of social media alerts. |
-| **Cloud Run Jobs / Vertex AI** | Orchestrates scheduled autonomous retraining of species probability models, feeding updated weights back to the AI Agent. |
+| **Go 1.24 (Cloud Run)** | Sub-10ms cold start, minimal memory footprint (<15MB distroless image), executing ultra-fast inference and analytics REST APIs. |
+| **Kotlin Multiplatform (KMP)** | Single shared codebase (`:shared`) powering both Android Mobile/Tablet and Web (JS/Wasm) with 100% UI and model code sharing. |
+| **Compose Multiplatform (CMP)** | Declarative UI delivering unified Main HUD, GIS Map, Incident Reporter, and Admin Console across Web & Android. |
+| **Cloud Firestore** | Low-latency, offline-capable NoSQL database with 3-Role RBAC security rules for real-time alert sync. |
+| **Google Gemini API** | Gemini 1.5/2.0 Flash for sub-2s multimodal photo triage (species, fruit load, decay state) with Structured JSON outputs. |
+| **GitHub Actions CI/CD** | Automated multi-target test pipeline running Go unit tests, KMP JVM tests, Webpack bundling, and Android APK builds. |
+
+---
+
+## 8. Repository Structure & Modules
+
+```
+CoExistShieldAI/
+├── backend-cloudrun/                # Ultra-lightweight Go Cloud Run REST microservice
+│   ├── cmd/server/main.go          # Server entry point
+│   ├── internal/api/               # HTTP router, handlers, and integration tests
+│   ├── internal/gemini/            # Google Gemini 1.5/2.0 Flash client (Structured JSON)
+│   ├── internal/geofence/          # Dynamic geofence recalculation & analytics engine
+│   ├── internal/model/             # Go DTOs matching Kotlin & Gemini schemas
+│   └── Dockerfile                  # Multi-stage distroless build (~15MB container)
+├── shared/                         # Kotlin Multiplatform (KMP) shared module
+│   ├── src/commonMain/kotlin/      # Domain models, Ktor ApiClient, and Compose UI screens
+│   │   ├── ai/coexistshield/model/      # Core types, Incidents, Roadkill, Geofences, KakiTrees
+│   │   ├── ai/coexistshield/network/    # Ktor REST client & GeminiTriageService
+│   │   ├── ai/coexistshield/repository/ # Incident & Geofence repositories (with offline queue)
+│   │   └── ai/coexistshield/ui/         # Main HUD, GIS Map, Reporter, Admin Console, Theme
+│   ├── src/jsMain/                 # Compose Web entry point (Main.kt & index.html)
+│   └── src/commonTest/             # Unit tests for serialization and network client
+├── composeApp/                     # Android Application module (:composeApp)
+│   └── src/androidMain/            # MainActivity.kt, AndroidManifest.xml, resources
+├── firestore.rules                 # Cloud Firestore 3-Role RBAC security rules
+├── firebase-tests/                 # Emulator tests for security rules (@firebase/rules-unit-testing)
+├── scripts/                        # Deployment helper scripts (e.g., deploy_cloudrun.sh)
+└── .github/workflows/              # GitHub Actions CI and Cloud Run deployment workflows
+```
+
+---
+
+## 9. Local Setup & Build Guide
+
+### Prerequisites
+- **JDK 21** (e.g. OpenJDK 21 via Temurin or Homebrew)
+- **Go 1.24+**
+- **Android SDK** (API 35, Build-Tools 35)
+- **Node.js 20+** (for Firebase security rule tests)
+
+### 9.1 Backend (Go Cloud Run)
+```bash
+# Navigate to backend directory
+cd backend-cloudrun
+
+# Run all unit tests with race detection
+go test -v -race ./...
+
+# Run server locally (default port 8080)
+PORT=8080 GEMINI_API_KEY="your-gemini-key" go run ./cmd/server
+```
+
+### 9.2 Client (Kotlin Multiplatform / Compose)
+```bash
+# Set JAVA_HOME to JDK 21
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+
+# 1. Run Shared JVM unit tests
+./gradlew :shared:jvmTest
+
+# 2. Build Web application bundle (output in shared/build/dist/js/productionExecutable)
+./gradlew :shared:jsBrowserDistribution
+
+# 3. Assemble Android Debug APK (output in composeApp/build/outputs/apk/debug)
+./gradlew :composeApp:assembleDebug
+```
+
+### 9.3 Deploy to Google Cloud Run
+```bash
+# One-click deployment script
+./scripts/deploy_cloudrun.sh <GCP_PROJECT_ID> asia-northeast1
+```
