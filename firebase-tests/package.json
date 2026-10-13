@@ -1,0 +1,13 @@
+{
+  "name": "coexist-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pretest": "cp ../firestore.rules ./firestore.rules",
+    "test": "firebase emulators:exec --only firestore --project demo-coexist \"node --test rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
+}

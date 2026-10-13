@@ -1,0 +1,479 @@
+rules_version = '2';
+
+// ===============================================================
+// CoExist Shield AI - Firestore Security Rules (PROTOTYPE - needs review)
+// ===============================================================
+//
+// Auth model (Firebase Auth custom claims, set only by backend/Admin SDK):
+//   role   in {CITIZEN, OFFICIAL, ADMIN}  (missing/unknown => CITIZEN)
+//   region in {JAPAN, APAC}               (OFFICIAL)
+//   orgId  string                         (OFFICIAL)
+// Anonymous sign-in may ONLY create incident reports. It gets no reads of
+// non-public data and no other writes.
+// Cloud Run / AI backend uses the Admin SDK and bypasses these rules.
+//
+// Assumed Data Model (schema the rest of the project must adopt)
+// ---------------------------------------------------------------
+// geofences/{id}            : written by ADMIN only (free-form, backend generated).
+// incidents/{id}            : required: reporterId(string=uid), reporterRole(enum),
+//     category(enum), region(JAPAN|APAC), location(latlng), timestamp(timestamp),
+//     photoUrls(list<https url>, max 5), verificationStatus(PENDING|VERIFIED|REJECTED)
+//     optional: species(enum), description(string<=2000), verifiedBy(uid), updatedAt(timestamp)
+// roadkill/{id}             : required: reporterId, location(latlng), species(enum),
+//     clearanceStatus(REPORTED|DISPATCHED|CLEARED), createdAt(timestamp)
+//     optional: description, photoUrls, region, assignedOfficialId, clearedAt, updatedAt
+// kaki_trees_public/{id}    : (NEW) coarse, no owner info: geohash(string<=5),
+//     hazardTier(LOW|MEDIUM|HIGH), status(tree enum), region; optional updatedAt, createdAt
+// kaki_trees/{id}           : private. required: ownerId, region, location(latlng),
+//     status(tree enum), isTop5PercentHazard(bool), createdAt
+//     optional: orgId, hazardScore(number), propertyContext(map<=20 keys),
+//     ownerConsentRef(string) (NEW), verifiedByOfficialId, gcfCampaignId, updatedAt
+// crop_attractants/{id}     : required: reporterId, region, location, cropType(string),
+//     growthStage(VEGETATIVE|RIPENING|READY_FOR_HARVEST|HARVESTED_CLEARED), createdAt
+//     optional: attractantRiskIndex (backend/ADMIN only), updatedAt
+// livestock_pastures/{id}   : required: ownerId, region, name, location, verificationStatus, createdAt
+//     optional: livestockType, updatedAt, verifiedBy
+//     backend/ADMIN only: isKillSite, killReportedAt, cachingRiskExpiry, activeThreatTier
+// users/{uid}               : self-editable: displayName, email, preferredLanguage,
+//     createdAt, updatedAt. ADMIN-managed: role, region, orgId (claim mirrors).
+// incident_memories/{id}    : AI-generated; ADMIN read only, no client writes.
+//
+// Assumptions: createdAt-style fields use serverTimestamp() (== request.time) on create.
+// Queries must include the filters that rules require (e.g. incidents list for
+// citizens: where reporterId == uid, or where verificationStatus == 'VERIFIED';
+// officials: where region == <their region>).
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------
+    // Enums
+    // ---------------------------------------------------------------
+    function roles()          { return ['CITIZEN', 'OFFICIAL', 'ADMIN']; }
+    function regions()        { return ['JAPAN', 'APAC']; }
+    function verifStatuses()  { return ['PENDING', 'VERIFIED', 'REJECTED']; }
+    function categories()     {
+      return ['WILDLIFE_SIGHTING', 'PHYSICAL_TRACE', 'ROADKILL',
+              'LIVESTOCK_DEPREDATION', 'ATTRACTANT_FRUIT_TREE'];
+    }
+    function clearanceStatuses() { return ['REPORTED', 'DISPATCHED', 'CLEARED']; }
+    function treeStatuses()   { return ['UNMANAGED', 'SCHEDULED_REMOVAL', 'PRUNED', 'FELLED']; }
+    function species()        { return ['TIGER', 'ELEPHANT', 'BEAR', 'WILD_BOAR', 'DEER', 'MONKEY', 'UNKNOWN']; }
+    function growthStages()   { return ['VEGETATIVE', 'RIPENING', 'READY_FOR_HARVEST', 'HARVESTED_CLEARED']; }
+    function hazardTiers()    { return ['LOW', 'MEDIUM', 'HIGH']; }
+
+    // ---------------------------------------------------------------
+    // Auth helpers (all short-circuit on request.auth == null)
+    // ---------------------------------------------------------------
+    function isAuthed() {
+      return request.auth != null;
+    }
+    function isAnonymous() {
+      return isAuthed() && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+    // Authenticated with a real (non-anonymous) identity.
+    function isSignedIn() {
+      return isAuthed() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    // The caller's real role. Anonymous / missing / unknown claim => CITIZEN.
+    function callerRole() {
+      return isSignedIn() && request.auth.token.get('role', 'CITIZEN') in ['OFFICIAL', 'ADMIN']
+        ? request.auth.token.role
+        : 'CITIZEN';
+    }
+    function isAdmin() {
+      return callerRole() == 'ADMIN';
+    }
+    function isOfficial() {
+      return callerRole() == 'OFFICIAL';
+    }
+    function isOwner(uid) {
+      return isAuthed() && uid is string && request.auth.uid == uid;
+    }
+    function isSignedInOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    // OFFICIAL whose region claim matches the document region.
+    function officialInRegion(docRegion) {
+      return isOfficial() &&
+             request.auth.token.get('region', '') in regions() &&
+             request.auth.token.get('region', '') == docRegion;
+    }
+    // OFFICIAL whose region AND orgId claims match the document.
+    function officialInRegionOrg(docRegion, docOrg) {
+      return officialInRegion(docRegion) &&
+             request.auth.token.get('orgId', '') is string &&
+             request.auth.token.get('orgId', '') != '' &&
+             request.auth.token.get('orgId', '') == docOrg;
+    }
+
+    // ---------------------------------------------------------------
+    // Generic validation helpers
+    // ---------------------------------------------------------------
+    function str(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+    function optStr(d, k, maxLen) {
+      return !(k in d) || str(d[k], 0, maxLen);
+    }
+    function optTs(d, k) {
+      return !(k in d) || d[k] is timestamp;
+    }
+    function isHttpsUrl(u) {
+      return u is string && u.size() <= 1024 && u.matches('^https://.+');
+    }
+    // CEL has no loops: list capped at 5 and each possible element checked by index.
+    function validPhotoList(l) {
+      return l is list && l.size() <= 5 &&
+        (l.size() < 1 || isHttpsUrl(l[0])) &&
+        (l.size() < 2 || isHttpsUrl(l[1])) &&
+        (l.size() < 3 || isHttpsUrl(l[2])) &&
+        (l.size() < 4 || isHttpsUrl(l[3])) &&
+        (l.size() < 5 || isHttpsUrl(l[4]));
+    }
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    function absent(d, keys) {
+      return !d.keys().hasAny(keys);
+    }
+    function isNow(t) {
+      return t is timestamp && t == request.time;
+    }
+
+    // ---------------------------------------------------------------
+    // Domain validators (called from BOTH create and update paths)
+    // ---------------------------------------------------------------
+    function isValidIncident(d) {
+      return d.keys().hasAll(['reporterId', 'reporterRole', 'category', 'region', 'location',
+                              'timestamp', 'photoUrls', 'verificationStatus']) &&
+             d.keys().hasOnly(['reporterId', 'reporterRole', 'category', 'region', 'location',
+                               'timestamp', 'photoUrls', 'verificationStatus', 'species',
+                               'description', 'verifiedBy', 'updatedAt']) &&
+             str(d.reporterId, 1, 128) &&
+             d.reporterRole in roles() &&
+             d.category in categories() &&
+             d.region in regions() &&
+             d.location is latlng &&
+             d.timestamp is timestamp &&
+             validPhotoList(d.photoUrls) &&
+             d.verificationStatus in verifStatuses() &&
+             (!('species' in d) || d.species in species()) &&
+             optStr(d, 'description', 2000) &&
+             optStr(d, 'verifiedBy', 128) &&
+             optTs(d, 'updatedAt');
+    }
+
+    function isValidRoadkill(d) {
+      return d.keys().hasAll(['reporterId', 'location', 'species', 'clearanceStatus', 'createdAt']) &&
+             d.keys().hasOnly(['reporterId', 'location', 'species', 'clearanceStatus', 'createdAt',
+                               'description', 'photoUrls', 'region', 'assignedOfficialId',
+                               'clearedAt', 'updatedAt']) &&
+             str(d.reporterId, 1, 128) &&
+             d.location is latlng &&
+             d.species in species() &&
+             d.clearanceStatus in clearanceStatuses() &&
+             d.createdAt is timestamp &&
+             optStr(d, 'description', 2000) &&
+             (!('photoUrls' in d) || validPhotoList(d.photoUrls)) &&
+             (!('region' in d) || d.region in regions()) &&
+             optStr(d, 'assignedOfficialId', 128) &&
+             optTs(d, 'clearedAt') &&
+             optTs(d, 'updatedAt');
+    }
+
+    function isValidTreePublic(d) {
+      return d.keys().hasAll(['geohash', 'hazardTier', 'status', 'region']) &&
+             d.keys().hasOnly(['geohash', 'hazardTier', 'status', 'region', 'updatedAt', 'createdAt']) &&
+             str(d.geohash, 1, 5) &&
+             d.hazardTier in hazardTiers() &&
+             d.status in treeStatuses() &&
+             d.region in regions() &&
+             optTs(d, 'updatedAt') &&
+             optTs(d, 'createdAt');
+    }
+
+    function isValidTree(d) {
+      return d.keys().hasAll(['ownerId', 'region', 'location', 'status', 'isTop5PercentHazard', 'createdAt']) &&
+             d.keys().hasOnly(['ownerId', 'region', 'orgId', 'location', 'status', 'isTop5PercentHazard',
+                               'hazardScore', 'propertyContext', 'ownerConsentRef',
+                               'verifiedByOfficialId', 'gcfCampaignId', 'createdAt', 'updatedAt']) &&
+             str(d.ownerId, 1, 128) &&
+             d.region in regions() &&
+             optStr(d, 'orgId', 128) &&
+             d.location is latlng &&
+             d.status in treeStatuses() &&
+             d.isTop5PercentHazard is bool &&
+             (!('hazardScore' in d) || (d.hazardScore is number && d.hazardScore >= 0 && d.hazardScore <= 100)) &&
+             (!('propertyContext' in d) || (d.propertyContext is map && d.propertyContext.size() <= 20)) &&
+             optStr(d, 'ownerConsentRef', 256) &&
+             optStr(d, 'verifiedByOfficialId', 128) &&
+             optStr(d, 'gcfCampaignId', 128) &&
+             d.createdAt is timestamp &&
+             optTs(d, 'updatedAt');
+    }
+
+    function isValidCrop(d) {
+      return d.keys().hasAll(['reporterId', 'region', 'location', 'cropType', 'growthStage', 'createdAt']) &&
+             d.keys().hasOnly(['reporterId', 'region', 'location', 'cropType', 'growthStage', 'createdAt',
+                               'attractantRiskIndex', 'updatedAt']) &&
+             str(d.reporterId, 1, 128) &&
+             d.region in regions() &&
+             d.location is latlng &&
+             str(d.cropType, 1, 100) &&
+             d.growthStage in growthStages() &&
+             d.createdAt is timestamp &&
+             (!('attractantRiskIndex' in d) || (d.attractantRiskIndex is number &&
+                                                d.attractantRiskIndex >= 0 && d.attractantRiskIndex <= 100)) &&
+             optTs(d, 'updatedAt');
+    }
+
+    function pastureServerKeys() {
+      return ['isKillSite', 'killReportedAt', 'cachingRiskExpiry', 'activeThreatTier'];
+    }
+    function isValidPasture(d) {
+      return d.keys().hasAll(['ownerId', 'region', 'name', 'location', 'verificationStatus', 'createdAt']) &&
+             d.keys().hasOnly(['ownerId', 'region', 'name', 'location', 'verificationStatus', 'createdAt',
+                               'livestockType', 'updatedAt', 'verifiedBy',
+                               'isKillSite', 'killReportedAt', 'cachingRiskExpiry', 'activeThreatTier']) &&
+             str(d.ownerId, 1, 128) &&
+             d.region in regions() &&
+             str(d.name, 1, 200) &&
+             d.location is latlng &&
+             d.verificationStatus in verifStatuses() &&
+             d.createdAt is timestamp &&
+             optStr(d, 'livestockType', 100) &&
+             optTs(d, 'updatedAt') &&
+             optStr(d, 'verifiedBy', 128) &&
+             (!('isKillSite' in d) || d.isKillSite is bool) &&
+             optTs(d, 'killReportedAt') &&
+             optTs(d, 'cachingRiskExpiry') &&
+             (!('activeThreatTier' in d) || str(d.activeThreatTier, 1, 50));
+    }
+
+    function selfUserKeys() {
+      return ['displayName', 'email', 'preferredLanguage', 'createdAt', 'updatedAt'];
+    }
+    function isValidUser(d) {
+      return d.keys().hasOnly(['displayName', 'email', 'preferredLanguage', 'createdAt', 'updatedAt',
+                               'role', 'region', 'orgId']) &&
+             (!('displayName' in d) || str(d.displayName, 0, 100)) &&
+             (!('email' in d) || (str(d.email, 3, 254) && d.email.matches('^[^@\\s]+@[^@\\s]+$'))) &&
+             optStr(d, 'preferredLanguage', 16) &&
+             optTs(d, 'createdAt') &&
+             optTs(d, 'updatedAt') &&
+             (!('role' in d) || d.role in roles()) &&
+             (!('region' in d) || d.region in regions()) &&
+             optStr(d, 'orgId', 128);
+    }
+
+    // ===============================================================
+    // geofences: public read (early warning), ADMIN write only.
+    // ===============================================================
+    match /geofences/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // incidents
+    // ===============================================================
+    match /incidents/{id} {
+      // Owner (any status), VERIFIED to signed-in users, OFFICIAL in own region, ADMIN all.
+      // Anonymous users cannot read incidents.
+      allow read: if isSignedIn() && (
+                       resource.data.reporterId == request.auth.uid ||
+                       resource.data.verificationStatus == 'VERIFIED' ||
+                       isAdmin() ||
+                       officialInRegion(resource.data.region));
+
+      // Any authenticated user (incl. anonymous) may report, as themselves, as PENDING,
+      // with their real role, and with no verification metadata.
+      allow create: if isAuthed() &&
+                       isValidIncident(request.resource.data) &&
+                       request.resource.data.reporterId == request.auth.uid &&
+                       request.resource.data.verificationStatus == 'PENDING' &&
+                       request.resource.data.reporterRole == callerRole() &&
+                       absent(request.resource.data, ['verifiedBy', 'updatedAt']) &&
+                       request.resource.data.timestamp <= request.time + duration.value(5, 'm') &&
+                       request.resource.data.timestamp > request.time - duration.value(7, 'd');
+
+      // ADMIN: anything (still schema-valid). OFFICIAL (own region): moderation only,
+      // PENDING -> VERIFIED|REJECTED. Owners can never update.
+      allow update: if isValidIncident(request.resource.data) && (
+                       isAdmin() ||
+                       (officialInRegion(resource.data.region) &&
+                        changedKeys().hasOnly(['verificationStatus', 'verifiedBy', 'updatedAt']) &&
+                        resource.data.verificationStatus == 'PENDING' &&
+                        request.resource.data.verificationStatus in ['VERIFIED', 'REJECTED'] &&
+                        request.resource.data.verifiedBy == request.auth.uid &&
+                        isNow(request.resource.data.updatedAt)));
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // roadkill: public read; workflow REPORTED -> DISPATCHED -> CLEARED.
+    // ===============================================================
+    match /roadkill/{id} {
+      allow read: if true;
+
+      allow create: if isSignedIn() &&
+                       isValidRoadkill(request.resource.data) &&
+                       request.resource.data.reporterId == request.auth.uid &&
+                       request.resource.data.clearanceStatus == 'REPORTED' &&
+                       absent(request.resource.data, ['assignedOfficialId', 'clearedAt', 'updatedAt']) &&
+                       isNow(request.resource.data.createdAt);
+
+      allow update: if isValidRoadkill(request.resource.data) && (
+                       isAdmin() ||
+                       (isOfficial() &&
+                        changedKeys().hasOnly(['clearanceStatus', 'assignedOfficialId', 'clearedAt', 'updatedAt']) &&
+                        isNow(request.resource.data.updatedAt) &&
+                        (
+                          // REPORTED -> DISPATCHED: claim it as yourself, not yet cleared
+                          (resource.data.clearanceStatus == 'REPORTED' &&
+                           request.resource.data.clearanceStatus == 'DISPATCHED' &&
+                           request.resource.data.assignedOfficialId == request.auth.uid &&
+                           !('clearedAt' in request.resource.data))
+                          ||
+                          // DISPATCHED -> CLEARED: assignee unchanged, clearedAt = now
+                          (resource.data.clearanceStatus == 'DISPATCHED' &&
+                           request.resource.data.clearanceStatus == 'CLEARED' &&
+                           request.resource.data.assignedOfficialId == resource.data.assignedOfficialId &&
+                           isNow(request.resource.data.clearedAt))
+                        )));
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // kaki_trees_public: coarse/masked data, public read, ADMIN (backend) write.
+    // ===============================================================
+    match /kaki_trees_public/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidTreePublic(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // kaki_trees: private exact GPS / owner data.
+    // ===============================================================
+    match /kaki_trees/{id} {
+      allow read: if isSignedIn() && (
+                       resource.data.ownerId == request.auth.uid ||
+                       isAdmin() ||
+                       officialInRegionOrg(resource.data.region, resource.data.get('orgId', null)));
+
+      // Citizens may only submit UNMANAGED trees with no hazard/verification data.
+      allow create: if isSignedIn() &&
+                       isValidTree(request.resource.data) &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.status == 'UNMANAGED' &&
+                       request.resource.data.isTop5PercentHazard == false &&
+                       request.resource.data.get('hazardScore', 0) == 0 &&
+                       absent(request.resource.data, ['verifiedByOfficialId', 'gcfCampaignId',
+                                                      'ownerConsentRef', 'updatedAt']) &&
+                       isNow(request.resource.data.createdAt);
+
+      allow update: if isValidTree(request.resource.data) && (
+                       isAdmin() ||
+                       (officialInRegionOrg(resource.data.region, resource.data.get('orgId', null)) &&
+                        changedKeys().hasOnly(['status', 'verifiedByOfficialId', 'ownerConsentRef', 'updatedAt']) &&
+                        resource.data.status in ['UNMANAGED', 'SCHEDULED_REMOVAL'] &&
+                        request.resource.data.status in ['SCHEDULED_REMOVAL', 'PRUNED', 'FELLED'] &&
+                        request.resource.data.status != resource.data.status &&
+                        request.resource.data.verifiedByOfficialId == request.auth.uid &&
+                        isNow(request.resource.data.updatedAt)));
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // crop_attractants
+    // ===============================================================
+    match /crop_attractants/{id} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+                       isValidCrop(request.resource.data) &&
+                       request.resource.data.reporterId == request.auth.uid &&
+                       request.resource.data.growthStage == 'RIPENING' &&
+                       absent(request.resource.data, ['attractantRiskIndex', 'updatedAt']) &&
+                       isNow(request.resource.data.createdAt);
+
+      allow update: if isValidCrop(request.resource.data) && (
+                       isAdmin() ||
+                       (officialInRegion(resource.data.region) &&
+                        changedKeys().hasOnly(['growthStage', 'updatedAt']) &&
+                        isNow(request.resource.data.updatedAt)));
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // livestock_pastures: clients can never set kill-site / threat-tier fields.
+    // ===============================================================
+    match /livestock_pastures/{id} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+                       isValidPasture(request.resource.data) &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.verificationStatus == 'PENDING' &&
+                       absent(request.resource.data, pastureServerKeys()) &&
+                       absent(request.resource.data, ['verifiedBy', 'updatedAt']) &&
+                       isNow(request.resource.data.createdAt);
+
+      allow update: if isValidPasture(request.resource.data) && (
+                       isAdmin() ||
+                       (officialInRegion(resource.data.region) &&
+                        changedKeys().hasOnly(['verificationStatus', 'verifiedBy', 'updatedAt']) &&
+                        request.resource.data.verificationStatus in ['VERIFIED', 'REJECTED'] &&
+                        request.resource.data.verifiedBy == request.auth.uid &&
+                        isNow(request.resource.data.updatedAt)));
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // users: own profile (never role/region/orgId); OFFICIAL reads same org; ADMIN manages.
+    // ===============================================================
+    match /users/{uid} {
+      allow read: if isSignedIn() && (
+                       request.auth.uid == uid ||
+                       isAdmin() ||
+                       (isOfficial() &&
+                        request.auth.token.get('orgId', '') is string &&
+                        request.auth.token.get('orgId', '') != '' &&
+                        resource.data.get('orgId', null) == request.auth.token.get('orgId', '')));
+
+      allow create: if isValidUser(request.resource.data) && (
+                       isAdmin() ||
+                       (isSignedInOwner(uid) &&
+                        request.resource.data.keys().hasOnly(selfUserKeys())));
+
+      allow update: if isValidUser(request.resource.data) && (
+                       isAdmin() ||
+                       (isSignedInOwner(uid) &&
+                        changedKeys().hasOnly(selfUserKeys()) &&
+                        request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)));
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // incident_memories: AI generated. No client access; ADMIN read only.
+    // ===============================================================
+    match /incident_memories/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
