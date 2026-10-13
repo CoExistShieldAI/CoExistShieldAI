@@ -63,4 +63,16 @@ class GeofenceRepository(
             }.body()
         }
     }
+
+    suspend fun generateScentPlumeGeofences(
+        request: ai.coexistshield.network.GeneratePlumeGeofencesRequest
+    ): Result<ai.coexistshield.network.GeneratePlumeGeofencesResponse> {
+        return runCatching {
+            httpClient.post("/api/v1/geofences/scent-plume") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
 }
+

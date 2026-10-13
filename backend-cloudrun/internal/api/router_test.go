@@ -151,3 +151,91 @@ func TestRspoExportEndpoint(t *testing.T) {
 		t.Errorf("expected text/csv content type, got %s", w.Header().Get("Content-Type"))
 	}
 }
+
+func TestScentPlumeGeofencesEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := model.GeneratePlumeGeofencesRequest{
+		Weather: &model.WeatherConditions{
+			WindSpeedKmh:     15.0,
+			WindDirectionDeg: 270.0, // Westerly wind (blowing towards East: bearing 90°)
+			MoonIllumination: 0.05,  // Near New Moon
+		},
+		Attractants: []model.AttractantHub{
+			{
+				Id:           "kt_01",
+				Type:         "KAKI_TREE",
+				Latitude:     38.2560,
+				Longitude:    140.3210,
+				FruitLoad:    "ABUNDANT",
+				IsTop5Hazard: true,
+			},
+			{
+				Id:              "rk_01",
+				Type:            "ROADKILL",
+				Latitude:        38.2600,
+				Longitude:       140.3250,
+				HoursSinceDeath: 4.0,
+			},
+		},
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/geofences/scent-plume", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp model.GeneratePlumeGeofencesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Count != 2 {
+		t.Fatalf("expected 2 zones generated, got %d", resp.Count)
+	}
+
+	// Verify RFC 7946 Polygon geometry
+	zone1 := resp.Zones[0]
+	if zone1.PolygonGeoJson == nil || zone1.PolygonGeoJson.Type != "Polygon" {
+		t.Fatalf("expected Polygon geometry, got %+v", zone1.PolygonGeoJson)
+	}
+	coords := zone1.PolygonGeoJson.Coordinates[0]
+	if len(coords) < 30 {
+		t.Fatalf("expected at least 30 boundary vertices, got %d", len(coords))
+	}
+
+	// First and last vertex must be identical for valid GeoJSON LinearRing
+	first := coords[0]
+	last := coords[len(coords)-1]
+	if first[0] != last[0] || first[1] != last[1] {
+		t.Errorf("LinearRing not closed: first [%f, %f], last [%f, %f]", first[0], first[1], last[0], last[1])
+	}
+
+	// Check downwind elongation:
+	// Westerly wind blows towards East (+longitude). Max longitude should be extended further east from center
+	centerLon := 140.3210
+	maxLon := -180.0
+	minLon := 180.0
+	for _, pt := range coords {
+		if pt[0] > maxLon {
+			maxLon = pt[0]
+		}
+		if pt[0] < minLon {
+			minLon = pt[0]
+		}
+	}
+
+	eastSpread := maxLon - centerLon
+	westSpread := centerLon - minLon
+
+	if eastSpread <= westSpread {
+		t.Errorf("scent plume should elongate eastward (downwind). eastSpread=%f, westSpread=%f", eastSpread, westSpread)
+	}
+}
+

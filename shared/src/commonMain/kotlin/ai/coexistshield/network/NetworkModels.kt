@@ -63,3 +63,54 @@ data class TopHazardsResponse(
     val top5PercentCutoffHazardScore: Double,
     val priorityTrees: List<PriorityKakiTreeDto> = emptyList()
 )
+
+@Serializable
+data class WeatherConditionsDto(
+    val windSpeedKmh: Double,
+    val windDirectionDeg: Double,
+    val moonIllumination: Double,
+    val precipitationMmH: Double = 0.0
+)
+
+@Serializable
+data class AttractantHubDto(
+    val id: String,
+    val type: String,
+    val latitude: Double,
+    val longitude: Double,
+    val fruitLoad: String? = null,
+    val isTop5Hazard: Boolean = false,
+    val hoursSinceDeath: Double? = null
+)
+
+@Serializable
+data class GeneratePlumeGeofencesRequest(
+    val attractants: List<AttractantHubDto>,
+    val weather: WeatherConditionsDto? = null
+)
+
+@Serializable
+data class GeoJsonPolygonDto(
+    val type: String,
+    val coordinates: List<List<List<Double>>>
+)
+
+@Serializable
+data class GeofenceZoneDto(
+    val id: String,
+    val tier: AlertTier,
+    val targetSpecies: List<String> = emptyList(),
+    val polygonGeoJson: GeoJsonPolygonDto? = null,
+    val activeRiskScore: Double,
+    val causalFactors: List<String> = emptyList(),
+    val expiresAt: String,
+    val createdAt: String
+)
+
+@Serializable
+data class GeneratePlumeGeofencesResponse(
+    val zones: List<GeofenceZoneDto> = emptyList(),
+    val count: Int,
+    val createdAt: String
+)
+

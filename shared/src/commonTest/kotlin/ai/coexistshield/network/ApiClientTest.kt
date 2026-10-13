@@ -104,4 +104,63 @@ class ApiClientTest {
         assertEquals("kt_1120", data.priorityTrees.first().treeId)
         assertEquals(0.95, data.priorityTrees.first().hazardScore)
     }
+
+    @Test
+    fun testScentPlumeGeofencesApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "zones": [
+                    {
+                        "id": "geo_kt_01_1",
+                        "tier": "TIER_2_WARNING",
+                        "targetSpecies": ["BEAR"],
+                        "polygonGeoJson": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[140.321, 38.256], [140.325, 38.257], [140.321, 38.256]]
+                            ]
+                        },
+                        "activeRiskScore": 0.88,
+                        "causalFactors": ["Attractant: KAKI_TREE", "Wind: 15.0 km/h"],
+                        "expiresAt": "2026-10-16T00:00:00Z",
+                        "createdAt": "2026-10-14T00:00:00Z"
+                    }
+                ],
+                "count": 1,
+                "createdAt": "2026-10-14T00:00:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.generateScentPlumeGeofences(
+            GeneratePlumeGeofencesRequest(
+                attractants = listOf(
+                    AttractantHubDto(
+                        id = "kt_01",
+                        type = "KAKI_TREE",
+                        latitude = 38.256,
+                        longitude = 140.321,
+                        fruitLoad = "ABUNDANT"
+                    )
+                ),
+                weather = WeatherConditionsDto(
+                    windSpeedKmh = 15.0,
+                    windDirectionDeg = 270.0,
+                    moonIllumination = 0.05
+                )
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals(1, data.count)
+        val zone = data.zones.first()
+        assertEquals("geo_kt_01_1", zone.id)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, zone.tier)
+        assertEquals(0.88, zone.activeRiskScore)
+        assertEquals("Polygon", zone.polygonGeoJson?.type)
+    }
 }
+

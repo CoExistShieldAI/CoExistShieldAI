@@ -46,6 +46,7 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/healthz", r.handleHealth)
 	r.mux.HandleFunc("/api/v1/forensics/triage", r.handleForensicsTriage)
 	r.mux.HandleFunc("/api/v1/geofences/recalculate", r.handleGeofencesRecalculate)
+	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
 	r.mux.HandleFunc("/api/v1/analytics/japan-kaki/top-hazards", r.handleTopHazards)
 	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.handleRspoExport)
 }
@@ -92,6 +93,22 @@ func (r *Router) handleGeofencesRecalculate(w http.ResponseWriter, req *http.Req
 	}
 
 	resp := r.geofenceEngine.Recalculate(recalcReq)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleGeneratePlumeGeofences(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var plumeReq model.GeneratePlumeGeofencesRequest
+	if err := json.NewDecoder(req.Body).Decode(&plumeReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	resp := r.geofenceEngine.GenerateScentPlumeGeofences(plumeReq)
 	writeJSON(w, http.StatusOK, resp)
 }
 
