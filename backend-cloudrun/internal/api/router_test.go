@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"ai.coexistshield/backend/internal/coldstart"
+	"ai.coexistshield/backend/internal/compliance"
+	"ai.coexistshield/backend/internal/corroboration"
 	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
-	"ai.coexistshield/backend/internal/compliance"
-	"ai.coexistshield/backend/internal/corroboration"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
 	"ai.coexistshield/backend/internal/tiger"
@@ -1290,6 +1291,137 @@ func TestUpdateRoadkillStatusEndpoint(t *testing.T) {
 		t.Errorf("expected ClearedAt timestamp set upon clearance")
 	}
 }
+
+func TestColdStartStatusEndpoint(t *testing.T) {
+	router := setupTestServer()
+	req := httptest.NewRequest("GET", "/api/v1/coldstart/status", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var status coldstart.ColdStartStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatalf("failed to decode ColdStartStatus: %v", err)
+	}
+
+	if status.TotalGbifOccurrences == 0 {
+		t.Errorf("expected pre-seeded GBIF occurrences > 0, got %d", status.TotalGbifOccurrences)
+	}
+	if status.TotalFirmsAnomalies == 0 {
+		t.Errorf("expected pre-seeded FIRMS anomalies > 0, got %d", status.TotalFirmsAnomalies)
+	}
+	if !status.ReadyForDayOneDeployment {
+		t.Errorf("expected ReadyForDayOneDeployment=true")
+	}
+}
+
+func TestColdStartBootstrapEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	// Bootstrap for JAPAN region
+	reqBody, _ := json.Marshal(map[string]string{
+		"region": "JAPAN",
+	})
+	req := httptest.NewRequest("POST", "/api/v1/coldstart/gbif-firms/bootstrap", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var status coldstart.ColdStartStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatalf("failed to decode ColdStartStatus: %v", err)
+	}
+
+	if !status.Bootstrapped {
+		t.Errorf("expected Bootstrapped=true")
+	}
+	if status.LastBootstrapTimestamp == "" {
+		t.Errorf("expected LastBootstrapTimestamp to be set")
+	}
+
+	// Verify geofences are active
+	geoReq := httptest.NewRequest("GET", "/api/v1/geofences/active?latitude=39.7&longitude=141.1&radiusKm=5000", nil)
+	wGeo := httptest.NewRecorder()
+	router.ServeHTTP(wGeo, geoReq)
+	if wGeo.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for active geofences, got %d", wGeo.Code)
+	}
+}
+
+func TestNgoBulkImportEndpoint_CSV(t *testing.T) {
+	router := setupTestServer()
+
+	csvPayload := `date,species,lat,lon,observation_type,tier,notes
+2026-10-14T06:00:00Z,BEAR,39.7020,141.1520,DIRECT_SIGHTING,TIER_2_WARNING,Spotted near school boundary
+2026-10-14T08:00:00Z,TIGER,0.8250,101.5300,PUGMARK_TRACK,TIER_3_DANGER,Corral intrusion
+`
+	importReq := coldstart.NgoBulkImportRequest{
+		Format:        "CSV",
+		Organization:  "International Ranger Federation",
+		RangerStation: "Iwate-Station-01",
+		Region:        "JAPAN",
+		Payload:       csvPayload,
+	}
+	reqBytes, _ := json.Marshal(importReq)
+	req := httptest.NewRequest("POST", "/api/v1/ngo/patrol-logs/bulk-import", bytes.NewReader(reqBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp coldstart.NgoBulkImportResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode NgoBulkImportResponse: %v", err)
+	}
+
+	if resp.ImportedCount != 2 {
+		t.Errorf("expected 2 records imported, got %d", resp.ImportedCount)
+	}
+	if resp.FormatDetected != "CSV" {
+		t.Errorf("expected format CSV, got %s", resp.FormatDetected)
+	}
+	if resp.GeofencesActivated == 0 {
+		t.Errorf("expected geofences to be activated")
+	}
+}
+
+func TestNgoTemplatesEndpoint(t *testing.T) {
+	router := setupTestServer()
+	req := httptest.NewRequest("GET", "/api/v1/ngo/patrol-logs/templates", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var result struct {
+		Templates map[string]string `json:"templates"`
+		Formats   []string          `json:"formats"`
+		Sla       string            `json:"sla"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to decode templates response: %v", err)
+	}
+
+	if len(result.Templates) < 3 {
+		t.Errorf("expected at least 3 templates (CSV, GEOJSON, GPX), got %d", len(result.Templates))
+	}
+	if result.Sla == "" {
+		t.Errorf("expected SLA specification in template response")
+	}
+}
+
 
 
 

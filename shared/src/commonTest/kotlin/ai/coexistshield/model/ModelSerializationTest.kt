@@ -88,4 +88,38 @@ class ModelSerializationTest {
         assertEquals(true, deserialized.isKillSite)
         assertEquals(AlertTier.TIER_3_DANGER, deserialized.activeThreatTier)
     }
+
+    @Test
+    fun testColdStartAndNgoSerialization() {
+        val status = ai.coexistshield.network.ColdStartStatusDto(
+            bootstrapped = true,
+            totalGbifOccurrences = 12400,
+            totalFirmsAnomalies = 3850,
+            totalNgoPatrolRecords = 840,
+            activeBaselineGeofences = 34,
+            regionsCovered = listOf("JAPAN", "THAILAND", "INDONESIA"),
+            lastBootstrapTimestamp = "2026-10-14T06:00:00Z",
+            readyForDayOneDeployment = true
+        )
+        val serializedStatus = json.encodeToString(status)
+        assertTrue(serializedStatus.contains("THAILAND"))
+        val deserializedStatus = json.decodeFromString<ai.coexistshield.network.ColdStartStatusDto>(serializedStatus)
+        assertEquals(12400, deserializedStatus.totalGbifOccurrences)
+        assertEquals(34, deserializedStatus.activeBaselineGeofences)
+
+        val ngoResp = ai.coexistshield.network.NgoBulkImportResponseDto(
+            importedCount = 42,
+            formatDetected = "GEOJSON",
+            processingDurationMs = 120,
+            speciesBreakdown = mapOf("BEAR" to 30, "TIGER" to 12),
+            geofencesActivated = 8,
+            message = "Imported 42 records in 120ms within 5-min SLA."
+        )
+        val serializedNgo = json.encodeToString(ngoResp)
+        assertTrue(serializedNgo.contains("GEOJSON"))
+        val deserializedNgo = json.decodeFromString<ai.coexistshield.network.NgoBulkImportResponseDto>(serializedNgo)
+        assertEquals(42, deserializedNgo.importedCount)
+        assertEquals(8, deserializedNgo.geofencesActivated)
+    }
 }
+

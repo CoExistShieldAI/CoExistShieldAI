@@ -61,7 +61,8 @@ import androidx.compose.ui.unit.sp
 enum class AdminTab(val title: String) {
     JAPAN_MUNICIPAL("Japan: Kaki & GCF"),
     APAC_PLANTATION("APAC: Plantations & RSPO"),
-    SYSTEM_AI("AI System Health")
+    SYSTEM_AI("AI System Health"),
+    COLD_START_NGO("Cold-Start & NGO")
 }
 
 data class PriorityKakiItem(
@@ -131,7 +132,17 @@ data class AdminConsoleUiState(
     val bigQueryReplicationLagSeconds: Double = 12.4,
     val bigQuerySlaTargetSeconds: Int = 60,
     val bigQueryStagedSamplesCount: Int = 1420,
-    val bigQuerySpatialIndexing: String = "Uber H3 Res 8 (~460m edge) & S2 Level 13"
+    val bigQuerySpatialIndexing: String = "Uber H3 Res 8 (~460m edge) & S2 Level 13",
+    // Open-to-Enterprise Cold-Start & Conservation NGO Ingestion (Issue #23)
+    val coldStartBootstrapped: Boolean = true,
+    val gbifOccurrencesCount: Int = 12400,
+    val firmsAnomaliesCount: Int = 3850,
+    val ngoPatrolRecordsCount: Int = 840,
+    val coldStartDayOneGeofencesCount: Int = 34,
+    val coldStartRolloutRegions: List<String> = listOf("JAPAN (Tohoku)", "THAILAND (Eastern Forest)", "INDONESIA (Riau Peatland)"),
+    val ngoBulkImportSlaTarget: String = "< 5 minutes SLA",
+    val ngoSupportedFormats: List<String> = listOf("CSV (SMART / Ranger)", "GeoJSON RFC 7946", "GPX Handheld XML"),
+    val lastNgoImportMessage: String = "Imported 128 ranger patrol tracks in 1,240 ms from Eastern Forest Complex (within SLA)."
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -143,7 +154,9 @@ fun AdminConsoleScreen(
     onMarkTreePruned: (String) -> Unit = {},
     onDispatchCarcassTruck: (String) -> Unit = {},
     onExportRspoReport: () -> Unit = {},
-    onTriggerAiRetraining: () -> Unit = {}
+    onTriggerAiRetraining: () -> Unit = {},
+    onTriggerColdStartBootstrap: (String) -> Unit = {},
+    onBulkImportNgoLogs: (String, String) -> Unit = { _, _ -> }
 ) {
     Scaffold(
         topBar = {
@@ -220,6 +233,11 @@ fun AdminConsoleScreen(
                     AdminTab.SYSTEM_AI -> SystemAiHealthTab(
                         state = state,
                         onTriggerAiRetraining = onTriggerAiRetraining
+                    )
+                    AdminTab.COLD_START_NGO -> ColdStartNgoTab(
+                        state = state,
+                        onTriggerColdStartBootstrap = onTriggerColdStartBootstrap,
+                        onBulkImportNgoLogs = onBulkImportNgoLogs
                     )
                 }
             }
@@ -746,6 +764,156 @@ fun SystemAiHealthTab(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// TAB 4: Cold-Start Strategy & Conservation NGO Data Ingestion (Issue #23)
+// -------------------------------------------------------------
+@Composable
+fun ColdStartNgoTab(
+    state: AdminConsoleUiState,
+    onTriggerColdStartBootstrap: (String) -> Unit = {},
+    onBulkImportNgoLogs: (String, String) -> Unit = { _, _ -> }
+) {
+    // Card 1: Macro Open Data Bootstrap (GBIF + NASA FIRMS)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Open Macro Baseline Pre-Training", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (state.coldStartBootstrapped) TierSafe.copy(alpha = 0.15f) else TierWarning.copy(alpha = 0.15f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = if (state.coldStartBootstrapped) "DAY 1 ACTIVE" else "PENDING BOOTSTRAP",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (state.coldStartBootstrapped) TierSafe else TierWarning
+                    )
+                }
+            }
+
+            Text(
+                text = "Pre-trains spatial risk priors using Global Biodiversity Information Facility (GBIF) historical occurrences and NASA FIRMS satellite thermal anomalies before local user crowdsourcing begins.",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("GBIF Occurrences", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.gbifOccurrencesCount} Records", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("NASA FIRMS Hotspots", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.firmsAnomaliesCount} Thermal", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("Day 1 Geofences", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.coldStartDayOneGeofencesCount} Active", fontSize = 13.sp, fontWeight = FontWeight.Black, color = TierSafe)
+                }
+            }
+
+            Text("Active Regional Corridors: ${state.coldStartRolloutRegions.joinToString(" • ")}", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = { onTriggerColdStartBootstrap("ALL") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("Re-Bootstrap Baseline Geofences (GBIF + FIRMS)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+
+    // Card 2: Conservation NGO & Ranger Offline Telemetry Bulk Ingest
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Conservation NGO Patrol Ingestion", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .background(TierNotice.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(state.ngoBulkImportSlaTarget, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TierNotice)
+                }
+            }
+
+            Text(
+                text = "Allows park rangers and conservation NGOs to ingest offline field telemetry (SMART Conservation CSV, GeoJSON RFC 7946, GPX handheld logs) within 5 minutes SLA.",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("NGO Patrol Records", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.ngoPatrolRecordsCount} Tracks", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("Supported Formats", fontSize = 11.sp, color = Color.Gray)
+                    Text("CSV • GeoJSON • GPX", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Latest NGO Ingestion Audit Log:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(state.lastNgoImportMessage, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = {
+                    onBulkImportNgoLogs("CSV", "date,species,lat,lon,tier\n2026-10-14T06:00:00Z,BEAR,39.7020,141.1520,TIER_2_WARNING")
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TierWarning)
+            ) {
+                Text("Bulk Ingest Offline Ranger Patrol Logs (5-Min SLA)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

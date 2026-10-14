@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"ai.coexistshield/backend/internal/coldstart"
 	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/corroboration"
 	"ai.coexistshield/backend/internal/elephant"
@@ -32,6 +33,7 @@ type Router struct {
 	tigerEngine         *tiger.Engine
 	complianceEngine    *compliance.Engine
 	corroborationEngine *corroboration.Engine
+	coldstartEngine     *coldstart.Engine
 	mu                  sync.RWMutex
 	incidents           []model.IncidentDto
 	roadkills           []model.RoadkillRecordDto
@@ -59,6 +61,7 @@ func NewRouter(
 		tigerEngine:         tigerEngine,
 		complianceEngine:    complianceEngine,
 		corroborationEngine: corroborationEngine,
+		coldstartEngine:     coldstart.NewEngine(mlPipeline, geofenceEngine, memoryBank),
 	}
 
 	// Dynamic model promotion listener (Issue #21): updates live geofencing engine without server restart
@@ -125,6 +128,12 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/corroboration/ingest", r.handleCorroborationIngest)
 	r.mux.HandleFunc("/api/v1/corroboration/evaluate", r.handleCorroborationEvaluate)
 	r.mux.HandleFunc("/api/v1/corroboration/poll-cycle", r.handleCorroborationPollCycle)
+
+	// Cold-Start & Conservation NGO bulk ingestion routes (Issue #23)
+	r.mux.HandleFunc("/api/v1/coldstart/gbif-firms/bootstrap", r.handleColdStartBootstrap)
+	r.mux.HandleFunc("/api/v1/coldstart/status", r.handleColdStartStatus)
+	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/bulk-import", r.handleNgoBulkImport)
+	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/templates", r.handleNgoTemplates)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -1224,6 +1233,78 @@ func (r *Router) initSeedData() {
 	}
 }
 
+
+func (r *Router) GetColdStartEngine() *coldstart.Engine {
+	return r.coldstartEngine
+}
+
+func (r *Router) handleColdStartBootstrap(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	region := "ALL"
+	if req.Body != nil {
+		var body struct {
+			Region string `json:"region"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err == nil && body.Region != "" {
+			region = body.Region
+		}
+	}
+	if q := req.URL.Query().Get("region"); q != "" {
+		region = q
+	}
+
+	status := r.coldstartEngine.BootstrapDayOne(region)
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (r *Router) handleColdStartStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	status := r.coldstartEngine.GetStatus()
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (r *Router) handleNgoBulkImport(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var importReq coldstart.NgoBulkImportRequest
+	if err := json.NewDecoder(req.Body).Decode(&importReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.coldstartEngine.ImportPatrolLogs(importReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Bulk import failed: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleNgoTemplates(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	templates := r.coldstartEngine.GetStandardTemplates()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"templates": templates,
+		"formats":   []string{"CSV", "GEOJSON", "GPX"},
+		"sla":       "5 minutes",
+	})
+}
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

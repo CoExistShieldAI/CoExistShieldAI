@@ -606,6 +606,62 @@ data class UpdateRoadkillStatusRequestDto(
     val assignedOfficialId: String? = null
 )
 
+// Issue #23: Open-to-Enterprise Cold-Start Strategy & Conservation NGO Data Ingestion DTOs
+
+@Serializable
+data class ColdStartStatusDto(
+    val bootstrapped: Boolean = false,
+    val totalGbifOccurrences: Int = 0,
+    val totalFirmsAnomalies: Int = 0,
+    val totalNgoPatrolRecords: Int = 0,
+    val activeBaselineGeofences: Int = 0,
+    val regionsCovered: List<String> = emptyList(),
+    val lastBootstrapTimestamp: String = "",
+    val readyForDayOneDeployment: Boolean = true
+)
+
+@Serializable
+data class NgoPatrolRecordDto(
+    val recordId: String,
+    val organization: String,
+    val rangerUnit: String,
+    val species: String,
+    val observationType: String,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: String,
+    val individualCount: Int = 1,
+    val corridorRiskTier: String,
+    val notes: String = ""
+)
+
+@Serializable
+data class NgoBulkImportRequestDto(
+    val format: String = "AUTO",
+    val organization: String,
+    val rangerStation: String,
+    val region: String = "JAPAN",
+    val payload: String
+)
+
+@Serializable
+data class NgoBulkImportResponseDto(
+    val importedCount: Int,
+    val formatDetected: String,
+    val processingDurationMs: Long,
+    val speciesBreakdown: Map<String, Int> = emptyMap(),
+    val geofencesActivated: Int,
+    val importedRecords: List<NgoPatrolRecordDto> = emptyList(),
+    val message: String
+)
+
+@Serializable
+data class NgoTemplatesResponseDto(
+    val templates: Map<String, String> = emptyMap(),
+    val formats: List<String> = emptyList(),
+    val sla: String = "5 minutes"
+)
+
 
 
 
