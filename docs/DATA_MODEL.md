@@ -23,6 +23,12 @@ Issue text, Gemini JSON schemas, and `firestore.rules` must use these values exa
 - Geohash precision: ≤5 characters for anything public (`kaki_trees_public`).
 - `geofences.polygonGeoJson` accepts `Polygon | MultiPolygon` (RFC 7946).
 - Sample data: Morioka City is `municipalityCode=03201` (~39.70N, 141.15E).
+- **Field Media Attachments (Google Cloud Storage):**
+  - Storage Bucket: `corald-coexistshield-media` (or `GCS_MEDIA_BUCKET` env).
+  - Object Key Pattern: `uploads/YYYYMMDD_HHMMSS_<rand4>_<sanitized_name>.<ext>`.
+  - Max limits: Up to 5 images per report, maximum 5 MB per file.
+  - Multi-photo field `photo_urls: string[]` is canonical across Wildlife, Roadkill, and Environmental records.
+  - For backward compatibility with legacy single-photo consumers, Roadkill `photo_url` mirrors `photo_urls[0]`.
 
 ## Known divergences still to resolve
 - `hazardTier` (`LOW|MEDIUM|HIGH`, used by `kaki_trees_public`) has no Kotlin enum yet.
