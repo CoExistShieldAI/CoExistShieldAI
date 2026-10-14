@@ -419,6 +419,11 @@ func (s *Store) CreateRoadkill(rk AdminRoadkillRecord) AdminRoadkillRecord {
 	if rk.ReliabilityScore == 0 {
 		rk.ReliabilityScore = 0.90
 	}
+	if len(rk.PhotoURLs) > 0 && rk.PhotoURL == "" {
+		rk.PhotoURL = rk.PhotoURLs[0]
+	} else if rk.PhotoURL != "" && len(rk.PhotoURLs) == 0 {
+		rk.PhotoURLs = []string{rk.PhotoURL}
+	}
 	s.roadkills[rk.ID] = rk
 	return rk
 }

@@ -101,6 +101,7 @@ To prove algorithmic portability across diverse ecosystems, CoExist Shield AI re
 3. **Roadkill Incident Logging & One Health Live Map:**
    - Rapid camera capture with automated GPS tagging.
    - Interactive GIS map displaying confirmed roadkill locations, pathogen vector status, and correlated predator hazard zones.
+   - **Slippy Map Raster Tiles & Dynamic Clustering:** Live raster tile basemap (ESRI Dark Canvas) with nationwide zoom (Zoom 5 to 15), dynamic marker clustering with click-to-expand (smooth zoom into cluster centroid), and Google Maps external navigation routing.
 4. **Livestock Corrals Map & Depredation Incident Logging (Primary APAC / Tiger Mitigation):**
    - **Livestock Pasture & Corrals Map:** GIS layer mapping domestic herds (**cattle, water buffaloes, goats, pigs**) and night corrals to identify high-density carnivore attractant hotspots across plantation edges.
    - **Livestock Depredation Reporting:** Streamlined reporting flow for pastoralists and rangers to submit domestic animal predation incidents with GPS, livestock type, and forensic bite/wound photos.
@@ -124,14 +125,21 @@ Built for rangers, municipal wildlife control teams, plantation managers, and op
    - **AI Recalculation:** Instant manual trigger to execute the predictive engine on fresh multi-source inputs.
 2. **Wildlife Incident & Encounter Registry:**
    - Real-time logging of apex carnivores and megafauna (Asian Elephants, Tigers, Bears).
+   - Unified tab-based workspace (`Sightings Registry` table with search & filter vs. `+ Log Wildlife Sighting` 2-column Map-Picker workspace).
+   - Interactive Google Map click-to-pin drop with automatic latitude/longitude and address reverse geocoding.
+   - Multi-photo field attachments (up to 5 photos) uploaded directly to Cloud Storage.
    - Searchable status workflows (`Unverified` -> `Verified` -> `Resolved` -> `False Alarm`).
 3. **Roadkill Surveillance & Big-Screen Desktop Entry:**
    - **Predator Magnet Mitigation:** Real-time carcass tracking preventing apex predators from using roads as hunting grounds.
    - **Data Cleansing:** Reliability scoring and instant exclusion toggles (`is_excluded`) to filter out noise from AI dispersion models.
-   - **Desktop Big-Screen Registration Workspace:** 2-column layout with interactive Google Map click-to-pin drop, auto-populated GPS/address, and carcass decay stages (`Fresh`, `Moderate`, `Advanced`).
-4. **Ecological & Attractant Layers Management:**
+   - **Desktop Big-Screen Registration Workspace:** Unified 2-column tab workspace with interactive Google Map click-to-pin drop, auto-populated GPS/address, carcass decay stages (`Fresh`, `Moderate`, `Advanced`), and multi-photo uploads.
+4. **Ecological & Attractant Layers Management (Category-First Wizard):**
    - Management of causal root attractants: sugarcane phenology (Thailand), livestock pastures (Indonesia), and abandoned persimmon trees (Japan).
-5. **Operations, Emergency Broadcast & GIS Export:**
+   - **Poka-Yoke 2-Step Wizard:** Step 1 selects ecological context; Step 2 automatically configures context-aware default radii (e.g. Sugarcane: 3000m, Livestock Corrals: 1500m, Abandoned Persimmon: 500m, Water Holes: 1000m) and risk weights with interactive map circle preview.
+5. **Multi-Photo Evidence Upload & Google Cloud Storage:**
+   - Direct multipart uploads (`/api/v1/admin/upload`) to Cloud Storage bucket (`corald-coexistshield-media`).
+   - Client-side auto-compression for images >1MB, drag-and-drop zone, thumbnail grid, and full-resolution inspection.
+6. **Operations, Emergency Broadcast & GIS Export:**
    - **Emergency Area Push Broadcast:** Immediate dispatch of audio sirens and push alerts to mobile devices within specific geofences.
    - **GIS Data Export:** One-click downloads of GeoJSON (RFC 7946) and CSV formats for QGIS, ArcGIS, and government reports.
 
@@ -241,21 +249,22 @@ All issues, pull requests, and git commit messages follow the **Conventional Com
 
 ### 7. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
 
-CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatform, and ultra-lightweight Go serverless technologies:
+CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatform, Angular 22, and ultra-lightweight Go serverless technologies:
 
 ```
 +-----------------------------------------------------------------------------------------+
 |                                    Client Layer                                         |
-|  - Android Application (:composeApp: Kotlin 2.1, Compose Multiplatform, Jetpack)        |
-|  - Web Application (:shared: Kotlin/Wasm & JS, Skiko CanvasBasedWindow)                 |
+|  - Field Mobile / Tablet (:composeApp: Kotlin 2.1, Compose Multiplatform, Jetpack)      |
+|  - Public / Field Web App (:shared: Kotlin/Wasm & JS, Skiko CanvasBasedWindow)          |
+|  - Operations Admin Portal (web-admin: Angular 22, Google Maps JS API, Tailwind CSS)    |
 +--------------------------------------------+--------------------------------------------+
-                                             | Real-time Synchronization / Auth
+                                             | Real-time Synchronization / REST / Uploads
                                              v
 +-----------------------------------------------------------------------------------------+
-|                                 Firebase & Firestore                                    |
+|                              Firebase & Google Cloud Storage                            |
 |  - Firebase Authentication (3-Role RBAC: CITIZEN, OFFICIAL, ADMIN)                      |
-|  - Cloud Firestore (High-throughput NoSQL real-time sync for incidents,                |
-|                     roadkill logs, and active dynamic geofence GeoJSON polygons)        |
+|  - Cloud Firestore (High-throughput NoSQL real-time sync with Repository persistence)   |
+|  - Google Cloud Storage (Media bucket: corald-coexistshield-media for field evidence)   |
 |  - 3-Role RBAC Security Rules (firestore.rules) & Privacy Geohash Protection            |
 +--------------------------------------------+--------------------------------------------+
                                              | REST / JSON Structured Outputs
@@ -263,18 +272,19 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 +-----------------------------------------------------------------------------------------+
 |                      Google Cloud Run Microservice (Go 1.24)                            |
 |  - Ultra-lightweight Go HTTP backend (distroless container, sub-10ms cold start)        |
+|  - Admin REST API (/api/v1/admin/*) with GCS upload, manual geofences, and exports      |
+|  - Live External Connectors: GBIF occurrence API, NASA FIRMS thermal, Open-Meteo       |
+|  - BigQuery GIS streaming insertAll pipeline and dynamic geofence engine                |
 |  - Multimodal photo forensics & structured prompt contracts                             |
-|  - Dynamic geofence recalculation & Japanese municipal Kaki hazard analytics            |
-|  - ESG RSPO audit reporting streaming engine                                            |
 +--------------------------------------------+--------------------------------------------+
                                              | Multimodal Reasoning
                                              v
 +-----------------------------------------------------------------------------------------+
 |                                  Google Gemini API                                      |
-|  - Gemini 1.5/2.0 Flash: Multimodal classification of species, fruit load level,         |
+|  - Gemini 2.5 / 2.0 / 1.5 Flash: Multimodal classification of species, fruit load level, |
 |                          ripeness stages, and carcass decay forensic analysis           |
 |  - Gemini Structured Outputs: Zero-syntax-error JSON response schema contracts          |
-+--------------------------------------------+--------------------------------------------+
++-----------------------------------------------------------------------------------------+
 ```
 
 | Technology | Role & Strategic Justification |
@@ -282,8 +292,11 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 | **Go 1.24 (Cloud Run)** | Sub-10ms cold start, minimal memory footprint (<15MB distroless image), executing ultra-fast inference and analytics REST APIs. |
 | **Kotlin Multiplatform (KMP)** | Single shared codebase (`:shared`) powering both Android Mobile/Tablet and Web (JS/Wasm) with 100% UI and model code sharing. |
 | **Compose Multiplatform (CMP)** | Declarative UI delivering unified Main HUD, GIS Map, Incident Reporter, and Admin Console across Web & Android. |
-| **Cloud Firestore** | Low-latency, offline-capable NoSQL database with 3-Role RBAC security rules for real-time alert sync. |
-| **Google Gemini API** | Gemini 1.5/2.0 Flash for sub-2s multimodal photo triage (species, fruit load, decay state) with Structured JSON outputs. |
+| **Angular 22 (web-admin)** | High-density desktop operations portal with Google Maps JS API, 2-column Map-Picker tabs, and category wizards. |
+| **Google Maps JS API** | Interactive pin drop, reverse geocoding, geofence polygon/circle authoring, and cluster visualization. |
+| **Cloud Firestore** | Low-latency, offline-capable NoSQL database with 3-Role RBAC security rules and persistent repository layer. |
+| **Google Cloud Storage (GCS)** | Secure, scalable media bucket (`corald-coexistshield-media`) for forensic wildlife & roadkill photo attachments. |
+| **Google Gemini API** | Gemini 2.5 / 2.0 / 1.5 Flash for sub-2s multimodal photo triage (species, fruit load, decay state) with Structured JSON outputs. |
 | **GitHub Actions CI/CD** | Automated multi-target test pipeline running Go unit tests, KMP JVM tests, Webpack bundling, and Android APK builds. |
 
 ---
@@ -294,17 +307,28 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 CoExistShieldAI/
 ├── backend-cloudrun/                # Ultra-lightweight Go Cloud Run REST microservice
 │   ├── cmd/server/main.go          # Server entry point
+│   ├── internal/admin/             # Admin REST handlers, store, and GCS multi-photo uploader
 │   ├── internal/api/               # HTTP router, handlers, and integration tests
-│   ├── internal/gemini/            # Google Gemini 1.5/2.0 Flash client (Structured JSON)
+│   ├── internal/gemini/            # Google Gemini 2.5/2.0/1.5 Flash client (Structured JSON)
 │   ├── internal/geofence/          # Dynamic geofence recalculation & analytics engine
+│   ├── internal/repository/        # Cloud Firestore persistent storage layer
 │   ├── internal/model/             # Go DTOs matching Kotlin & Gemini schemas
 │   └── Dockerfile                  # Multi-stage distroless build (~15MB container)
+├── web-admin/                      # Angular 22 Admin Operations Portal
+│   ├── src/app/components/         # Dashboard, Geofence Map, Wildlife, Roadkill, Environmental, Ops
+│   │   ├── image-upload/           # Multi-photo evidence uploader with client compression
+│   │   ├── environmental/          # Category-First Wizard & Map-Picker workspace
+│   │   ├── wildlife/               # Wildlife sighting registry & 2-column Map-Picker
+│   │   ├── roadkill/               # Roadkill surveillance, data cleansing & Map-Picker
+│   │   └── geofence-map/           # JAPAC dynamic geofences & manual override tools
+│   ├── src/app/services/           # AdminApiService (REST endpoints & GCS upload)
+│   └── angular.json                # Angular CLI workspace configuration
 ├── shared/                         # Kotlin Multiplatform (KMP) shared module
 │   ├── src/commonMain/kotlin/      # Domain models, Ktor ApiClient, and Compose UI screens
 │   │   ├── ai/coexistshield/model/      # Core types, Incidents, Roadkill, Geofences, KakiTrees
 │   │   ├── ai/coexistshield/network/    # Ktor REST client & GeminiTriageService
 │   │   ├── ai/coexistshield/repository/ # Incident & Geofence repositories (with offline queue)
-│   │   └── ai/coexistshield/ui/         # Main HUD, GIS Map, Reporter, Admin Console, Theme
+│   │   └── ai/coexistshield/ui/         # Main HUD, Slippy GIS Map (ESRI raster), Clustering
 │   ├── src/jsMain/                 # Compose Web entry point (Main.kt & index.html)
 │   └── src/commonTest/             # Unit tests for serialization and network client
 ├── composeApp/                     # Android Application module (:composeApp)
@@ -312,10 +336,13 @@ CoExistShieldAI/
 ├── web-e2e/                        # Playwright E2E test suite for Compose Web app
 │   ├── tests/                      # Page load, Canvas rendering, offline resilience, perf tests
 │   └── playwright.config.ts        # Multi-viewport (Desktop & Mobile) test configuration
+├── infra/                          # Infrastructure as Code (Terraform)
+│   └── terraform/                  # Google Cloud & Firebase Identity Platform provisioning
+├── docker-compose.test.yml         # Containerized test environment for live backend E2E suites
 ├── firestore.rules                 # Cloud Firestore 3-Role RBAC security rules
 ├── firebase-tests/                 # Emulator tests for security rules (@firebase/rules-unit-testing)
-├── scripts/                        # Deployment helper scripts (e.g., deploy_cloudrun.sh)
-└── .github/workflows/              # GitHub Actions CI and Cloud Run deployment workflows
+├── scripts/                        # Deployment helper scripts (e.g., deploy_cloudrun.sh, render_web_config.sh)
+└── .github/workflows/              # GitHub Actions CI and Cloud Run / Firebase deployment workflows
 ```
 
 ---
@@ -355,31 +382,48 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew :composeApp:assembleDebug
 ```
 
-### 9.3 Web Application E2E Tests (Playwright)
-The Compose Multiplatform Web app is verified using an automated Playwright End-to-End (E2E) test suite covering Desktop & Mobile viewports:
+### 9.3 Operations Admin Portal (Angular 22)
+```bash
+# Navigate to web-admin directory
+cd web-admin
+
+# Install npm dependencies
+npm install
+
+# Start Angular development server locally
+npm start
+# -> Access Operations Console at http://localhost:4200
+
+# Build production distribution for Firebase Hosting (output in dist/web-admin/browser)
+npm run build
+```
+
+### 9.4 E2E & Integration Tests (Playwright & Docker Compose)
+The platform features automated Playwright End-to-End suites as well as containerized live backend integration tests:
 
 ```bash
-# 1. Build the production Web distribution
+# 1. Compose Multiplatform Web app E2E tests (Desktop Chrome & Mobile Pixel 7)
 ./gradlew :shared:jsBrowserDistribution
-
-# 2. Run all E2E tests (Desktop Chrome & Mobile Pixel 7)
 cd web-e2e
 npm test
 
-# (Optional) Run tests against the live production deployment
-npm run test:prod
-
-# (Optional) Interactive Playwright UI mode
-npm run test:ui
+# 2. Live backend containerized integration test suite
+docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
 ```
 
-### 9.4 Deploy to Google Cloud Run (Singapore / asia-southeast1)
+### 9.5 Deploy to Google Cloud Run & Firebase Hosting
 ```bash
-# One-click deployment script targeting Singapore (AI Builders Cup Demo Day region)
+# Deploy Go microservice targeting Singapore (AI Builders Cup Demo Day region)
 ./scripts/deploy_cloudrun.sh corald asia-southeast1
+
+# Deploy KMP Web App to Firebase Hosting
+firebase deploy --only hosting:app
+
+# Deploy Angular Admin Portal to Firebase Hosting
+firebase deploy --only hosting:admin
 ```
 
-### 9.5 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
+### 9.6 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
 The microservices and continuous retraining pipeline are deployed and actively running on Google Cloud Run:
 
 - **Public Base URL:** `https://coexistshield-backend-4cerxfo4wq-as.a.run.app`
@@ -388,20 +432,32 @@ The microservices and continuous retraining pipeline are deployed and actively r
 - **Live Verification Endpoints:**
   - `GET /health` — Service health & uptime probe (`{"status":"healthy","service":"coexistshield-backend-cloudrun"}`)
   - `GET /api/v1/geofences/active?latitude=39.7&longitude=141.1&radiusKm=5000` — Dynamic multi-species GeoJSON geofences
+  - `GET /api/v1/admin/dashboard/stats` — Real-time operations stats & active predator magnets
+  - `GET /api/v1/admin/geofences` — Active manual & AI geofence registry
   - `GET /api/v1/coldstart/status` — Open macro pre-training & Day 1 geofence status (GBIF + NASA FIRMS)
   - `GET /api/v1/ml/status` — Live ML continuous retraining pipeline and active production model weights
   - `GET /api/v1/ngo/patrol-logs/templates` — Ranger field log standardized templates (CSV, GeoJSON, GPX)
 - **Continuous Retraining Cloud Run Job:** `coexistshield-retrain-job` (automated model retraining with statistical validation gate checks)
 
-### 9.6 Live Review Web Application (Firebase Hosting)
-For interactive evaluation by hackathon judges and rangers, the Compose Multiplatform Web app is live:
+### 9.7 Live Review Web Applications (Firebase Hosting)
+For interactive evaluation by hackathon judges and rangers, two dedicated web applications are deployed live:
 
-- **Web Dashboard URL:** **`https://corald.web.app`** (Mirror: `https://corald.firebaseapp.com`)
-- **Key Features Available:**
-  - 3-Tier Dynamic Early-Warning Geofence HUD
-  - Multimodal Gemini 3.8 Flash Forensic Triage Card & Attribution
-  - GIS Hazard Map with H3 Hexagonal Incursion Probability Layers
-  - Decision-Support Console: Japan Municipal GCF, APAC Plantation RSPO Zero-Deforestation Auditing, and Cold-Start & NGO Bulk Patrol Ingestion
+1. **Public / Field Web App (Kotlin Multiplatform & Compose):**
+   - **URL:** **`https://corald.web.app`** (Mirror: `https://corald.firebaseapp.com`)
+   - **Key Features:**
+     - 3-Tier Dynamic Early-Warning Geofence HUD
+     - Multimodal Gemini 3.8 / 2.5 Flash Forensic Triage Card & Attribution
+     - GIS Hazard Map with Slippy Raster Tiles (ESRI Dark Canvas), Dynamic Marker Clustering with Click-to-Expand, and H3 Hexagonal Incursion Probability Layers
+     - Decision-Support Console: Japan Municipal GCF, APAC Plantation RSPO Zero-Deforestation Auditing, and Cold-Start & NGO Bulk Patrol Ingestion
+
+2. **Operations Admin Web Portal (Angular 22 + Google Maps JS API):**
+   - **URL:** **`https://corald-admin.web.app`** (Mirror: `https://corald-admin.firebaseapp.com`)
+   - **Key Features:**
+     - JAPAC Regional Map Console (`lat: 15.0, lng: 105.0`) with Circle/Polygon manual geofence authoring and AI recalculation triggers
+     - Unified Wildlife Encounter & Roadkill Hubs with interactive 2-column Map-Picker tabs and reverse geocoding
+     - Category-First Environmental Attractant Wizard with context-aware default radii (Sugarcane 3000m, Livestock 1500m, Kaki 500m, Watering Holes 1000m)
+     - Multi-Photo Evidence Upload (up to 5 photos, 5MB limit) directly integrated with Google Cloud Storage (`corald-coexistshield-media`)
+     - Tactical Dispatch: Area Emergency Siren & Push Broadcast, plus one-click RFC 7946 GeoJSON and CSV data exports
 
 
 ## Authentication setup (Terraform + CI/CD)

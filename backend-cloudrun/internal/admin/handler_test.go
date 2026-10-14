@@ -3,8 +3,10 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -188,4 +190,94 @@ func TestOperationsEmergencyBroadcastAndExport(t *testing.T) {
 		t.Errorf("Unexpected content type: %s", csvResp.Header.Get("Content-Type"))
 	}
 	csvResp.Body.Close()
+}
+
+func TestUploadPhotos(t *testing.T) {
+	ts, _ := setupTestServer()
+	defer ts.Close()
+
+	// 1. Successful upload of 2 images
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part1, err := writer.CreateFormFile("files", "test1.jpg")
+	if err != nil {
+		t.Fatalf("Failed to create form file: %v", err)
+	}
+	// JPEG magic bytes: \xFF\xD8\xFF
+	_, _ = part1.Write([]byte("\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xFF\xDB"))
+
+	part2, err := writer.CreateFormFile("files", "test2.png")
+	if err != nil {
+		t.Fatalf("Failed to create form file: %v", err)
+	}
+	// PNG magic bytes: \x89PNG\r\n\x1a\n
+	_, _ = part2.Write([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"))
+
+	_ = writer.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/admin/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Upload request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	var uploadResp UploadResponse
+	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
+		t.Fatalf("Failed to decode upload response: %v", err)
+	}
+
+	if len(uploadResp.URLs) != 2 {
+		t.Fatalf("Expected 2 URLs, got %d", len(uploadResp.URLs))
+	}
+	for _, u := range uploadResp.URLs {
+		if !strings.HasPrefix(u, "https://storage.googleapis.com/") {
+			t.Errorf("Invalid GCS URL format: %s", u)
+		}
+	}
+
+	// 2. Reject non-image file
+	body = &bytes.Buffer{}
+	writer = multipart.NewWriter(body)
+	partTxt, _ := writer.CreateFormFile("files", "malicious.sh")
+	_, _ = partTxt.Write([]byte("#!/bin/bash\necho hello"))
+	_ = writer.Close()
+
+	req, _ = http.NewRequest(http.MethodPost, ts.URL+"/api/v1/admin/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	badResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer badResp.Body.Close()
+	if badResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 Bad Request for non-image, got %d", badResp.StatusCode)
+	}
+
+	// 3. Reject more than 5 files
+	body = &bytes.Buffer{}
+	writer = multipart.NewWriter(body)
+	for i := 0; i < 6; i++ {
+		p, _ := writer.CreateFormFile("files", "img.jpg")
+		_, _ = p.Write([]byte("\xFF\xD8\xFF\xE0\x00\x10JFIF"))
+	}
+	_ = writer.Close()
+
+	req, _ = http.NewRequest(http.MethodPost, ts.URL+"/api/v1/admin/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	tooManyResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer tooManyResp.Body.Close()
+	if tooManyResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 Bad Request for >5 files, got %d", tooManyResp.StatusCode)
+	}
 }

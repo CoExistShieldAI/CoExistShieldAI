@@ -17,10 +17,11 @@ The **CoExist Shield AI Admin Web Portal** is the mission-critical operational c
 4. Ecological attractant data control (sugar crops, abandoned persimmon trees, livestock grazing).
 5. Operational tools: AI engine recalculation triggers, emergency push broadcasts, and GIS/CSV export.
 
-### 1.2 Technology Stack
+#### 1.2 Technology Stack
 - **Frontend Framework:** Angular 22 (Latest version) (Standalone Components, Signals, Reactive Forms, Injectable Services)
 - **Map Engine:** Google Maps JavaScript API with `@angular/google-maps` & Drawing Library
 - **UI Styling:** Tailwind CSS & Lucide Icons (clean, high-density dashboard UI)
+- **Cloud Storage:** Google Cloud Storage (`corald-coexistshield-media`) for multi-photo evidence uploads
 - **Backend:** Go (`backend-cloudrun/internal/admin`), REST API endpoints with structured JSON responses
 - **Data Store:** Cloud Firestore & In-Memory Geospatial Spatial Index
 
@@ -32,23 +33,23 @@ The **CoExist Shield AI Admin Web Portal** is the mission-critical operational c
 |  | (KPIs/Charts) |  | (Circle/Polygon) |  | (Wildlife/RK)|  |
 |  +---------------+  +------------------+  +--------------+  |
 +------------------------------+------------------------------+
-                               | HTTPS / REST (JSON)
+                               | HTTPS / REST (JSON) & Multipart Uploads
 +------------------------------v------------------------------+
 |                 Go Backend (backend-cloudrun)                |
 |  +------------------+  +------------------+  +-----------+  |
-|  | Admin API Router |  | Geofence Service |  | ML Engine |  |
-|  | (/api/v1/admin)  |  | (Manual/AI Persist)| (Trigger)  |  |
+|  | Admin API Router |  | Geofence Service |  | GCS Media |  |
+|  | (/api/v1/admin)  |  | (Manual/AI Persist)| (Uploader) |  |
 |  +------------------+  +------------------+  +-----------+  |
 +------------------------------+------------------------------+
                                |
-              Cloud Firestore / GeoJSON Data Store
+               Cloud Firestore & Google Cloud Storage
 ```
 
 ---
 
 ## 2. Navigation & Layout Design
 
-### 2.1 Global Shell Layout
+### 2.1 Global Shell Layout & Workspace Conventions
 The web application uses a persistent left sidebar with desktop-optimized layout:
 - **Header:**
   - Active Theater indicator: `JAPAC Operational Theater`
@@ -61,6 +62,10 @@ The web application uses a persistent left sidebar with desktop-optimized layout
   - `Roadkill Management` (`/incidents/roadkill`)
   - `Environmental Attractants` (`/environmental`)
   - `Operations & Export` (`/operations`)
+- **Unified Workspace Pattern:**
+  - All data management views (Wildlife, Roadkill, Environmental) share a consistent dual-tab navigation pattern:
+    - **Tab 1: History / Registry Table** with comprehensive search, filters, credibility toggles, and status badges.
+    - **Tab 2: Entry Workspace (Map-Picker)** featuring a 2-column layout with input forms on the left and a full-height interactive Google Map on the right for pinpoint coordinate selection and reverse geocoding.
 
 ---
 
@@ -110,52 +115,61 @@ The web application uses a persistent left sidebar with desktop-optimized layout
 ---
 
 ### 3.3 Screen 3: Wildlife Sighting & Encounter Hub (`/incidents/wildlife`)
-**Objective:** Manage, verify, and filter wildlife sightings and attack incidents.
+**Objective:** Manage, verify, filter, and register wildlife sightings and attack incidents across JAPAC.
 
-- **Filter & Search Bar:**
-  - Search by Keyword (Location, Description, Reporter ID)
-  - Species Filter: `All`, `Asian Elephant`, `Sumatran Tiger`, `Bengal Tiger`, `Brown Bear`, `Asian Black Bear`
-  - Severity Level: `Tier 1 (Sighting)`, `Tier 2 (Crop/Property Damage)`, `Tier 3 (Direct Human Threat/Encounter)`
-  - Verification Status: `All`, `Unverified`, `Verified`, `Resolved`, `False Alarm`
-- **Data Table:**
-  - Columns: Timestamp, Species, Location (Lat/Lng & Region), Threat Tier, Verification Status, Reporter, Actions (`Verify`, `View Map`, `Delete`).
-- **Create Sighting Modal:**
-  - Species dropdown, Incident Timestamp, Coordinates (with mini-map pin selector), Description, Action taken.
+- **Dual-Tab Workspace Layout:**
+  - **Tab 1: Sightings Registry:**
+    - **Filter & Search Bar:** Search by keyword (species, road, reporter); filter by Species (`Asian Elephant`, `Sumatran Tiger`, `Bengal Tiger`, `Brown Bear`, `Asian Black Bear`) and Threat Tier (`Tier 1 Caution`, `Tier 2 Alert`, `Tier 3 Critical`).
+    - **Data Table:** Displays Reported At, Species, Location & Coordinates, Threat Level badge, Verification Status (`Unverified`, `Verified`, `Resolved`, `False Alarm`), Reporter, and Actions (`Verify`, `View Map`, `Delete`).
+  - **Tab 2: Log Wildlife Sighting (2-Column Map-Picker Workspace):**
+    - **Left Column (Incident Form):**
+      - Species selection, Incident Timestamp, Threat Level, Reporter ID, Incident Description.
+      - **Multi-Photo Evidence Uploader (`ImageUploadComponent`):** Drag-and-drop zone supporting up to 5 photos, automatic canvas compression for files >1MB, preview thumbnail grid with deletion, and direct upload to Google Cloud Storage (`corald-coexistshield-media`).
+    - **Right Column (Interactive Map Pinpoint):**
+      - Full-height Google Map: Click anywhere or drag marker to set coordinates.
+      - Automatically populates Latitude, Longitude, and reverse-geocodes locality / road name.
 
 ---
 
 ### 3.4 Screen 4: Roadkill Records & Big-Screen Entry (`/incidents/roadkill`)
 **Objective:** Audit historical roadkill incidents, filter out low-credibility noise, and provide a rapid, desktop-optimized entry workflow.
 
-- **Historical Log & Data Cleansing:**
-  - Table displaying Roadkill incidents with **Reliability Score (0 - 100%)** calculated from reporter track record and photo metadata.
-  - **Credibility Filter:** Toggle to exclude/hide low-credibility records from AI ingestion.
-  - **Exclude Toggle Button:** Instant `Exclude from AI / Low Credibility` switch per row.
-  - **Carcass Disposal Workflow:** Status tags: `Pending Disposal` (Warning: Predator Magnet) vs `Disposed / Cleared`.
-- **Desktop Big-Screen Registration Workspace:**
-  - 2-Column Desktop Layout:
+- **Dual-Tab Workspace Layout:**
+  - **Tab 1: History & Data Cleansing:**
+    - Table displaying Roadkill incidents with **Reliability Score (0 - 100%)** calculated from reporter track record and photo metadata.
+    - **Credibility Filter:** Toggle to exclude/hide low-credibility records from AI ingestion (`Show Low-Credibility / Excluded Reports`).
+    - **Active Predator Magnets Counter:** Displays live count of carcasses with status `Pending Removal`.
+    - **Instant Actions:** Toggle exclusion (`is_excluded = true/false`) and mark disposal (`Pending Removal` -> `Disposed`).
+  - **Tab 2: Log Roadkill (2-Column Map-Picker Workspace):**
     - **Left Column (Data Form):**
       - Species identification (Wild Boar, Deer, Small Mammal, Monkey, Cattle, Unknown)
       - Estimated Size / Weight
       - **Carcass Decay Stage:** `Fresh (<6h)`, `Moderate (6-24h)`, `Advanced (>24h)` (critical input for predator attraction modeling)
       - Road Type / Speed Limit
-      - Photo Drag-and-Drop Uploader with instant preview
+      - **Multi-Photo Evidence Uploader:** Up to 5 forensic photos with client compression and GCS storage.
     - **Right Column (Interactive Map Pinpoint):**
-      - Full-height Google Map: Click anywhere to drop a pin.
+      - Full-height Google Map: Click anywhere to drop pin.
       - Automatically populates Latitude, Longitude, and reverse-geocodes road/locality name.
 
 ---
 
 ### 3.5 Screen 5: Environmental & Ecological Attractants (`/environmental`)
-**Objective:** Manage causal attractant layers that fuel predictive geofencing models.
+**Objective:** Manage causal attractant layers that fuel predictive geofencing models with context-aware presets.
 
-- **Attractant Categories:**
-  - **Crop Phenology (APAC):** Sugarcane, banana, ripe jackfruit fields with harvest/ripening date ranges.
-  - **Abandoned Persimmon Trees (Japan):** High-risk unharvested *kaki* trees in depopulated valleys.
-  - **Livestock Corrals & Pastures (APAC):** Open cattle/goat grazing areas attracting apex predators.
-- **Table & Management:**
-  - List with columns: Category, Name/Location, Risk Weight (0.1 - 1.0), Active Season, Last Updated, Actions (`Edit`, `Delete`).
-  - Add Attractant Modal: Geographic polygon or center point, type, phenology calendar, and risk weight.
+- **Dual-Tab Workspace Layout:**
+  - **Tab 1: Attractant Layers Registry:**
+    - **Regional Overview Cards:** Thailand & APAC Core (Sugarcane & Fruit), Indonesia & India Core (Livestock Corrals), Japan Validation Core (Abandoned Persimmon Trees).
+    - **Attractants Table:** Displays Category, Layer Name, Location Description (with center coordinates and radius in meters), Risk Weight (0.1 - 1.0), Active Season / Harvest Window, Last Updated, and Deletion action.
+  - **Tab 2: Log Attractant Layer (Category-First Wizard Flow):**
+    - **Step 1: Select Ecological Context (Poka-Yoke Design):**
+      - Selecting a category preset automatically configures context-aware baseline parameters:
+        - `Sugarcane & Fruit Phenology`: Default radius **3,000m**, Risk **0.85**, Harvest season peak, map focus on Kaeng Krachan (Thailand).
+        - `Abandoned Persimmon (Kaki) Clusters`: Default radius **500m**, Risk **0.90**, Autumn hyperphagia peak, map focus on Morioka (Japan).
+        - `Unfenced Livestock Corrals & Pastures`: Default radius **1,500m**, Risk **0.80**, Year-round nocturnal ambush, map focus on Siak (Sumatra).
+        - `Dry-Season Wildlife Watering Holes`: Default radius **1,000m**, Risk **0.70**, Dry season peak.
+    - **Step 2: 2-Column Registration Workspace:**
+      - **Left Column:** Zone Name, Risk Weight slider, Active Season, Location Description, Radius (meters).
+      - **Right Column:** Interactive Google Map with draggable center marker and real-time circle radius overlay preview.
 
 ---
 
@@ -203,6 +217,7 @@ Base Path: `/api/v1/admin`
 | `/environmental/{id}` | `DELETE` | Remove an attractant record |
 | `/operations/broadcast` | `POST` | Send emergency push broadcast to users in target geofence |
 | `/export/{dataset}` | `GET` | Stream GeoJSON or CSV file (`?format=geojson\|csv`) |
+| `/upload` | `POST` | Upload field photos to Cloud Storage (`files` field, multipart/form-data, max 5, 5MB each) |
 
 ---
 
@@ -244,10 +259,63 @@ Base Path: `/api/v1/admin`
     "lng": 99.682,
     "road_name": "Rural Route 3219, KM 14"
   },
-  "photo_url": "https://storage.googleapis.com/coexist-roadkill/rk-0042.jpg",
+  "photo_url": "https://storage.googleapis.com/corald-coexistshield-media/uploads/20261015_053000_a1b2c3d4_rk0042.jpg",
+  "photo_urls": [
+    "https://storage.googleapis.com/corald-coexistshield-media/uploads/20261015_053000_a1b2c3d4_rk0042.jpg"
+  ],
   "reliability_score": 0.92,
   "is_excluded": false,
   "status": "PENDING_REMOVAL",
   "reported_at": "2026-10-15T05:30:00Z"
+}
+```
+
+### 5.3 Wildlife Incident Model
+```json
+{
+  "id": "inc-wildlife-001",
+  "species": "Sumatran Tiger",
+  "threat_level": "TIER_3_CRITICAL",
+  "location": {
+    "lat": 0.515,
+    "lng": 101.465,
+    "road_name": "Siak Oil Palm Division 3 Boundary"
+  },
+  "status": "VERIFIED",
+  "reporter": "officer_sumatra_04",
+  "description": "Adult male tiger observed near communal goat corral. Cattle carcass found nearby.",
+  "photo_urls": [
+    "https://storage.googleapis.com/corald-coexistshield-media/uploads/20261015_061500_e5f6g7h8_tiger_track.jpg"
+  ],
+  "reported_at": "2026-10-15T06:15:00Z"
+}
+```
+
+### 5.4 Environmental Attractant Layer Model
+```json
+{
+  "id": "env-cane-01",
+  "category": "CROP_PHENOLOGY",
+  "name": "Kaeng Krachan Border Sugarcane Sector A",
+  "location_desc": "Sugarcane plantation bordering Kaeng Krachan National Park East Gate",
+  "circle_center": {
+    "lat": 12.875,
+    "lng": 99.655
+  },
+  "radius_meters": 3000,
+  "risk_weight": 0.85,
+  "active_season": "November - March (Maturity & Harvest Peak)",
+  "photo_urls": [],
+  "last_updated": "2026-10-15T06:00:00Z"
+}
+```
+
+### 5.5 Upload Media Response Model
+```json
+{
+  "urls": [
+    "https://storage.googleapis.com/corald-coexistshield-media/uploads/20261015_063000_1a2b3c4d_field_photo_1.jpg",
+    "https://storage.googleapis.com/corald-coexistshield-media/uploads/20261015_063000_5e6f7a8b_field_photo_2.jpg"
+  ]
 }
 ```

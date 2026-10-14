@@ -3,6 +3,8 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -45,6 +47,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Operations & Emergency
 	mux.HandleFunc("/api/v1/admin/operations/broadcast", h.handleEmergencyBroadcast)
 	mux.HandleFunc("/api/v1/admin/export/", h.handleExport)
+
+	// Multi-photo Upload to Cloud Storage
+	mux.HandleFunc("/api/v1/admin/upload", h.handleUpload)
 }
 
 // --- Helper Functions ---
@@ -342,4 +347,92 @@ func (h *Handler) handleExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+// --- Multi-photo Upload Handler ---
+
+func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limit request body to 32MB max
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse multipart form: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Support files passed under "files", "photos", or "file"
+	var files []*multipart.FileHeader
+	if fList, exists := r.MultipartForm.File["files"]; exists {
+		files = append(files, fList...)
+	}
+	if fList, exists := r.MultipartForm.File["photos"]; exists {
+		files = append(files, fList...)
+	}
+	if fList, exists := r.MultipartForm.File["file"]; exists {
+		files = append(files, fList...)
+	}
+
+	if len(files) == 0 {
+		http.Error(w, "No files provided in request", http.StatusBadRequest)
+		return
+	}
+
+	if len(files) > 5 {
+		http.Error(w, "Maximum 5 files allowed per upload", http.StatusBadRequest)
+		return
+	}
+
+	bucket := GetMediaBucket()
+	var uploadedURLs []string
+
+	for _, fileHeader := range files {
+		// Enforce single file size limit (5MB ceiling on backend)
+		if fileHeader.Size > 5*1024*1024 {
+			http.Error(w, fmt.Sprintf("File %s exceeds maximum 5MB limit", fileHeader.Filename), http.StatusBadRequest)
+			return
+		}
+
+		f, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to open file %s: %v", fileHeader.Filename, err), http.StatusInternalServerError)
+			return
+		}
+
+		data, err := io.ReadAll(f)
+		_ = f.Close()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read file %s: %v", fileHeader.Filename, err), http.StatusInternalServerError)
+			return
+		}
+
+		// Detect content type
+		contentType := fileHeader.Header.Get("Content-Type")
+		if contentType == "" || contentType == "application/octet-stream" {
+			contentType = http.DetectContentType(data)
+		}
+
+		// Ensure it's an image
+		if !strings.HasPrefix(contentType, "image/") {
+			http.Error(w, fmt.Sprintf("File %s is not a valid image format (%s)", fileHeader.Filename, contentType), http.StatusBadRequest)
+			return
+		}
+
+		objectName := GenerateObjectName(fileHeader.Filename)
+		url, err := UploadToGCS(bucket, objectName, contentType, data)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to upload to Cloud Storage: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		uploadedURLs = append(uploadedURLs, url)
+	}
+
+	writeJSON(w, http.StatusOK, UploadResponse{URLs: uploadedURLs})
 }

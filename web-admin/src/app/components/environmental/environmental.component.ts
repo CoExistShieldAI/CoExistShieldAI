@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
 import { AdminEnvironmentalData, AttractantCategory } from '../../models/admin.model';
+import { ImageUploadComponent } from '../image-upload/image-upload.component';
 
 interface CategoryPreset {
   category: AttractantCategory;
@@ -23,7 +24,7 @@ interface CategoryPreset {
 @Component({
   selector: 'app-environmental',
   standalone: true,
-  imports: [CommonModule, FormsModule, GoogleMapsModule],
+  imports: [CommonModule, FormsModule, GoogleMapsModule, ImageUploadComponent],
   template: `
     <div class="p-8 space-y-6 max-w-7xl mx-auto">
       <!-- Title & Tab Switcher (Matching Wildlife & Roadkill) -->
@@ -82,6 +83,7 @@ interface CategoryPreset {
                 <tr>
                   <th class="py-3 px-4">Category</th>
                   <th class="py-3 px-4">Attractant Layer Name</th>
+                  <th class="py-3 px-4">Photos</th>
                   <th class="py-3 px-4">Location Description</th>
                   <th class="py-3 px-4">Risk Weight</th>
                   <th class="py-3 px-4">Active Season / Harvest Window</th>
@@ -99,6 +101,20 @@ interface CategoryPreset {
                     </td>
                     <td class="py-3.5 px-4 font-bold text-white whitespace-nowrap">
                       {{ env.name }}
+                    </td>
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                      @if (env.photo_urls && env.photo_urls.length > 0) {
+                        <div class="flex items-center gap-1.5">
+                          <a [href]="env.photo_urls[0]" target="_blank" rel="noopener noreferrer" class="block w-8 h-8 rounded-lg overflow-hidden border border-slate-700 hover:border-emerald-500 transition-colors flex-shrink-0">
+                            <img [src]="env.photo_urls[0]" alt="Photo" class="w-full h-full object-cover">
+                          </a>
+                          <span class="text-[11px] font-mono text-slate-400">
+                            {{ env.photo_urls.length }} {{ env.photo_urls.length === 1 ? 'pic' : 'pics' }}
+                          </span>
+                        </div>
+                      } @else {
+                        <span class="text-[11px] text-slate-600 italic">None</span>
+                      }
                     </td>
                     <td class="py-3.5 px-4 text-slate-300">
                       {{ env.location_desc }}
@@ -125,7 +141,7 @@ interface CategoryPreset {
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="7" class="py-8 text-center text-slate-500">No environmental attractant layers registered.</td>
+                    <td colspan="8" class="py-8 text-center text-slate-500">No environmental attractant layers registered.</td>
                   </tr>
                 }
               </tbody>
@@ -262,6 +278,9 @@ interface CategoryPreset {
                   </div>
                 </div>
 
+                <!-- Attractant Photo Evidence (Max 5, D&D, client shrink >1MB, Cloud Storage) -->
+                <app-image-upload [(photoUrls)]="photoUrls"></app-image-upload>
+
                 <div class="flex items-center justify-between pt-4 border-t border-slate-800">
                   <button type="button" (click)="selectedCategory.set(null)" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">
                     Back to Categories
@@ -369,6 +388,7 @@ export class EnvironmentalComponent implements OnInit {
     }
   ];
 
+  photoUrls: string[] = [];
   newItem: Partial<AdminEnvironmentalData> = {
     category: 'CROP_PHENOLOGY',
     name: '',
@@ -409,11 +429,13 @@ export class EnvironmentalComponent implements OnInit {
   }
 
   startNewRegistration() {
+    this.photoUrls = [];
     this.activeTab.set('entry');
     this.selectedCategory.set(null); // Always start at Step 1 (Poka-Yoke)
   }
 
   selectCategory(category: AttractantCategory) {
+    this.photoUrls = [];
     this.selectedCategory.set(category);
     const preset = this.categoryPresets.find(p => p.category === category);
     if (preset) {
@@ -443,12 +465,14 @@ export class EnvironmentalComponent implements OnInit {
   saveEnvironmental() {
     const payload: Partial<AdminEnvironmentalData> = {
       ...this.newItem,
+      photo_urls: [...this.photoUrls],
       geometry_type: 'circle',
       circle_center: { lat: this.itemLat, lng: this.itemLng },
       radius_meters: Number(this.itemRadius)
     };
     this.api.createEnvironmental(payload).subscribe({
       next: () => {
+        this.photoUrls = [];
         this.selectedCategory.set(null);
         this.activeTab.set('history');
       }

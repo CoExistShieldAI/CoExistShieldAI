@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
 import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models/admin.model';
+import { ImageUploadComponent } from '../image-upload/image-upload.component';
 
 @Component({
   selector: 'app-wildlife',
   standalone: true,
-  imports: [CommonModule, FormsModule, GoogleMapsModule],
+  imports: [CommonModule, FormsModule, GoogleMapsModule, ImageUploadComponent],
   template: `
     <div class="p-8 space-y-6 max-w-7xl mx-auto">
       <!-- Title & Tab Switcher (Matching Roadkill style) -->
@@ -75,6 +76,7 @@ import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models
                 <tr>
                   <th class="py-3 px-4">Reported At</th>
                   <th class="py-3 px-4">Species</th>
+                  <th class="py-3 px-4">Photos</th>
                   <th class="py-3 px-4">Location & Coordinates</th>
                   <th class="py-3 px-4">Threat Level</th>
                   <th class="py-3 px-4">Status</th>
@@ -90,6 +92,20 @@ import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models
                     </td>
                     <td class="py-3.5 px-4 font-semibold text-white whitespace-nowrap">
                       {{ item.species }}
+                    </td>
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                      @if (item.photo_urls && item.photo_urls.length > 0) {
+                        <div class="flex items-center gap-1.5">
+                          <a [href]="item.photo_urls[0]" target="_blank" rel="noopener noreferrer" class="block w-8 h-8 rounded-lg overflow-hidden border border-slate-700 hover:border-emerald-500 transition-colors flex-shrink-0">
+                            <img [src]="item.photo_urls[0]" alt="Photo" class="w-full h-full object-cover">
+                          </a>
+                          <span class="text-[11px] font-mono text-slate-400">
+                            {{ item.photo_urls.length }} {{ item.photo_urls.length === 1 ? 'pic' : 'pics' }}
+                          </span>
+                        </div>
+                      } @else {
+                        <span class="text-[11px] text-slate-600 italic">None</span>
+                      }
                     </td>
                     <td class="py-3.5 px-4 text-slate-300">
                       <div class="font-medium">{{ item.location.road_name || 'Forest Interface' }}</div>
@@ -122,7 +138,7 @@ import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="7" class="py-8 text-center text-slate-500">No wildlife incidents match the active filters.</td>
+                    <td colspan="8" class="py-8 text-center text-slate-500">No wildlife incidents match the active filters.</td>
                   </tr>
                 }
               </tbody>
@@ -202,6 +218,9 @@ import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models
                 class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500"></textarea>
             </div>
 
+            <!-- Photo Evidence (Max 5, D&D, client shrink >1MB, Cloud Storage) -->
+            <app-image-upload [(photoUrls)]="photoUrls"></app-image-upload>
+
             <div class="flex items-center justify-between pt-4 border-t border-slate-800">
               <button type="button" (click)="activeTab.set('history')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">
                 Cancel
@@ -244,6 +263,7 @@ export class WildlifeComponent implements OnInit {
   filterTier = '';
 
   // Form Fields
+  photoUrls: string[] = [];
   newItem: Partial<AdminWildlifeIncident> = {
     species: 'Asian Elephant',
     threat_level: 'TIER_3_CRITICAL',
@@ -294,6 +314,7 @@ export class WildlifeComponent implements OnInit {
   saveIncident() {
     const payload: Partial<AdminWildlifeIncident> = {
       ...this.newItem,
+      photo_urls: [...this.photoUrls],
       location: {
         lat: this.pinLat,
         lng: this.pinLng,
@@ -303,6 +324,7 @@ export class WildlifeComponent implements OnInit {
     };
     this.api.createWildlife(payload).subscribe({
       next: () => {
+        this.photoUrls = [];
         this.activeTab.set('history');
       }
     });

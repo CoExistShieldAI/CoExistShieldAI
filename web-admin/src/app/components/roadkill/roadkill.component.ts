@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
 import { AdminRoadkillRecord, DecayStage, RoadkillStatus } from '../../models/admin.model';
+import { ImageUploadComponent } from '../image-upload/image-upload.component';
 
 @Component({
   selector: 'app-roadkill',
   standalone: true,
-  imports: [CommonModule, FormsModule, GoogleMapsModule],
+  imports: [CommonModule, FormsModule, GoogleMapsModule, ImageUploadComponent],
   template: `
     <div class="p-8 space-y-6 max-w-7xl mx-auto">
       <!-- Title & Tab Switcher -->
@@ -65,6 +66,7 @@ import { AdminRoadkillRecord, DecayStage, RoadkillStatus } from '../../models/ad
                 <tr>
                   <th class="py-3 px-4">Reported</th>
                   <th class="py-3 px-4">Species & Decay Stage</th>
+                  <th class="py-3 px-4">Photos</th>
                   <th class="py-3 px-4">Location (Road & GPS)</th>
                   <th class="py-3 px-4">Reliability Score</th>
                   <th class="py-3 px-4">Carcass Status</th>
@@ -87,6 +89,20 @@ import { AdminRoadkillRecord, DecayStage, RoadkillStatus } from '../../models/ad
                           {{ rk.decay_stage }}
                         </span>
                       </div>
+                    </td>
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                      @if ((rk.photo_urls && rk.photo_urls.length > 0) || rk.photo_url) {
+                        <div class="flex items-center gap-1.5">
+                          <a [href]="(rk.photo_urls && rk.photo_urls[0]) || rk.photo_url" target="_blank" rel="noopener noreferrer" class="block w-8 h-8 rounded-lg overflow-hidden border border-slate-700 hover:border-emerald-500 transition-colors flex-shrink-0">
+                            <img [src]="(rk.photo_urls && rk.photo_urls[0]) || rk.photo_url" alt="Photo" class="w-full h-full object-cover">
+                          </a>
+                          <span class="text-[11px] font-mono text-slate-400">
+                            {{ rk.photo_urls?.length || 1 }} {{ (rk.photo_urls?.length || 1) === 1 ? 'pic' : 'pics' }}
+                          </span>
+                        </div>
+                      } @else {
+                        <span class="text-[11px] text-slate-600 italic">None</span>
+                      }
                     </td>
                     <td class="py-3.5 px-4 text-slate-300">
                       <div class="font-medium">{{ rk.location.road_name || 'Highway Corridor' }}</div>
@@ -213,12 +229,8 @@ import { AdminRoadkillRecord, DecayStage, RoadkillStatus } from '../../models/ad
               </div>
             </div>
 
-            <!-- Photo Attachment -->
-            <div>
-              <label class="block text-slate-300 font-medium mb-1">Photo Attachment / Evidence URL</label>
-              <input type="text" [(ngModel)]="newRecord.photo_url" name="photo" placeholder="https://storage.googleapis.com/..."
-                class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500">
-            </div>
+            <!-- Photo Attachment (Max 5, D&D, client shrink >1MB, Cloud Storage) -->
+            <app-image-upload [(photoUrls)]="photoUrls"></app-image-upload>
 
             <div class="flex items-center justify-between pt-4 border-t border-slate-800">
               <button type="button" (click)="activeTab.set('history')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">
@@ -260,11 +272,11 @@ export class RoadkillComponent implements OnInit {
   showExcluded = true;
 
   // Desktop Entry Form
+  photoUrls: string[] = [];
   newRecord: Partial<AdminRoadkillRecord> = {
     species: 'Wild Boar',
     estimated_weight_kg: 50,
-    decay_stage: 'FRESH',
-    photo_url: ''
+    decay_stage: 'FRESH'
   };
   pinLat = 12.842;
   pinLng = 99.680;
@@ -312,6 +324,8 @@ export class RoadkillComponent implements OnInit {
   submitRoadkillEntry() {
     const payload: Partial<AdminRoadkillRecord> = {
       ...this.newRecord,
+      photo_urls: [...this.photoUrls],
+      photo_url: this.photoUrls.length > 0 ? this.photoUrls[0] : '',
       location: {
         lat: this.pinLat,
         lng: this.pinLng,
@@ -324,6 +338,7 @@ export class RoadkillComponent implements OnInit {
 
     this.api.createRoadkill(payload).subscribe({
       next: () => {
+        this.photoUrls = [];
         this.activeTab.set('history');
       }
     });

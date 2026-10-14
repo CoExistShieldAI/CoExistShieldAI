@@ -40,6 +40,7 @@ export interface AdminWildlifeIncident {
   status: WildlifeStatus;
   reporter: string;
   description: string;
+  photo_urls?: string[];
   reported_at: string;
 }
 
@@ -53,6 +54,7 @@ export interface AdminRoadkillRecord {
   decay_stage: DecayStage;
   location: IncidentLocation;
   photo_url?: string;
+  photo_urls?: string[];
   reliability_score: number;
   is_excluded: boolean;
   status: RoadkillStatus;
@@ -72,7 +74,12 @@ export interface AdminEnvironmentalData {
   radius_meters?: number;
   risk_weight: number;
   active_season: string;
+  photo_urls?: string[];
   last_updated: string;
+}
+
+export interface UploadResponse {
+  urls: string[];
 }
 
 export interface DashboardStats {

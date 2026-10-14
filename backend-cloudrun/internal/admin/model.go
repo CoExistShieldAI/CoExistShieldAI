@@ -42,6 +42,7 @@ type AdminWildlifeIncident struct {
 	Status      string           `json:"status"`       // "UNVERIFIED", "VERIFIED", "RESOLVED", "FALSE_ALARM"
 	Reporter    string           `json:"reporter"`
 	Description string           `json:"description"`
+	PhotoURLs   []string         `json:"photo_urls,omitempty"`
 	ReportedAt  time.Time        `json:"reported_at"`
 }
 
@@ -53,6 +54,7 @@ type AdminRoadkillRecord struct {
 	DecayStage        string           `json:"decay_stage"` // "FRESH", "MODERATE", "ADVANCED"
 	Location          IncidentLocation `json:"location"`
 	PhotoURL          string           `json:"photo_url,omitempty"`
+	PhotoURLs         []string         `json:"photo_urls,omitempty"`
 	ReliabilityScore  float64          `json:"reliability_score"` // 0.0 - 1.0
 	IsExcluded        bool             `json:"is_excluded"`
 	Status            string           `json:"status"` // "PENDING_REMOVAL", "DISPOSED"
@@ -71,7 +73,13 @@ type AdminEnvironmentalData struct {
 	RadiusMeters float64      `json:"radius_meters,omitempty"`
 	RiskWeight   float64      `json:"risk_weight"` // 0.1 - 1.0
 	ActiveSeason string       `json:"active_season"`
+	PhotoURLs    []string     `json:"photo_urls,omitempty"`
 	LastUpdated  time.Time    `json:"last_updated"`
+}
+
+// UploadResponse represents the response with uploaded media URLs
+type UploadResponse struct {
+	URLs []string `json:"urls"`
 }
 
 // DashboardStatsResponse aggregates operational KPIs
