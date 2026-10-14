@@ -240,5 +240,40 @@ data class MlQueryResponseDto(
     val slaTargetSeconds: Int = 45
 )
 
+@Serializable
+data class ThailandCropPlotDto(
+    val id: String,
+    val name: String,
+    val province: String,
+    val parkBoundary: String,
+    val cropType: String,
+    val growthStage: String,
+    val latitude: Double,
+    val longitude: Double,
+    val areaHectares: Double,
+    val distanceToForestEdgeM: Double,
+    val forestBearingDeg: Double,
+    val aromaVolatilityIndex: Double,
+    val maturityScore: Double,
+    val activeRiskScore: Double,
+    val alertTier: AlertTier,
+    val scentBufferMeters: Double,
+    val scentPlumePolygon: GeoJsonPolygonDto? = null,
+    val updatedAt: String
+)
+
+@Serializable
+data class ThailandCropPlotsResponseDto(
+    val plots: List<ThailandCropPlotDto> = emptyList(),
+    val count: Int,
+    val monitoredParks: List<String> = emptyList()
+)
+
+@Serializable
+data class UpdateHarvestStageRequestDto(
+    val growthStage: String
+)
+
+
 
 

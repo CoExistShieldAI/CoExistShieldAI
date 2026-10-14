@@ -218,7 +218,12 @@ fun App() {
                         onSelectEntity = { mapSelectedEntity = it },
                         onOfficialActionClick = { entityId ->
                             scope.launch {
-                                snackbarHostState.showSnackbar("Official Action Logged: #$entityId marked Resolved / Cleared!")
+                                if (entityId.startsWith("th_plot")) {
+                                    geofenceRepository.updateCropHarvestStage(entityId, "HARVESTED_CLEARED")
+                                    snackbarHostState.showSnackbar("HEC Mitigation: Plot $entityId marked Harvested & Cleared! Scent plume corridor neutralized.")
+                                } else {
+                                    snackbarHostState.showSnackbar("Official Action Logged: #$entityId marked Resolved / Cleared!")
+                                }
                                 mapSelectedEntity = null
                             }
                         }

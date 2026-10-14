@@ -270,6 +270,44 @@ fun MapCanvasPlaceholder(
                     )
                 }
             )
+
+            // Sample Interactive Pin 4: Thailand Asian Elephant Crop Attractant Plot (HEC)
+            PinButton(
+                title = "Elephant Attractant #th_plot_kb_01 (Sugarcane)",
+                color = TierDanger,
+                onClick = {
+                    onPinClick(
+                        SelectedEntityDetails(
+                            id = "th_plot_kb_01",
+                            title = "Kui Buri Sugarcane Estate #1 (14.5 ha)",
+                            subtitle = "Prachuap Khiri Khan • 650m to National Park Border",
+                            speciesOrType = "Saccharum officinarum (Elephant Calorie Magnet)",
+                            threatTier = AlertTier.TIER_3_DANGER,
+                            geminiBadgeText = "Gemini Vision: High Sucrose Spike • 2.8km Scent Corridor blowing West into Reserve",
+                            canMarkResolved = true
+                        )
+                    )
+                }
+            )
+
+            // Sample Interactive Pin 5: Thailand Khao Daeng Jackfruit Grove
+            PinButton(
+                title = "Jackfruit Odor Corridor #th_plot_kb_02 (Ripening)",
+                color = TierWarning,
+                onClick = {
+                    onPinClick(
+                        SelectedEntityDetails(
+                            id = "th_plot_kb_02",
+                            title = "Khao Daeng Jackfruit Grove (8.2 ha)",
+                            subtitle = "Kui Buri Buffer • 1100m to Forest Edge",
+                            speciesOrType = "Artocarpus heterophyllus (High Volatile Esters)",
+                            threatTier = AlertTier.TIER_2_WARNING,
+                            geminiBadgeText = "Gemini Vision: Aromatic Ester Emission 0.85 • Dynamic Buffer Expanded",
+                            canMarkResolved = true
+                        )
+                    )
+                }
+            )
         }
     }
 }

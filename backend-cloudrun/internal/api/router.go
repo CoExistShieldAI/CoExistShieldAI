@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
@@ -20,6 +22,7 @@ type Router struct {
 	geofenceEngine *geofence.Engine
 	memoryBank     *memory.Bank
 	mlPipeline     *ml.RetrainingPipeline
+	elephantEngine *elephant.Engine
 }
 
 func NewRouter(
@@ -27,6 +30,7 @@ func NewRouter(
 	geofenceEngine *geofence.Engine,
 	memoryBank *memory.Bank,
 	mlPipeline *ml.RetrainingPipeline,
+	elephantEngine *elephant.Engine,
 ) *Router {
 	r := &Router{
 		mux:            http.NewServeMux(),
@@ -34,6 +38,7 @@ func NewRouter(
 		geofenceEngine: geofenceEngine,
 		memoryBank:     memoryBank,
 		mlPipeline:     mlPipeline,
+		elephantEngine: elephantEngine,
 	}
 	r.registerRoutes()
 	return r
@@ -66,6 +71,9 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/ml/retrain", r.handleMlRetrain)
 	r.mux.HandleFunc("/api/v1/ml/predict", r.handleMlPredict)
 	r.mux.HandleFunc("/api/v1/ml/query", r.handleMlQuery)
+	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/crop-plots", r.handleThailandCropPlots)
+	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/recalculate", r.handleThailandHecRecalculate)
+	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/plots/", r.handleThailandPlotAction)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -338,6 +346,90 @@ func (r *Router) handleMlQuery(w http.ResponseWriter, req *http.Request) {
 		"resolution":       8,
 		"slaTargetSeconds": 45,
 	})
+}
+
+func (r *Router) handleThailandCropPlots(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	plots := r.elephantEngine.GetRegisteredPlots()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"plots": plots,
+		"count": len(plots),
+		"monitoredParks": []string{
+			"Kui Buri National Park",
+			"Kaeng Krachan National Park",
+		},
+	})
+}
+
+type ThailandHecRecalculateRequest struct {
+	Weather *model.WeatherConditions `json:"weather,omitempty"`
+}
+
+func (r *Router) handleThailandHecRecalculate(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var recalcReq ThailandHecRecalculateRequest
+	if req.Body != nil && req.ContentLength > 0 {
+		_ = json.NewDecoder(req.Body).Decode(&recalcReq)
+	}
+
+	weather := model.WeatherConditions{
+		WindSpeedKmh:     14.0,
+		WindDirectionDeg: 90.0,
+		MoonIllumination: 0.15,
+	}
+	if recalcReq.Weather != nil {
+		weather = *recalcReq.Weather
+	}
+
+	plots := r.elephantEngine.RecalculateAllPlots(weather)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"plots":          plots,
+		"count":          len(plots),
+		"recalculatedAt": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+type UpdateHarvestStageRequest struct {
+	GrowthStage string                   `json:"growthStage"`
+	Weather     *model.WeatherConditions `json:"weather,omitempty"`
+}
+
+func (r *Router) handleThailandPlotAction(w http.ResponseWriter, req *http.Request) {
+	// Path pattern: /api/v1/analytics/thailand-hec/plots/{id}/harvest-stage
+	path := strings.TrimPrefix(req.URL.Path, "/api/v1/analytics/thailand-hec/plots/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 || parts[1] != "harvest-stage" {
+		http.NotFound(w, req)
+		return
+	}
+
+	plotID := parts[0]
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var updateReq UpdateHarvestStageRequest
+	if err := json.NewDecoder(req.Body).Decode(&updateReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	updated, err := r.elephantEngine.UpdateHarvestStage(plotID, updateReq.GrowthStage, updateReq.Weather)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

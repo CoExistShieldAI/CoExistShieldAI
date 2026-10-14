@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
@@ -20,7 +21,8 @@ func setupTestServer() *Router {
 	geofenceEngine := geofence.NewEngine()
 	memoryBank := memory.NewBank()
 	mlPipeline := ml.NewRetrainingPipeline()
-	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline)
+	elephantEngine := elephant.NewEngine()
+	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine)
 }
 
 func TestHealthz(t *testing.T) {
@@ -455,5 +457,99 @@ func TestMlQueryEndpoint(t *testing.T) {
 		t.Errorf("expected query to contain h3_geo_to_h3")
 	}
 }
+
+func TestThailandCropPlotsEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/analytics/thailand-hec/crop-plots", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var resp struct {
+		Plots          []elephant.ElephantCropPlot `json:"plots"`
+		Count          int                         `json:"count"`
+		MonitoredParks []string                    `json:"monitoredParks"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Count < 4 {
+		t.Errorf("expected at least 4 plots, got %d", resp.Count)
+	}
+	if len(resp.MonitoredParks) != 2 {
+		t.Errorf("expected 2 monitored national parks, got %d", len(resp.MonitoredParks))
+	}
+}
+
+func TestThailandHecRecalculateEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := ThailandHecRecalculateRequest{
+		Weather: &model.WeatherConditions{
+			WindSpeedKmh:     20.0,
+			WindDirectionDeg: 90.0, // Blowing towards West into Kui Buri forest
+			MoonIllumination: 0.05, // New Moon
+			PrecipitationMmH: 0.0,
+		},
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/analytics/thailand-hec/recalculate", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Plots []elephant.ElephantCropPlot `json:"plots"`
+		Count int                         `json:"count"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Count < 4 {
+		t.Errorf("expected at least 4 plots, got %d", resp.Count)
+	}
+}
+
+func TestThailandPlotActionEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := UpdateHarvestStageRequest{
+		GrowthStage: "HARVESTED_CLEARED",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/analytics/thailand-hec/plots/th_plot_kb_01/harvest-stage", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var updated elephant.ElephantCropPlot
+	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("failed to decode updated plot: %v", err)
+	}
+
+	if updated.GrowthStage != "HARVESTED_CLEARED" {
+		t.Errorf("expected HARVESTED_CLEARED stage, got %s", updated.GrowthStage)
+	}
+	if updated.ActiveRiskScore > 0.40 {
+		t.Errorf("expected risk score <= 0.40 after clearing, got %.3f", updated.ActiveRiskScore)
+	}
+}
+
 
 

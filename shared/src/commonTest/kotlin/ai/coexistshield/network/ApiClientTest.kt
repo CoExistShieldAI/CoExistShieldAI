@@ -362,7 +362,85 @@ class ApiClientTest {
         assertEquals(ai.coexistshield.model.AlertTier.TIER_3_DANGER, data.alertTier)
         assertEquals("carcass_proximity", data.dominantFeature)
     }
+
+    @Test
+    fun testThailandCropPlotsApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "plots": [
+                    {
+                        "id": "th_plot_kb_01",
+                        "name": "Kui Buri Valley Sugarcane Estate #1",
+                        "province": "Prachuap Khiri Khan",
+                        "parkBoundary": "Kui Buri National Park",
+                        "cropType": "SUGARCANE",
+                        "growthStage": "READY_FOR_HARVEST",
+                        "latitude": 12.0520,
+                        "longitude": 99.6210,
+                        "areaHectares": 14.5,
+                        "distanceToForestEdgeM": 650.0,
+                        "forestBearingDeg": 285.0,
+                        "aromaVolatilityIndex": 0.85,
+                        "maturityScore": 1.0,
+                        "activeRiskScore": 0.88,
+                        "alertTier": "TIER_3_DANGER",
+                        "scentBufferMeters": 2800.0,
+                        "updatedAt": "2026-10-14T08:00:00Z"
+                    }
+                ],
+                "count": 1,
+                "monitoredParks": ["Kui Buri National Park"]
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getThailandCropPlots()
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals(1, data.count)
+        assertEquals("th_plot_kb_01", data.plots[0].id)
+        assertEquals("SUGARCANE", data.plots[0].cropType)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_3_DANGER, data.plots[0].alertTier)
+    }
+
+    @Test
+    fun testUpdateCropHarvestStageApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "id": "th_plot_kb_01",
+                "name": "Kui Buri Valley Sugarcane Estate #1",
+                "province": "Prachuap Khiri Khan",
+                "parkBoundary": "Kui Buri National Park",
+                "cropType": "SUGARCANE",
+                "growthStage": "HARVESTED_CLEARED",
+                "latitude": 12.0520,
+                "longitude": 99.6210,
+                "areaHectares": 14.5,
+                "distanceToForestEdgeM": 650.0,
+                "forestBearingDeg": 285.0,
+                "aromaVolatilityIndex": 0.85,
+                "maturityScore": 0.05,
+                "activeRiskScore": 0.12,
+                "alertTier": "SAFE",
+                "scentBufferMeters": 400.0,
+                "updatedAt": "2026-10-14T08:05:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.updateCropHarvestStage("th_plot_kb_01", "HARVESTED_CLEARED")
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("HARVESTED_CLEARED", data.growthStage)
+        assertEquals(ai.coexistshield.model.AlertTier.SAFE, data.alertTier)
+        assertEquals(0.12, data.activeRiskScore)
+    }
 }
+
 
 
 

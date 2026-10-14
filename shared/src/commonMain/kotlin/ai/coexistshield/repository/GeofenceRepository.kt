@@ -130,6 +130,24 @@ class GeofenceRepository(
             httpClient.get("/api/v1/ml/query").body()
         }
     }
+
+    suspend fun getThailandCropPlots(): Result<ai.coexistshield.network.ThailandCropPlotsResponseDto> {
+        return runCatching {
+            httpClient.get("/api/v1/analytics/thailand-hec/crop-plots").body()
+        }
+    }
+
+    suspend fun updateCropHarvestStage(
+        plotId: String,
+        newStage: String
+    ): Result<ai.coexistshield.network.ThailandCropPlotDto> {
+        return runCatching {
+            httpClient.post("/api/v1/analytics/thailand-hec/plots/$plotId/harvest-stage") {
+                contentType(ContentType.Application.Json)
+                setBody(ai.coexistshield.network.UpdateHarvestStageRequestDto(growthStage = newStage))
+            }.body()
+        }
+    }
 }
 
 
