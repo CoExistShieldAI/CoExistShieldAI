@@ -28,7 +28,8 @@ data class GeminiTriageResult(
     val fruitLoadLevel: String? = null,
     val traceType: String? = null,
     val traumaType: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val source: String? = null
 )
 
 @Serializable

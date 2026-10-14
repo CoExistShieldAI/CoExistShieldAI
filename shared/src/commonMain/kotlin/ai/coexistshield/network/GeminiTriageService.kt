@@ -39,16 +39,18 @@ class GeminiTriageService(
                 fruitLoadLevel = response.attributes?.fruitLoadLevel?.name,
                 traceType = response.attributes?.traceType,
                 traumaType = response.attributes?.traumaType,
-                notes = response.notes ?: "AI forensic analysis completed via Gemini 3.8 Flash."
+                notes = response.notes ?: "AI forensic analysis completed via Gemini 3.8 Flash.",
+                source = response.source ?: "gemini"
             )
         }.recoverCatching { error ->
-            // Robust local fallback when field connectivity drops
+            // Transparent local fallback when field connectivity drops
             GeminiTriageResult(
                 detectedLabel = categoryHint ?: "Unclassified Field Specimen",
-                commonName = "Offline Cached Triage",
-                confidence = 0.70,
-                forensicTags = listOf("offline_queued", "pending_cloud_sync"),
-                notes = "Connectivity unavailable. Report preserved locally in offline queue."
+                commonName = "Pending Cloud AI Triage",
+                confidence = 0.0,
+                forensicTags = listOf("offline_queued", "pending_gemini_analysis"),
+                notes = "Network connectivity unavailable. Photo queued locally for Gemini 3.8 Flash triage upon reconnect.",
+                source = "offline_fallback"
             )
         }
     }

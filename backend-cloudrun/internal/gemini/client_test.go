@@ -2,7 +2,13 @@ package gemini
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"ai.coexistshield/backend/internal/model"
 )
@@ -13,8 +19,42 @@ func TestGeminiModelVersionRequirement(t *testing.T) {
 	}
 }
 
-func TestMultimodalForensicTriageTracesAndCarcass(t *testing.T) {
-	client := NewClient()
+func TestGeminiApiKeyRequiredWhenMockDisabled(t *testing.T) {
+	client := NewClientWithConfig(Config{
+		ApiKey:      "",
+		MockEnabled: false,
+	})
+	ctx := context.Background()
+
+	// 1. TriageFieldPhoto
+	_, err := client.TriageFieldPhoto(ctx, model.ForensicTriageRequest{
+		ImageBase64:  "mockBase64",
+		CategoryHint: "PHYSICAL_TRACE",
+	})
+	if !errors.Is(err, ErrApiKeyMissing) {
+		t.Fatalf("expected ErrApiKeyMissing for TriageFieldPhoto, got %v", err)
+	}
+
+	// 2. ExtractIncidentEntities
+	_, err = client.ExtractIncidentEntities(ctx, "クマの目撃情報", "HOTLINE", "JAPAN")
+	if !errors.Is(err, ErrApiKeyMissing) {
+		t.Fatalf("expected ErrApiKeyMissing for ExtractIncidentEntities, got %v", err)
+	}
+
+	// 3. GenerateExplainableAlert
+	_, _, err = client.GenerateExplainableAlert(ctx, model.CausalAlertExplanationRequest{
+		Tier:          "TIER_3_DANGER",
+		TargetSpecies: "BEAR",
+	}, nil)
+	if !errors.Is(err, ErrApiKeyMissing) {
+		t.Fatalf("expected ErrApiKeyMissing for GenerateExplainableAlert, got %v", err)
+	}
+}
+
+func TestMultimodalForensicTriageTracesAndCarcassMock(t *testing.T) {
+	client := NewClientWithConfig(Config{
+		MockEnabled: true,
+	})
 	ctx := context.Background()
 
 	// 1. Physical Trace (Claw mark on cedar)
@@ -36,6 +76,9 @@ func TestMultimodalForensicTriageTracesAndCarcass(t *testing.T) {
 	if traceResp.Confidence < 0.90 {
 		t.Errorf("expected confidence >= 0.90, got %f", traceResp.Confidence)
 	}
+	if traceResp.Source != "mock" {
+		t.Errorf("expected Source == 'mock', got '%s'", traceResp.Source)
+	}
 
 	// 2. Roadkill carcass triage
 	roadkillResp, err := client.TriageFieldPhoto(ctx, model.ForensicTriageRequest{
@@ -49,6 +92,9 @@ func TestMultimodalForensicTriageTracesAndCarcass(t *testing.T) {
 	}
 	if roadkillResp.Attributes == nil || roadkillResp.Attributes.DecayState == nil || *roadkillResp.Attributes.DecayState != "FRESH" {
 		t.Errorf("expected FRESH decay state, got %+v", roadkillResp.Attributes)
+	}
+	if roadkillResp.Source != "mock" {
+		t.Errorf("expected Source == 'mock', got '%s'", roadkillResp.Source)
 	}
 
 	// 3. Attractant fruit tree
@@ -80,8 +126,10 @@ func TestMultimodalForensicTriageTracesAndCarcass(t *testing.T) {
 	}
 }
 
-func TestExtractIncidentEntitiesMultilingualCausalNLP(t *testing.T) {
-	client := NewClient()
+func TestExtractIncidentEntitiesMultilingualCausalNLPMock(t *testing.T) {
+	client := NewClientWithConfig(Config{
+		MockEnabled: true,
+	})
 	ctx := context.Background()
 
 	// 1. Japanese Municipal Disaster Radio Broadcast
@@ -101,6 +149,9 @@ func TestExtractIncidentEntitiesMultilingualCausalNLP(t *testing.T) {
 	}
 	if jpEntity.Confidence < 0.90 {
 		t.Errorf("expected confidence >= 0.90, got %f", jpEntity.Confidence)
+	}
+	if jpEntity.InferenceProvider != "mock" {
+		t.Errorf("expected InferenceProvider == 'mock', got '%s'", jpEntity.InferenceProvider)
 	}
 
 	// 2. English Social Media / Citizen Field Post (Tiger)
@@ -133,8 +184,10 @@ func TestExtractIncidentEntitiesMultilingualCausalNLP(t *testing.T) {
 	}
 }
 
-func TestGenerateExplainableAlertGemini38Flash(t *testing.T) {
-	client := NewClient()
+func TestGenerateExplainableAlertGemini38FlashMock(t *testing.T) {
+	client := NewClientWithConfig(Config{
+		MockEnabled: true,
+	})
 	ctx := context.Background()
 
 	req := model.CausalAlertExplanationRequest{
@@ -161,5 +214,115 @@ func TestGenerateExplainableAlertGemini38Flash(t *testing.T) {
 	}
 	if recs[0].Priority != "IMMEDIATE" {
 		t.Errorf("expected IMMEDIATE priority on primary recommendation, got %s", recs[0].Priority)
+	}
+}
+
+func TestGeminiLiveHttpCallWithMockServer(t *testing.T) {
+	sampleTriageJson := `{
+		"detectedSpecies": "Ursus thibetanus",
+		"commonName": "Asian Black Bear",
+		"confidence": 0.98,
+		"attributes": {
+			"fruitLoadLevel": "ABUNDANT"
+		},
+		"suggestedTags": ["bear_sighting", "persimmon_lure"],
+		"preliminaryThreatIndex": 0.91,
+		"notes": "Real Gemini 3.8 Flash multimodal analysis result."
+	}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "models/gemini-3.8-flash:generateContent") {
+			t.Errorf("unexpected URL path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("key") != "secret-api-key" {
+			t.Errorf("expected query param key=secret-api-key, got %s", r.URL.Query().Get("key"))
+		}
+
+		resp := geminiResponse{
+			Candidates: []geminiCandidate{
+				{
+					Content: struct {
+						Parts []struct {
+							Text string `json:"text"`
+						} `json:"parts"`
+					}{
+						Parts: []struct {
+							Text string `json:"text"`
+						}{
+							{Text: sampleTriageJson},
+						},
+					},
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	client := NewClientWithConfig(Config{
+		ApiKey:      "secret-api-key",
+		Endpoint:    ts.URL,
+		Model:       "gemini-3.8-flash",
+		MockEnabled: false,
+		Timeout:     5 * time.Second,
+	})
+
+	ctx := context.Background()
+	res, err := client.TriageFieldPhoto(ctx, model.ForensicTriageRequest{
+		ImageBase64:  "dummyBase64",
+		CategoryHint: "ATTRACTANT_FRUIT_TREE",
+		Latitude:     39.7,
+		Longitude:    141.1,
+	})
+	if err != nil {
+		t.Fatalf("expected successful live call, got error: %v", err)
+	}
+	if res.DetectedSpecies != "Ursus thibetanus" {
+		t.Errorf("expected Ursus thibetanus, got %s", res.DetectedSpecies)
+	}
+	if res.Source != "gemini" {
+		t.Errorf("expected Source == 'gemini', got '%s'", res.Source)
+	}
+}
+
+func TestGeminiHttpErrorHandling(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":{"code":403,"message":"API_KEY_INVALID"}}`, http.StatusForbidden)
+	}))
+	defer ts.Close()
+
+	// 1. Without Mock -> Returns explicit error, never fakes success
+	clientNoMock := NewClientWithConfig(Config{
+		ApiKey:      "bad-key",
+		Endpoint:    ts.URL,
+		MockEnabled: false,
+	})
+	_, err := clientNoMock.TriageFieldPhoto(context.Background(), model.ForensicTriageRequest{
+		ImageBase64: "dummy",
+	})
+	if err == nil {
+		t.Fatalf("expected error when mock is disabled, got nil")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("expected error to contain 403 status, got %v", err)
+	}
+
+	// 2. With Mock -> Fallback explicitly marked as 'mock_fallback'
+	clientWithMock := NewClientWithConfig(Config{
+		ApiKey:      "bad-key",
+		Endpoint:    ts.URL,
+		MockEnabled: true,
+	})
+	res, err := clientWithMock.TriageFieldPhoto(context.Background(), model.ForensicTriageRequest{
+		ImageBase64:  "dummy",
+		CategoryHint: "ROADKILL",
+	})
+	if err != nil {
+		t.Fatalf("expected fallback success when mock is enabled, got %v", err)
+	}
+	if res.Source != "mock_fallback" {
+		t.Errorf("expected Source == 'mock_fallback', got '%s'", res.Source)
 	}
 }

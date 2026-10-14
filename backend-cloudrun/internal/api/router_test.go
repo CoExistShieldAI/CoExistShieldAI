@@ -22,7 +22,9 @@ import (
 )
 
 func setupTestServer() *Router {
-	geminiClient := gemini.NewClient()
+	geminiClient := gemini.NewClientWithConfig(gemini.Config{
+		MockEnabled: true,
+	})
 	geofenceEngine := geofence.NewEngine()
 	memoryBank := memory.NewBank()
 	mlPipeline := ml.NewRetrainingPipeline()
@@ -90,6 +92,44 @@ func TestForensicTriageEndpoint(t *testing.T) {
 	}
 	if resp.Attributes == nil || resp.Attributes.FruitLoadLevel != "ABUNDANT" {
 		t.Errorf("expected fruitLoadLevel ABUNDANT, got %+v", resp.Attributes)
+	}
+}
+
+func TestForensicTriageFailsWhenMockDisabledWithoutKey(t *testing.T) {
+	geminiClient := gemini.NewClientWithConfig(gemini.Config{
+		ApiKey:      "",
+		MockEnabled: false,
+	})
+	router := NewRouter(
+		geminiClient,
+		geofence.NewEngine(),
+		memory.NewBank(),
+		ml.NewRetrainingPipeline(),
+		elephant.NewEngine(),
+		tiger.NewEngine(),
+		compliance.NewEngine(),
+		corroboration.NewEngine(geminiClient),
+	)
+
+	reqBody := model.ForensicTriageRequest{
+		ImageBase64:  "data:image/jpeg;base64,mockImagePayload",
+		CategoryHint: "ATTRACTANT_FRUIT_TREE",
+		Latitude:     39.712,
+		Longitude:    141.158,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/forensics/triage", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 InternalServerError when mock is disabled, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "gemini API key is not configured") {
+		t.Errorf("expected error message about unconfigured API key, got %s", w.Body.String())
 	}
 }
 

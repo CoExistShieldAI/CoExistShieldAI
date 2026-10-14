@@ -31,7 +31,8 @@ data class ForensicTriageResponse(
     val attributes: TriageAttributes? = null,
     val suggestedTags: List<String> = emptyList(),
     val preliminaryThreatIndex: Double = 0.0,
-    val notes: String? = null
+    val notes: String? = null,
+    val source: String? = null
 )
 
 @Serializable

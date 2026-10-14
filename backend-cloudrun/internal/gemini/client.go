@@ -17,19 +17,77 @@ import (
 
 // GeminiModelVersion strictly defines Gemini 3.8 Flash per hackathon / architectural mandate.
 const GeminiModelVersion = "gemini-3.8-flash"
+const DefaultGeminiEndpoint = "https://generativelanguage.googleapis.com/v1beta"
+
+var ErrApiKeyMissing = fmt.Errorf("gemini API key is not configured and GEMINI_MOCK_ENABLED is false")
+
+type Config struct {
+	ApiKey      string
+	Model       string
+	Endpoint    string
+	MockEnabled bool
+	Timeout     time.Duration
+}
 
 type Client struct {
-	apiKey     string
-	httpClient *http.Client
+	apiKey      string
+	model       string
+	endpoint    string
+	mockEnabled bool
+	httpClient  *http.Client
+}
+
+func NewClientWithConfig(cfg Config) *Client {
+	modelName := cfg.Model
+	if modelName == "" {
+		modelName = GeminiModelVersion
+	}
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = DefaultGeminiEndpoint
+	}
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+
+	return &Client{
+		apiKey:      cfg.ApiKey,
+		model:       modelName,
+		endpoint:    endpoint,
+		mockEnabled: cfg.MockEnabled,
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+	}
+}
+
+func isMockEnabledFromEnv() bool {
+	val := strings.ToLower(strings.TrimSpace(os.Getenv("GEMINI_MOCK_ENABLED")))
+	if val == "true" || val == "1" || val == "yes" {
+		return true
+	}
+	valMock := strings.ToLower(strings.TrimSpace(os.Getenv("GEMINI_MOCK")))
+	return valMock == "true" || valMock == "1" || valMock == "yes"
 }
 
 func NewClient() *Client {
-	return &Client{
-		apiKey: os.Getenv("GEMINI_API_KEY"),
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+	modelName := os.Getenv("GEMINI_MODEL")
+	if modelName == "" {
+		modelName = GeminiModelVersion
 	}
+	endpoint := os.Getenv("GEMINI_API_ENDPOINT")
+	if endpoint == "" {
+		endpoint = DefaultGeminiEndpoint
+	}
+
+	return NewClientWithConfig(Config{
+		ApiKey:      os.Getenv("GEMINI_API_KEY"),
+		Model:       modelName,
+		Endpoint:    endpoint,
+		MockEnabled: isMockEnabledFromEnv(),
+		Timeout:     15 * time.Second,
+	})
 }
 
 type geminiPart struct {
@@ -68,11 +126,79 @@ type geminiResponse struct {
 	Candidates []geminiCandidate `json:"candidates"`
 }
 
+// executeGeminiCall handles HTTP POST with exponential backoff for transient 429/5xx status codes
+func (c *Client) executeGeminiCall(ctx context.Context, gReq geminiRequest) (string, error) {
+	bodyBytes, err := json.Marshal(gReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal gemini request: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.endpoint, c.model, c.apiKey)
+
+	maxRetries := 2
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(100*(1<<attempt)) * time.Millisecond
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(bodyBytes))
+		if err != nil {
+			return "", err
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := c.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		respBytes, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			var gResp geminiResponse
+			if err := json.Unmarshal(respBytes, &gResp); err != nil {
+				return "", fmt.Errorf("failed to decode gemini response json: %w", err)
+			}
+			if len(gResp.Candidates) == 0 || len(gResp.Candidates[0].Content.Parts) == 0 {
+				return "", fmt.Errorf("gemini response candidates are empty")
+			}
+			return gResp.Candidates[0].Content.Parts[0].Text, nil
+		}
+
+		// Transient retriable statuses: 429, 500, 502, 503, 504
+		if resp.StatusCode == http.StatusTooManyRequests || (resp.StatusCode >= 500 && resp.StatusCode <= 504) {
+			lastErr = fmt.Errorf("gemini api error status %d: %s", resp.StatusCode, string(respBytes))
+			continue
+		}
+
+		// Non-retriable 4xx client errors
+		return "", fmt.Errorf("gemini api error status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	return "", fmt.Errorf("gemini api call failed after %d retries: %w", maxRetries, lastErr)
+}
+
 // TriageFieldPhoto performs multimodal forensic analysis using Gemini 3.8 Flash.
 // Evaluates wildlife species, carcass decay states, trauma, and physical traces (claw marks, pugmarks, scat).
 func (c *Client) TriageFieldPhoto(ctx context.Context, req model.ForensicTriageRequest) (*model.ForensicTriageResponse, error) {
 	if c.apiKey == "" {
-		return mockTriage(req), nil
+		if c.mockEnabled {
+			return mockTriage(req, "mock"), nil
+		}
+		return nil, ErrApiKeyMissing
 	}
 
 	rawBase64 := req.ImageBase64
@@ -129,52 +255,32 @@ Perform multimodal forensic triage using Gemini 3.8 Flash. Output strict JSON ad
 		},
 	}
 
-	bodyBytes, err := json.Marshal(gReq)
+	text, err := c.executeGeminiCall(ctx, gReq)
 	if err != nil {
+		if c.mockEnabled {
+			return mockTriage(req, "mock_fallback"), nil
+		}
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", GeminiModelVersion, c.apiKey)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return mockTriage(req), nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("gemini 3.8 flash api error status %d: %s", resp.StatusCode, string(respBytes))
-	}
-
-	var gResp geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&gResp); err != nil {
-		return nil, err
-	}
-
-	if len(gResp.Candidates) == 0 || len(gResp.Candidates[0].Content.Parts) == 0 {
-		return mockTriage(req), nil
-	}
-
-	text := gResp.Candidates[0].Content.Parts[0].Text
 	var triageResp model.ForensicTriageResponse
 	if err := json.Unmarshal([]byte(text), &triageResp); err != nil {
+		if c.mockEnabled {
+			return mockTriage(req, "mock_fallback"), nil
+		}
 		return nil, fmt.Errorf("failed to parse structured gemini json: %w", err)
 	}
 
+	triageResp.Source = "gemini"
 	return &triageResp, nil
 }
 
-func mockTriage(req model.ForensicTriageRequest) *model.ForensicTriageResponse {
+func mockTriage(req model.ForensicTriageRequest, source string) *model.ForensicTriageResponse {
 	cat := strings.ToUpper(req.CategoryHint)
+	var resp *model.ForensicTriageResponse
 
 	if cat == "ATTRACTANT_FRUIT_TREE" {
-		return &model.ForensicTriageResponse{
+		resp = &model.ForensicTriageResponse{
 			DetectedSpecies: "Diospyros kaki",
 			CommonName:      "Persimmon Tree",
 			Confidence:      0.96,
@@ -189,7 +295,7 @@ func mockTriage(req model.ForensicTriageRequest) *model.ForensicTriageResponse {
 	} else if cat == "ROADKILL" {
 		fresh := "FRESH"
 		blunt := "BLUNT_FORCE_VEHICULAR"
-		return &model.ForensicTriageResponse{
+		resp = &model.ForensicTriageResponse{
 			DetectedSpecies: "Sus scrofa",
 			CommonName:      "Wild Boar",
 			Confidence:      0.92,
@@ -204,7 +310,7 @@ func mockTriage(req model.ForensicTriageRequest) *model.ForensicTriageResponse {
 	} else if cat == "PHYSICAL_TRACE" {
 		traceType := "CLAW_MARK_BARK_STRIPPING"
 		traceAge := 3.5
-		return &model.ForensicTriageResponse{
+		resp = &model.ForensicTriageResponse{
 			DetectedSpecies: "Ursus thibetanus",
 			CommonName:      "Asian Black Bear Claw Marks",
 			Confidence:      0.95,
@@ -219,7 +325,7 @@ func mockTriage(req model.ForensicTriageRequest) *model.ForensicTriageResponse {
 	} else if cat == "LIVESTOCK_DEPREDATION" {
 		fresh := "FRESH"
 		canine := "CANINE_PUNCTURE"
-		return &model.ForensicTriageResponse{
+		resp = &model.ForensicTriageResponse{
 			DetectedSpecies: "Panthera tigris sumatrae",
 			CommonName:      "Sumatra Tiger Depredation",
 			Confidence:      0.97,
@@ -231,24 +337,30 @@ func mockTriage(req model.ForensicTriageRequest) *model.ForensicTriageResponse {
 			PreliminaryThreatIndex: 0.96,
 			Notes:                  "Verified fresh tiger depredation; apex predator caching behavior detected.",
 		}
+	} else {
+		// Default wildlife sighting
+		resp = &model.ForensicTriageResponse{
+			DetectedSpecies:        "Ursus thibetanus",
+			CommonName:             "Asian Black Bear",
+			Confidence:             0.94,
+			SuggestedTags:          []string{"wildlife_sighting", "urban_interface"},
+			PreliminaryThreatIndex: 0.78,
+			Notes:                  "Verified wildlife sighting in suburban fringe zone via Gemini 3.8 Flash.",
+		}
 	}
 
-	// Default wildlife sighting
-	return &model.ForensicTriageResponse{
-		DetectedSpecies: "Ursus thibetanus",
-		CommonName:      "Asian Black Bear",
-		Confidence:      0.94,
-		SuggestedTags:   []string{"wildlife_sighting", "urban_interface"},
-		PreliminaryThreatIndex: 0.78,
-		Notes:           "Verified wildlife sighting in suburban fringe zone via Gemini 3.8 Flash.",
-	}
+	resp.Source = source
+	return resp
 }
 
 // ExtractIncidentEntities parses unstructured municipal emergency broadcasts, social posts (X, Bluesky),
 // and citizen reports to extract structured spatio-temporal incident entities using Gemini 3.8 Flash.
 func (c *Client) ExtractIncidentEntities(ctx context.Context, text string, sourceChannel string, regionHint string) (*model.ExtractedIncidentEntity, error) {
 	if c.apiKey == "" {
-		return mockExtractEntities(text, sourceChannel, regionHint), nil
+		if c.mockEnabled {
+			return mockExtractEntities(text, sourceChannel, regionHint, "mock"), nil
+		}
+		return nil, ErrApiKeyMissing
 	}
 
 	prompt := fmt.Sprintf(`You are an expert NLP extraction engine for wildlife early-warning and human-wildlife coexistence platforms.
@@ -293,45 +405,25 @@ Output strict JSON with schema:
 		},
 	}
 
-	bodyBytes, err := json.Marshal(gReq)
+	responseText, err := c.executeGeminiCall(ctx, gReq)
 	if err != nil {
+		if c.mockEnabled {
+			return mockExtractEntities(text, sourceChannel, regionHint, "mock_fallback"), nil
+		}
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", GeminiModelVersion, c.apiKey)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return mockExtractEntities(text, sourceChannel, regionHint), nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return mockExtractEntities(text, sourceChannel, regionHint), nil
-	}
-
-	var gResp geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&gResp); err != nil {
-		return mockExtractEntities(text, sourceChannel, regionHint), nil
-	}
-
-	if len(gResp.Candidates) == 0 || len(gResp.Candidates[0].Content.Parts) == 0 {
-		return mockExtractEntities(text, sourceChannel, regionHint), nil
-	}
-
-	responseText := gResp.Candidates[0].Content.Parts[0].Text
 	var entity model.ExtractedIncidentEntity
 	if err := json.Unmarshal([]byte(responseText), &entity); err != nil {
-		return mockExtractEntities(text, sourceChannel, regionHint), nil
+		if c.mockEnabled {
+			return mockExtractEntities(text, sourceChannel, regionHint, "mock_fallback"), nil
+		}
+		return nil, fmt.Errorf("failed to parse structured gemini json: %w", err)
 	}
 
 	entity.RawText = text
 	entity.SourceChannel = sourceChannel
+	entity.InferenceProvider = "gemini"
 	if entity.ExtractedTimestamp == "" {
 		entity.ExtractedTimestamp = time.Now().UTC().Format(time.RFC3339)
 	}
@@ -339,7 +431,7 @@ Output strict JSON with schema:
 	return &entity, nil
 }
 
-func mockExtractEntities(text string, sourceChannel string, regionHint string) *model.ExtractedIncidentEntity {
+func mockExtractEntities(text string, sourceChannel string, regionHint string, source string) *model.ExtractedIncidentEntity {
 	lower := strings.ToLower(text)
 	nowStr := time.Now().UTC().Format(time.RFC3339)
 
@@ -349,7 +441,7 @@ func mockExtractEntities(text string, sourceChannel string, regionHint string) *
 		if strings.Contains(text, "3") || strings.Contains(lower, "three") {
 			count = 3
 		}
-		return &model.ExtractedIncidentEntity{
+		entity := &model.ExtractedIncidentEntity{
 			EntityId:            fmt.Sprintf("nlp-ent-%d", time.Now().UnixNano()%1000000),
 			SourceChannel:       sourceChannel,
 			RawText:             text,
@@ -367,7 +459,9 @@ func mockExtractEntities(text string, sourceChannel string, regionHint string) *
 			ExtractedTimestamp:  nowStr,
 			CorroborationTags:   []string{"elephant_herd", "sugarcane_raid", "khao_ang_rue_nai"},
 			Notes:               "Gemini 3.8 Flash extracted herd movement toward harvestable crops.",
+			InferenceProvider:   source,
 		}
+		return entity
 	}
 
 	// Check Tiger / Indonesia / Riau
@@ -398,6 +492,7 @@ func mockExtractEntities(text string, sourceChannel string, regionHint string) *
 			ExtractedTimestamp:  nowStr,
 			CorroborationTags:   []string{"sumatra_tiger", "oil_palm_block", "siak_river", "fresh_pugmark"},
 			Notes:               "Gemini 3.8 Flash parsed tiger presence in high-risk plantation interface.",
+			InferenceProvider:   source,
 		}
 	}
 
@@ -440,18 +535,20 @@ func mockExtractEntities(text string, sourceChannel string, regionHint string) *
 		ExtractedTimestamp:  nowStr,
 		CorroborationTags:   []string{"bear_sighting", "kaki_attractant", "school_route"},
 		Notes:               "Gemini 3.8 Flash causal NLP extracted bear incident from municipal stream.",
+		InferenceProvider:   source,
 	}
 }
 
-// GenerateExplainableAlert synthesizes causal weather, attractants, multi-sensor corroboration, and episodic analogs
-// into an urgent, transparent natural language justification displayed on the Main HUD using Gemini 3.8 Flash.
 // GenerateExplainableAlert synthesizes causal weather, attractants, multi-sensor corroboration, and episodic analogs
 // into an urgent, transparent natural language justification displayed on the Main HUD, along with prioritized
 // municipal dispatch recommendations using Gemini 3.8 Flash.
 func (c *Client) GenerateExplainableAlert(ctx context.Context, req model.CausalAlertExplanationRequest, analogs []model.IncidentMemoryRecord) (string, []model.DispatchRecommendation, error) {
 	if c.apiKey == "" {
-		expl, recs := mockExplanation(req, analogs)
-		return expl, recs, nil
+		if c.mockEnabled {
+			expl, recs := mockExplanation(req, analogs)
+			return expl, recs, nil
+		}
+		return "", nil, ErrApiKeyMissing
 	}
 
 	var analogContext string
@@ -485,48 +582,26 @@ Direct output: Only the single sentence without quotes or preamble.`, req.Tier, 
 		},
 	}
 
-	bodyBytes, err := json.Marshal(gReq)
+	text, err := c.executeGeminiCall(ctx, gReq)
 	if err != nil {
-		expl, recs := mockExplanation(req, analogs)
-		return expl, recs, nil
-	}
-
-	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", GeminiModelVersion, c.apiKey)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(bodyBytes))
-	if err != nil {
-		expl, recs := mockExplanation(req, analogs)
-		return expl, recs, nil
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		expl, recs := mockExplanation(req, analogs)
-		return expl, recs, nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		expl, recs := mockExplanation(req, analogs)
-		return expl, recs, nil
-	}
-
-	var gResp geminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&gResp); err != nil {
-		expl, recs := mockExplanation(req, analogs)
-		return expl, recs, nil
-	}
-
-	_, recs := mockExplanation(req, analogs)
-	if len(gResp.Candidates) > 0 && len(gResp.Candidates[0].Content.Parts) > 0 {
-		text := strings.TrimSpace(gResp.Candidates[0].Content.Parts[0].Text)
-		if text != "" {
-			return text, recs, nil
+		if c.mockEnabled {
+			expl, recs := mockExplanation(req, analogs)
+			return expl, recs, nil
 		}
+		return "", nil, err
 	}
 
-	expl, _ := mockExplanation(req, analogs)
-	return expl, recs, nil
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		if c.mockEnabled {
+			expl, recs := mockExplanation(req, analogs)
+			return expl, recs, nil
+		}
+		return "", nil, fmt.Errorf("gemini returned empty explanation text")
+	}
+
+	recs := buildDispatchRecommendations(req, analogs)
+	return trimmed, recs, nil
 }
 
 func mockExplanation(req model.CausalAlertExplanationRequest, analogs []model.IncidentMemoryRecord) (string, []model.DispatchRecommendation) {
