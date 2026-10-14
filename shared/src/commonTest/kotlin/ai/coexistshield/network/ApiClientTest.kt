@@ -933,6 +933,73 @@ class ApiClientTest {
         val cycleResult = cycleRepo.runCorroborationPollCycle()
         assertTrue(cycleResult.isSuccess)
     }
+
+    @Test
+    fun testGetCurrentMeteorologyApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "temperatureCelsius": 14.5,
+                "humidityPct": 68.0,
+                "windSpeedKmh": 12.0,
+                "windDirectionDeg": 285.0,
+                "precipitationMmH": 0.0,
+                "isFloodedRiverRisk": false,
+                "moonPhase": {
+                    "phaseName": "NEW_MOON",
+                    "illumination": 0.02,
+                    "nocturnalRiskMultiplier": 1.588,
+                    "isNocturnalPeakRisk": true
+                },
+                "timestamp": "2026-10-14T08:00:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getCurrentMeteorology("JAPAN")
+        assertTrue(result.isSuccess)
+        val meteo = result.getOrNull()!!
+        assertEquals("NEW_MOON", meteo.moonPhase.phaseName)
+        assertEquals(0.02, meteo.moonPhase.illumination)
+        assertTrue(meteo.moonPhase.isNocturnalPeakRisk)
+        assertEquals(12.0, meteo.windSpeedKmh)
+        assertFalse(meteo.isFloodedRiverRisk)
+    }
+
+    @Test
+    fun testGetActiveGeofencesApi() = runTest {
+        val mockJsonResponse = """
+            [
+                {
+                    "id": "geo_jp_kaki_01",
+                    "tier": "TIER_2_WARNING",
+                    "targetSpecies": ["BEAR"],
+                    "coordinates": [
+                        {"latitude": 39.7020, "longitude": 141.1520}
+                    ],
+                    "centroid": {"latitude": 39.7020, "longitude": 141.1520},
+                    "radiusMeters": 750.0,
+                    "causalExplanation": "Tier 2 Warning: Overripe persimmon fruit drops with westerly scent plume.",
+                    "primaryAttractantRef": "kt_1120",
+                    "validFrom": "2026-10-14T08:00:00Z",
+                    "validUntil": "2026-10-16T08:00:00Z",
+                    "generatedAt": "2026-10-14T08:00:00Z"
+                }
+            ]
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getActiveGeofences(39.7020, 141.1520, 10.0)
+        assertTrue(result.isSuccess)
+        val zones = result.getOrNull()!!
+        assertEquals(1, zones.size)
+        assertEquals("geo_jp_kaki_01", zones[0].id)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, zones[0].tier)
+        assertEquals(750.0, zones[0].radiusMeters)
+    }
 }
 
 

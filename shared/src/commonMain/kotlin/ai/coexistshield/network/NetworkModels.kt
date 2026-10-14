@@ -67,11 +67,33 @@ data class TopHazardsResponse(
 )
 
 @Serializable
+data class MoonPhaseInfoDto(
+    val phaseName: String,
+    val illumination: Double,
+    val nocturnalRiskMultiplier: Double,
+    val isNocturnalPeakRisk: Boolean
+)
+
+@Serializable
+data class MeteorologicalConditionsDto(
+    val temperatureCelsius: Double,
+    val humidityPct: Double,
+    val windSpeedKmh: Double,
+    val windDirectionDeg: Double,
+    val precipitationMmH: Double,
+    val isFloodedRiverRisk: Boolean,
+    val moonPhase: MoonPhaseInfoDto,
+    val timestamp: String
+)
+
+@Serializable
 data class WeatherConditionsDto(
     val windSpeedKmh: Double,
     val windDirectionDeg: Double,
     val moonIllumination: Double,
-    val precipitationMmH: Double = 0.0
+    val precipitationMmH: Double = 0.0,
+    val temperatureCelsius: Double? = null,
+    val humidityPct: Double? = null
 )
 
 @Serializable

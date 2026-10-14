@@ -73,8 +73,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/healthz", r.handleHealth)
 	r.mux.HandleFunc("/api/v1/forensics/triage", r.handleForensicsTriage)
+	r.mux.HandleFunc("/api/v1/geofences/active", r.handleGetActiveGeofences)
 	r.mux.HandleFunc("/api/v1/geofences/recalculate", r.handleGeofencesRecalculate)
 	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
+	r.mux.HandleFunc("/api/v1/meteorology/current", r.handleGetCurrentMeteorology)
 	r.mux.HandleFunc("/api/v1/analytics/japan-kaki/top-hazards", r.handleTopHazards)
 	r.mux.HandleFunc("/api/v1/compliance/rspo/package", r.handleRspoPackage)
 	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.handleRspoExport)
@@ -160,6 +162,44 @@ func (r *Router) handleGeneratePlumeGeofences(w http.ResponseWriter, req *http.R
 
 	resp := r.geofenceEngine.GenerateScentPlumeGeofences(plumeReq)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleGetActiveGeofences(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	lat, err := strconv.ParseFloat(req.URL.Query().Get("lat"), 64)
+	if err != nil {
+		lat = 39.7020
+	}
+	lon, err := strconv.ParseFloat(req.URL.Query().Get("long"), 64)
+	if err != nil {
+		lon = 141.1520
+	}
+	radiusKm, err := strconv.ParseFloat(req.URL.Query().Get("radiusKm"), 64)
+	if err != nil || radiusKm <= 0 {
+		radiusKm = 25.0
+	}
+
+	zones := r.geofenceEngine.GetActiveGeofences(lat, lon, radiusKm)
+	writeJSON(w, http.StatusOK, zones)
+}
+
+func (r *Router) handleGetCurrentMeteorology(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	region := req.URL.Query().Get("region")
+	if region == "" {
+		region = "JAPAN"
+	}
+
+	meteo := r.geofenceEngine.GetCurrentMeteorology(region)
+	writeJSON(w, http.StatusOK, meteo)
 }
 
 func (r *Router) handleTopHazards(w http.ResponseWriter, req *http.Request) {

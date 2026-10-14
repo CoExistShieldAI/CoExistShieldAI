@@ -128,20 +128,41 @@ type GeofenceZoneDto struct {
 }
 
 type WeatherConditions struct {
-	WindSpeedKmh     float64 `json:"windSpeedKmh"`
-	WindDirectionDeg float64 `json:"windDirectionDeg"` // 0 = North, 90 = East, 180 = South, 270 = West (direction wind is blowing FROM)
-	MoonIllumination float64 `json:"moonIllumination"` // 0.0 (New Moon) to 1.0 (Full Moon)
-	PrecipitationMmH float64 `json:"precipitationMmH"`
+	WindSpeedKmh       float64  `json:"windSpeedKmh"`
+	WindDirectionDeg   float64  `json:"windDirectionDeg"` // 0 = North, 90 = East, 180 = South, 270 = West (direction wind is blowing FROM)
+	MoonIllumination   float64  `json:"moonIllumination"` // 0.0 (New Moon) to 1.0 (Full Moon)
+	PrecipitationMmH   float64  `json:"precipitationMmH"`
+	TemperatureCelsius *float64 `json:"temperatureCelsius,omitempty"`
+	HumidityPct        *float64 `json:"humidityPct,omitempty"`
+}
+
+type MoonPhaseInfo struct {
+	PhaseName               string  `json:"phaseName"`               // NEW_MOON, WAXING_CRESCENT, FIRST_QUARTER, WAXING_GIBBOUS, FULL_MOON, WANING_GIBBOUS, LAST_QUARTER, WANING_CRESCENT
+	Illumination            float64 `json:"illumination"`            // 0.0 to 1.0
+	NocturnalRiskMultiplier float64 `json:"nocturnalRiskMultiplier"` // 1.0 to 1.6x
+	IsNocturnalPeakRisk     bool    `json:"isNocturnalPeakRisk"`     // True if illumination <= 0.20
+}
+
+type MeteorologicalConditions struct {
+	TemperatureCelsius float64       `json:"temperatureCelsius"`
+	HumidityPct        float64       `json:"humidityPct"`
+	WindSpeedKmh       float64       `json:"windSpeedKmh"`
+	WindDirectionDeg   float64       `json:"windDirectionDeg"`
+	PrecipitationMmH   float64       `json:"precipitationMmH"`
+	IsFloodedRiverRisk bool          `json:"isFloodedRiverRisk"` // True if PrecipitationMmH >= 25.0
+	MoonPhase          MoonPhaseInfo `json:"moonPhase"`
+	Timestamp          string        `json:"timestamp"`
 }
 
 type AttractantHub struct {
-	Id           string  `json:"id"`
-	Type         string  `json:"type"` // KAKI_TREE, ELEPHANT_CROP, ROADKILL, KILL_SITE
-	Latitude     float64 `json:"latitude"`
-	Longitude    float64 `json:"longitude"`
-	FruitLoad    string  `json:"fruitLoad,omitempty"` // SPARSE, MODERATE, ABUNDANT
-	IsTop5Hazard bool    `json:"isTop5Hazard,omitempty"`
-	HoursSinceDeath float64 `json:"hoursSinceDeath,omitempty"`
+	Id              string   `json:"id"`
+	Type            string   `json:"type"` // KAKI_TREE, ELEPHANT_CROP, ROADKILL, KILL_SITE, PREDATOR_SIGHTING
+	Latitude        float64  `json:"latitude"`
+	Longitude       float64  `json:"longitude"`
+	FruitLoad       string   `json:"fruitLoad,omitempty"` // SPARSE, MODERATE, ABUNDANT
+	IsTop5Hazard    bool     `json:"isTop5Hazard,omitempty"`
+	HoursSinceDeath float64  `json:"hoursSinceDeath,omitempty"`
+	HoursSinceSeen  *float64 `json:"hoursSinceSeen,omitempty"`
 }
 
 type GeneratePlumeGeofencesRequest struct {
@@ -153,6 +174,27 @@ type GeneratePlumeGeofencesResponse struct {
 	Zones     []GeofenceZoneDto `json:"zones"`
 	Count     int               `json:"count"`
 	CreatedAt string            `json:"createdAt"`
+}
+
+type ActiveGeofencePoint struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+type ActiveGeofenceZone struct {
+	Id                   string                  `json:"id"`
+	Tier                 string                  `json:"tier"` // SAFE, TIER_1_NOTICE, TIER_2_WARNING, TIER_3_DANGER
+	TargetSpecies        []string                `json:"targetSpecies"`
+	Coordinates          []ActiveGeofencePoint   `json:"coordinates"`
+	Centroid             ActiveGeofencePoint     `json:"centroid"`
+	RadiusMeters         float64                 `json:"radiusMeters"`
+	CausalExplanation    string                  `json:"causalExplanation"`
+	PrimaryAttractantRef string                  `json:"primaryAttractantRef,omitempty"`
+	ActiveRiskScore      float64                 `json:"activeRiskScore"`
+	PolygonGeoJson       *GeoJSONPolygonGeometry `json:"polygonGeoJson,omitempty"`
+	ValidFrom            string                  `json:"validFrom"`
+	ValidUntil           string                  `json:"validUntil"`
+	GeneratedAt          string                  `json:"generatedAt"`
 }
 
 // Issue #10: Gemini 3.8 Flash Multimodal & NLP Incident Entity Models

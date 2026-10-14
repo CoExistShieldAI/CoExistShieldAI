@@ -269,6 +269,14 @@ class GeofenceRepository(
             response.status.value in 200..299
         }
     }
+
+    suspend fun getCurrentMeteorology(
+        region: String = "JAPAN"
+    ): Result<ai.coexistshield.network.MeteorologicalConditionsDto> {
+        return runCatching {
+            httpClient.get("/api/v1/meteorology/current?region=$region").body()
+        }
+    }
 }
 
 
