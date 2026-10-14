@@ -1330,6 +1330,10 @@ func (r *Router) initSeedData() {
 			ClearedAt:             "2026-10-12T14:30:00Z",
 		},
 	}
+
+	if r.coldstartEngine != nil {
+		r.coldstartEngine.LoadFixtureMacroDatasets()
+	}
 }
 
 

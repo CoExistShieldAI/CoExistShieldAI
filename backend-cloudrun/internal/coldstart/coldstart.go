@@ -1,10 +1,12 @@
 package coldstart
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -101,7 +103,8 @@ type Engine struct {
 	lastBootstrap  time.Time
 }
 
-// NewEngine initializes the cold-start pre-training engine with pre-loaded macro data.
+// NewEngine initializes the cold-start pre-training engine.
+// Pre-seeded macro datasets are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewEngine(
 	mlPipeline *ml.RetrainingPipeline,
 	geofenceEngine *geofence.Engine,
@@ -113,8 +116,15 @@ func NewEngine(
 		memoryBank:     memoryBank,
 		ngoRecords:     make([]NgoPatrolRecord, 0),
 	}
-	e.seedMacroDatasets()
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		e.LoadFixtureMacroDatasets()
+	}
 	return e
+}
+
+// LoadFixtureMacroDatasets populates fixture occurrences for tests or offline local development.
+func (e *Engine) LoadFixtureMacroDatasets() {
+	e.seedMacroDatasets()
 }
 
 func (e *Engine) seedMacroDatasets() {
@@ -155,6 +165,32 @@ func (e *Engine) BootstrapDayOne(region string) ColdStartStatus {
 	now := time.Now().UTC()
 	e.bootstrapped = true
 	e.lastBootstrap = now
+
+	// If macro records are empty, fetch live records from GBIF API
+	if len(e.gbifRecords) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		speciesQueryList := []struct {
+			Species string
+			SciName string
+			Country string
+		}{
+			{"BEAR", "Ursus thibetanus", "JP"},
+			{"ELEPHANT", "Elephas maximus", "TH"},
+			{"TIGER", "Panthera tigris sumatrae", "ID"},
+		}
+
+		for _, sq := range speciesQueryList {
+			if region != "" && region != "ALL" && !matchCountryToRegion(sq.Country, region) {
+				continue
+			}
+			occList, err := FetchGbifOccurrences(ctx, nil, sq.Species, sq.SciName, sq.Country, 15)
+			if err == nil && len(occList) > 0 {
+				e.gbifRecords = append(e.gbifRecords, occList...)
+			}
+		}
+	}
 
 	// 1. Ingest GBIF occurrences and balanced negative controls into ML pipeline
 	if e.mlPipeline != nil {

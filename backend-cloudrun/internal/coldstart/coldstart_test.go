@@ -1,6 +1,9 @@
 package coldstart_test
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +19,7 @@ func setupTestEngine(t *testing.T) (*coldstart.Engine, *ml.RetrainingPipeline, *
 	geoEngine := geofence.NewEngine()
 	mlPipeline := ml.NewRetrainingPipeline()
 	engine := coldstart.NewEngine(mlPipeline, geoEngine, memBank)
+	engine.LoadFixtureMacroDatasets()
 	return engine, mlPipeline, geoEngine
 }
 
@@ -258,5 +262,50 @@ func TestImportPatrolLogs_SLAConstraint(t *testing.T) {
 	// SLA is 5 minutes (300,000 ms); our execution should comfortably complete in < 5 seconds
 	if elapsed > 5*time.Second {
 		t.Fatalf("ingestion took %v, exceeded 5s threshold (SLA is 5m)", elapsed)
+	}
+}
+
+func TestFetchGbifOccurrences(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"offset": 0,
+			"limit": 10,
+			"endOfRecords": false,
+			"count": 1,
+			"results": [
+				{
+					"key": 987654321,
+					"scientificName": "Ursus thibetanus Cuvier, 1823",
+					"species": "Ursus thibetanus",
+					"decimalLatitude": 39.7050,
+					"decimalLongitude": 141.1550,
+					"eventDate": "2026-10-14T00:00:00",
+					"countryCode": "JP",
+					"basisOfRecord": "HUMAN_OBSERVATION"
+				}
+			]
+		}`))
+	}))
+	defer mockServer.Close()
+
+	t.Setenv("GBIF_API_ENDPOINT", mockServer.URL)
+
+	results, err := coldstart.FetchGbifOccurrences(context.Background(), mockServer.Client(), "BEAR", "Ursus thibetanus", "JP", 10)
+	if err != nil {
+		t.Fatalf("FetchGbifOccurrences failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].OccurrenceID != "gbif_987654321" {
+		t.Errorf("expected occurrence ID gbif_987654321, got %s", results[0].OccurrenceID)
+	}
+	if results[0].Latitude != 39.7050 || results[0].Longitude != 141.1550 {
+		t.Errorf("coordinates mismatch: got (%f, %f)", results[0].Latitude, results[0].Longitude)
+	}
+	if results[0].Species != "BEAR" {
+		t.Errorf("expected species BEAR, got %s", results[0].Species)
 	}
 }
