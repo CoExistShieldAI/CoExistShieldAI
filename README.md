@@ -114,7 +114,28 @@ To prove algorithmic portability across diverse ecosystems, CoExist Shield AI re
    - **High-Risk Top 5% Filtering:** Instead of relying on uncoordinated volunteer foraging, AI models pinpoint the top 5% most lethal abandoned persimmon trees near school routes and elderly homes.
    - **GCF Integration:** Integrates with **Government Crowdfunding (GCF)** systems to allocate public budgets and subsidized tree felling/pruning contracts with maximum return on public safety.
 
-### 4.2 Autonomous AI Agent: Multi-Source Causal Data Ingestion
+### 4.2 CoExist Shield Web Admin Operations Portal (Angular 22 + Go)
+Built for rangers, municipal wildlife control teams, plantation managers, and operations engineers:
+1. **JAPAC Dynamic Geofence Console:**
+   - Full-theater Google Maps visualization covering Japan, Southeast Asia, and South Asia (`lat: 15.0, lng: 105.0, zoom: 4`).
+   - Renders 3-tier predictive danger boundaries (Tier 1 Caution, Tier 2 Alert, Tier 3 Critical Danger).
+   - **Manual Geofence Overrides:** Create manual geofences using **both Circles and Polygons** with automatic persistence flags (`is_persistent: true`) that survive automated AI model sweeps.
+   - **Bulk Reset:** One-click `"Clear All Manual Fences"` for debug runs and field exercises.
+   - **AI Recalculation:** Instant manual trigger to execute the predictive engine on fresh multi-source inputs.
+2. **Wildlife Incident & Encounter Registry:**
+   - Real-time logging of apex carnivores and megafauna (Asian Elephants, Tigers, Bears).
+   - Searchable status workflows (`Unverified` -> `Verified` -> `Resolved` -> `False Alarm`).
+3. **Roadkill Surveillance & Big-Screen Desktop Entry:**
+   - **Predator Magnet Mitigation:** Real-time carcass tracking preventing apex predators from using roads as hunting grounds.
+   - **Data Cleansing:** Reliability scoring and instant exclusion toggles (`is_excluded`) to filter out noise from AI dispersion models.
+   - **Desktop Big-Screen Registration Workspace:** 2-column layout with interactive Google Map click-to-pin drop, auto-populated GPS/address, and carcass decay stages (`Fresh`, `Moderate`, `Advanced`).
+4. **Ecological & Attractant Layers Management:**
+   - Management of causal root attractants: sugarcane phenology (Thailand), livestock pastures (Indonesia), and abandoned persimmon trees (Japan).
+5. **Operations, Emergency Broadcast & GIS Export:**
+   - **Emergency Area Push Broadcast:** Immediate dispatch of audio sirens and push alerts to mobile devices within specific geofences.
+   - **GIS Data Export:** One-click downloads of GeoJSON (RFC 7946) and CSV formats for QGIS, ArcGIS, and government reports.
+
+### 4.3 Autonomous AI Agent: Multi-Source Causal Data Ingestion
 The AI Agent continuously gathers and learns from five critical causal data streams available via public APIs and real-time web scraping:
 
 1. **Agricultural Harvest & Crop Shipment Data:**
@@ -133,7 +154,7 @@ The AI Agent continuously gathers and learns from five critical causal data stre
    - *Causality:* Spikes in regional road traffic during holiday seasons increase roadkill frequency and sever wildlife migratory corridors, triggering disorientation and panic-driven incursions into populated areas.
    - *Sources:* Google Maps Traffic API and national highway agency real-time congestion feeds.
 
-### 4.3 Meteorological & Environmental Dynamics
+### 4.4 Meteorological & Environmental Dynamics
 The AI Agent models four crucial weather variables directly linked to animal behavior:
 
 1. **Precipitation & Snowpack (Real-time & Forecast):**
@@ -145,7 +166,7 @@ The AI Agent models four crucial weather variables directly linked to animal beh
 4. **Wind Direction & Wind Speed:**
    - *Causality:* Wildlife rely heavily on olfaction. When prevailing winds blow from residential areas (dumpsters, unharvested orchards) toward forest ridges, predators follow scent plumes directly downhill.
 
-### 4.4 Automated Continuous Learning & Agent Evolution Pipeline
+### 4.5 Automated Continuous Learning & Agent Evolution Pipeline
 
 To ensure the platform continuously adapts to changing ecological corridors and seasonal animal behaviors, CoExist Shield AI implements an end-to-end autonomous retraining and agent-grounding loop:
 

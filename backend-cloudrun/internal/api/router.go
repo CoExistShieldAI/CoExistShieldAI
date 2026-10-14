@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"ai.coexistshield/backend/internal/admin"
 	"ai.coexistshield/backend/internal/auth"
 	"ai.coexistshield/backend/internal/coldstart"
 	"ai.coexistshield/backend/internal/compliance"
@@ -40,6 +41,7 @@ type Router struct {
 	verifier            *auth.Verifier
 	incidentRepo        repository.IncidentRepository
 	roadkillRepo        repository.RoadkillRepository
+	adminHandler        *admin.Handler
 	mu                  sync.RWMutex
 	incidents           []model.IncidentDto
 	roadkills           []model.RoadkillRecordDto
@@ -72,6 +74,7 @@ func NewRouter(
 		coldstartEngine:     coldstart.NewEngine(mlPipeline, geofenceEngine, memoryBank),
 		incidentRepo:        memRepo,
 		roadkillRepo:        memRepo,
+		adminHandler:        admin.NewHandler(nil),
 		userRoles:           make(map[string]string),
 	}
 
@@ -102,9 +105,9 @@ func (r *Router) SetRepositories(incRepo repository.IncidentRepository, rkRepo r
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// Enable CORS for Compose Multiplatform Web app
+	// Enable CORS for Web Admin Portal & Compose Multiplatform
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 	if req.Method == http.MethodOptions {
@@ -191,6 +194,11 @@ func (r *Router) registerRoutes() {
 
 	// User role management route (Issue #46)
 	r.mux.HandleFunc("/api/v1/admin/set-role", r.adminOnly(r.handleAdminSetRole))
+
+	// Mount CoExist Shield AI Admin Web Portal endpoints (Issue #52, #53)
+	if r.adminHandler != nil {
+		r.adminHandler.RegisterRoutes(r.mux)
+	}
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {

@@ -18,7 +18,7 @@ The **CoExist Shield AI Admin Web Portal** is the mission-critical operational c
 5. Operational tools: AI engine recalculation triggers, emergency push broadcasts, and GIS/CSV export.
 
 ### 1.2 Technology Stack
-- **Frontend Framework:** Angular 19+ (Standalone Components, Signals, Reactive Forms, Injectable Services)
+- **Frontend Framework:** Angular 22 (Latest version) (Standalone Components, Signals, Reactive Forms, Injectable Services)
 - **Map Engine:** Google Maps JavaScript API with `@angular/google-maps` & Drawing Library
 - **UI Styling:** Tailwind CSS & Lucide Icons (clean, high-density dashboard UI)
 - **Backend:** Go (`backend-cloudrun/internal/admin`), REST API endpoints with structured JSON responses
@@ -26,7 +26,7 @@ The **CoExist Shield AI Admin Web Portal** is the mission-critical operational c
 
 ```
 +-------------------------------------------------------------+
-|             Angular 19 Admin Web Portal (English)           |
+|             Angular 22 Admin Web Portal (English)           |
 |  +---------------+  +------------------+  +--------------+  |
 |  | Dashboard     |  | JAPAC Map Console|  | Incident Hub |  |
 |  | (KPIs/Charts) |  | (Circle/Polygon) |  | (Wildlife/RK)|  |

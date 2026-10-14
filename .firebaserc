@@ -1,5 +1,18 @@
 {
   "projects": {
-    "default": "coexistshield-ai"
-  }
+    "default": "corald"
+  },
+  "targets": {
+    "corald": {
+      "hosting": {
+        "app": [
+          "corald"
+        ],
+        "admin": [
+          "corald-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
