@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -80,6 +81,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class MapLayerType(val label: String) {
@@ -558,10 +560,11 @@ fun GoogleMapsVectorCanvas(
                 }
             }
     ) {
-        val screenW = maxWidth.value
-        val screenH = maxHeight.value
-        val centerX = screenW / 2f + panOffsetX
-        val centerY = screenH / 2f + panOffsetY
+        val density = LocalDensity.current
+        val screenWPx = with(density) { maxWidth.toPx() }
+        val screenHPx = with(density) { maxHeight.toPx() }
+        val screenCenterX = screenWPx / 2f
+        val screenCenterY = screenHPx / 2f
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f + panOffsetX, size.height / 2f + panOffsetY)
@@ -619,37 +622,41 @@ fun GoogleMapsVectorCanvas(
 
         val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
         val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)
-        val currentCenterTileX = centerTileX - (panOffsetX / tileSizePx)
-        val currentCenterTileY = centerTileY - (panOffsetY / tileSizePx)
 
         pins.forEach { pin ->
             val pinTileX = TileCoordinateUtils.lonToTileX(pin.lon, discreteZoom)
             val pinTileY = TileCoordinateUtils.latToTileY(pin.lat, discreteZoom)
 
-            val pinPxX = (screenW / 2f) + (pinTileX - currentCenterTileX).toFloat() * tileSizePx - 50f
-            val pinPxY = (screenH / 2f) + (pinTileY - currentCenterTileY).toFloat() * tileSizePx - 25f
+            // Pin position in absolute canvas pixel coordinates matching tiles and geofences exactly
+            val pinPxX = screenCenterX + (pinTileX - centerTileX).toFloat() * tileSizePx + panOffsetX
+            val pinPxY = screenCenterY + (pinTileY - centerTileY).toFloat() * tileSizePx + panOffsetY
 
-            val pinX = pinPxX.coerceIn(10f, screenW - 130f).dp
-            val pinY = pinPxY.coerceIn(110f, screenH - 120f).dp
-
-            Box(
-                modifier = Modifier
-                    .offset(x = pinX, y = pinY)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF0F172A).copy(alpha = 0.94f))
-                    .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
-                    .clickable { onSelectPin(pin) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(pin.iconEmoji, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            // Only render pins that are near or within visible screen area to optimize performance
+            if (pinPxX >= -200f && pinPxX <= screenWPx + 200f && pinPxY >= -100f && pinPxY <= screenHPx + 100f) {
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (pinPxX - 55f).roundToInt(),
+                                (pinPxY - 16f).roundToInt()
+                            )
+                        }
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF0F172A).copy(alpha = 0.94f))
+                        .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
+                        .clickable { onSelectPin(pin) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(pin.iconEmoji, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
