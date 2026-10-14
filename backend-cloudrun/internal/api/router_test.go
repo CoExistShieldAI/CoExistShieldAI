@@ -3,12 +3,19 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"ai.coexistshield/backend/internal/auth"
 	"ai.coexistshield/backend/internal/coldstart"
 	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/corroboration"
@@ -1461,6 +1468,101 @@ func TestNgoTemplatesEndpoint(t *testing.T) {
 	}
 	if result.Sla == "" {
 		t.Errorf("expected SLA specification in template response")
+	}
+}
+
+func makeTestToken(t *testing.T, key *rsa.PrivateKey, project string, role string) string {
+	t.Helper()
+	now := time.Now()
+	payload := map[string]any{
+		"iss":   "https://securetoken.google.com/" + project,
+		"aud":   project,
+		"sub":   "u-test-admin",
+		"iat":   now.Add(-time.Minute).Unix(),
+		"exp":   now.Add(time.Hour).Unix(),
+		"email": "tester@coexistshield.ai",
+		"role":  role,
+	}
+	hb, _ := json.Marshal(map[string]string{"alg": "RS256", "kid": "k1"})
+	pb, _ := json.Marshal(payload)
+	signing := base64.RawURLEncoding.EncodeToString(hb) + "." + base64.RawURLEncoding.EncodeToString(pb)
+	d := sha256.Sum256([]byte(signing))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, d[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signing + "." + base64.RawURLEncoding.EncodeToString(sig)
+}
+
+func TestAdminOnlyEndpointsAndRoleAssignment(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const testProj = "coexistshield-auth-test"
+
+	jwkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]string{{
+			"kid": "k1",
+			"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
+			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
+		}}})
+	}))
+	defer jwkServer.Close()
+
+	router := setupTestServer()
+	verifier := auth.NewVerifier(testProj, jwkServer.URL)
+	router.SetAuthVerifier(verifier)
+
+	// 1. Unauthenticated request to /api/v1/admin/set-role -> 401
+	setRolePayload := `{"uid":"user-to-promote","role":"OFFICIAL"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/set-role", strings.NewReader(setRolePayload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized for missing token, got %d", w.Code)
+	}
+
+	// 2. CITIZEN request to /api/v1/admin/set-role -> 403
+	citizenToken := makeTestToken(t, key, testProj, "CITIZEN")
+	req = httptest.NewRequest("POST", "/api/v1/admin/set-role", strings.NewReader(setRolePayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+citizenToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for CITIZEN, got %d", w.Code)
+	}
+
+	// 3. OFFICIAL request to adminOnly endpoint -> 403 (adminOnly strictly requires ADMIN)
+	officialToken := makeTestToken(t, key, testProj, "OFFICIAL")
+	req = httptest.NewRequest("POST", "/api/v1/admin/set-role", strings.NewReader(setRolePayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+officialToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for OFFICIAL on admin-only route, got %d", w.Code)
+	}
+
+	// 4. ADMIN request to /api/v1/admin/set-role -> 200 OK
+	adminToken := makeTestToken(t, key, testProj, "ADMIN")
+	req = httptest.NewRequest("POST", "/api/v1/admin/set-role", strings.NewReader(setRolePayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ADMIN, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["success"] != true || resp["uid"] != "user-to-promote" || resp["role"] != "OFFICIAL" {
+		t.Errorf("unexpected set-role response: %+v", resp)
 	}
 }
 

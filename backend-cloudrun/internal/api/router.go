@@ -39,6 +39,7 @@ type Router struct {
 	mu                  sync.RWMutex
 	incidents           []model.IncidentDto
 	roadkills           []model.RoadkillRecordDto
+	userRoles           map[string]string
 }
 
 
@@ -64,6 +65,7 @@ func NewRouter(
 		complianceEngine:    complianceEngine,
 		corroborationEngine: corroborationEngine,
 		coldstartEngine:     coldstart.NewEngine(mlPipeline, geofenceEngine, memoryBank),
+		userRoles:           make(map[string]string),
 	}
 
 	// Dynamic model promotion listener (Issue #21): updates live geofencing engine without server restart
@@ -109,6 +111,15 @@ func (r *Router) officialOnly(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func (r *Router) adminOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		r.mu.RLock()
+		v := r.verifier
+		r.mu.RUnlock()
+		auth.RequireRole(v, h, "ADMIN")(w, req)
+	}
+}
+
 func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/healthz", r.handleHealth)
 	r.mux.HandleFunc("/health", r.handleHealth)
@@ -132,10 +143,10 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/memory/search", r.handleMemorySearch)
 	r.mux.HandleFunc("/api/v1/alerts/explain", r.handleAlertExplanation)
 	r.mux.HandleFunc("/api/v1/ml/status", r.handleMlStatus)
-	r.mux.HandleFunc("/api/v1/ml/retrain", r.officialOnly(r.handleMlRetrain))
+	r.mux.HandleFunc("/api/v1/ml/retrain", r.adminOnly(r.handleMlRetrain))
 	r.mux.HandleFunc("/api/v1/ml/predict", r.handleMlPredict)
 	r.mux.HandleFunc("/api/v1/ml/query", r.handleMlQuery)
-	r.mux.HandleFunc("/api/v1/bigquery/stream-sync", r.officialOnly(r.handleBigQueryStreamSync))
+	r.mux.HandleFunc("/api/v1/bigquery/stream-sync", r.adminOnly(r.handleBigQueryStreamSync))
 	r.mux.HandleFunc("/api/v1/bigquery/sync-status", r.handleBigQuerySyncStatus)
 	r.mux.HandleFunc("/api/v1/bigquery/staged-samples", r.handleBigQueryStagedSamples)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/crop-plots", r.handleThailandCropPlots)
@@ -152,10 +163,13 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/corroboration/poll-cycle", r.handleCorroborationPollCycle)
 
 	// Cold-Start & Conservation NGO bulk ingestion routes (Issue #23)
-	r.mux.HandleFunc("/api/v1/coldstart/gbif-firms/bootstrap", r.officialOnly(r.handleColdStartBootstrap))
+	r.mux.HandleFunc("/api/v1/coldstart/gbif-firms/bootstrap", r.adminOnly(r.handleColdStartBootstrap))
 	r.mux.HandleFunc("/api/v1/coldstart/status", r.handleColdStartStatus)
 	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/bulk-import", r.officialOnly(r.handleNgoBulkImport))
 	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/templates", r.handleNgoTemplates)
+
+	// User role management route (Issue #46)
+	r.mux.HandleFunc("/api/v1/admin/set-role", r.adminOnly(r.handleAdminSetRole))
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -1333,6 +1347,48 @@ func (r *Router) handleNgoTemplates(w http.ResponseWriter, req *http.Request) {
 		"templates": templates,
 		"formats":   []string{"CSV", "GEOJSON", "GPX"},
 		"sla":       "5 minutes",
+	})
+}
+
+type AdminSetRoleRequest struct {
+	UID  string `json:"uid"`
+	Role string `json:"role"` // CITIZEN, OFFICIAL, ADMIN
+}
+
+func (r *Router) handleAdminSetRole(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var roleReq AdminSetRoleRequest
+	if err := json.NewDecoder(req.Body).Decode(&roleReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	role := strings.ToUpper(strings.TrimSpace(roleReq.Role))
+	if role != "CITIZEN" && role != "OFFICIAL" && role != "ADMIN" {
+		http.Error(w, "Invalid role: must be CITIZEN, OFFICIAL, or ADMIN", http.StatusBadRequest)
+		return
+	}
+	if roleReq.UID == "" {
+		http.Error(w, "Missing required uid", http.StatusBadRequest)
+		return
+	}
+
+	r.mu.Lock()
+	if r.userRoles == nil {
+		r.userRoles = make(map[string]string)
+	}
+	r.userRoles[roleReq.UID] = role
+	r.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"uid":       roleReq.UID,
+		"role":      role,
+		"updatedAt": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 

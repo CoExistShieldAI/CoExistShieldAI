@@ -35,9 +35,22 @@ func main() {
 
 	router := api.NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine, corroborationEngine)
 
-	if projectID := os.Getenv("AUTH_PROJECT_ID"); projectID != "" {
+	projectID := os.Getenv("AUTH_PROJECT_ID")
+	if projectID == "" {
+		projectID = os.Getenv("FIREBASE_PROJECT_ID")
+	}
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	if projectID == "" {
+		projectID = os.Getenv("GCP_PROJECT")
+	}
+
+	if projectID != "" {
 		router.SetAuthVerifier(auth.NewVerifier(projectID, ""))
 		log.Printf("Firebase ID token verification enabled for project %s", projectID)
+	} else {
+		log.Printf("AUTH_PROJECT_ID not set; running in open demo mode")
 	}
 
 	server := &http.Server{
