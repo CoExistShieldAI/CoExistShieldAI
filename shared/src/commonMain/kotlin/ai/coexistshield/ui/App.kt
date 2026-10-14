@@ -80,6 +80,7 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
         var currentRole by remember { mutableStateOf(UserRole.CITIZEN) }
         var authUser by remember { mutableStateOf<AuthUser?>(null) }
         var isGuest by remember { mutableStateOf(true) }
+        var showDemoControls by remember { mutableStateOf(false) }
         val authService = remember { AuthService() }
         var isRestoringSession by remember { mutableStateOf(sessionStore.load() != null) }
 
@@ -304,6 +305,8 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
                     currentRole = currentRole,
                     currentTier = currentTier,
                     signedInEmail = authUser?.email,
+                    isExpanded = showDemoControls,
+                    onToggleExpand = { showDemoControls = !showDemoControls },
                     onLoginClick = { isGuest = false },
                     onLogoutClick = {
                         authUser = null
@@ -559,10 +562,8 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
                                     adminRetrainTimestamp = "Just now (${res.activeModelVersion})"
                                     snackbarHostState.showSnackbar("Continuous Retraining Passed! Promoted model: AUC ${res.candidateModel.metrics.aucRoc}")
                                 } else {
-                                    // Simulation fallback for offline demo
-                                    adminModelAucScore = 0.884
-                                    adminRetrainTimestamp = "Just now (v2026.10.14-promoted)"
-                                    snackbarHostState.showSnackbar("Cloud Run Job Retrained: AUC elevated to 0.884 (Promotion Gate Passed)")
+                                    val err = result.exceptionOrNull()?.message ?: "Retraining job execution failed."
+                                    snackbarHostState.showSnackbar("Retraining Error: $err")
                                 }
                                 adminIsRetraining = false
                             }
@@ -581,6 +582,8 @@ fun DemoControlBar(
     onRoleChange: (UserRole) -> Unit,
     onTierChange: (AlertTier) -> Unit,
     signedInEmail: String? = null,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {},
     onLoginClick: () -> Unit = {},
     onLogoutClick: () -> Unit = {}
 ) {
@@ -588,7 +591,7 @@ fun DemoControlBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xFF0F172A))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier
@@ -613,12 +616,16 @@ fun DemoControlBar(
                 }
             }
 
-            Text(
-                text = "DEMO CONTROLS:",
-                color = Color.White,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Black
-            )
+            TextButton(onClick = onToggleExpand) {
+                Text(
+                    text = if (isExpanded) "🛠 DEMO CONTROLS ▲" else "🛠 DEMO CONTROLS ▼",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isExpanded) MaterialTheme.colorScheme.primary else Color.LightGray
+                )
+            }
+
+            if (isExpanded) {
 
             // Role Switcher Chips (locked while signed in: role is derived from token claims)
             UserRole.values().forEach { role ->
@@ -658,4 +665,5 @@ fun DemoControlBar(
             }
         }
     }
+}
 }
