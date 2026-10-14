@@ -985,6 +985,220 @@ func TestGetCurrentMeteorologyEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetIncidentsEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	// 1. Get all incidents
+	req := httptest.NewRequest("GET", "/api/v1/incidents", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var incidents []model.IncidentDto
+	if err := json.Unmarshal(w.Body.Bytes(), &incidents); err != nil {
+		t.Fatalf("failed to decode incidents: %v", err)
+	}
+	if len(incidents) < 3 {
+		t.Errorf("expected at least 3 seed incidents, got %d", len(incidents))
+	}
+
+	// 2. Filter by category
+	req2 := httptest.NewRequest("GET", "/api/v1/incidents?category=ROADKILL", nil)
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w2.Code)
+	}
+
+	var roadkillIncidents []model.IncidentDto
+	if err := json.Unmarshal(w2.Body.Bytes(), &roadkillIncidents); err != nil {
+		t.Fatalf("failed to decode roadkill incidents: %v", err)
+	}
+	for _, inc := range roadkillIncidents {
+		if inc.Category != "ROADKILL" {
+			t.Errorf("expected category ROADKILL, got %s", inc.Category)
+		}
+	}
+}
+
+func TestSubmitIncidentEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	newIncident := model.IncidentDto{
+		Category: "WILDLIFE_SIGHTING",
+		Species:  "BEAR",
+		Location: model.GeoLocationDto{
+			Latitude:  39.7050,
+			Longitude: 141.1510,
+		},
+		Region:       "JAPAN",
+		Description:  "Large male bear seen crossing forest edge road.",
+		ReporterId:   "usr_test_101",
+		ReporterRole: "CITIZEN",
+	}
+	bodyBytes, _ := json.Marshal(newIncident)
+
+	req := httptest.NewRequest("POST", "/api/v1/incidents", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var created model.IncidentDto
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to decode created incident: %v", err)
+	}
+
+	if created.Id == "" {
+		t.Errorf("expected generated incident ID")
+	}
+	if created.GeminiTriageResult == nil {
+		t.Fatalf("expected Gemini triage result attached")
+	}
+	if created.GeminiTriageResult.ModelUsed != "gemini-3.8-flash" {
+		t.Errorf("expected gemini-3.8-flash, got %s", created.GeminiTriageResult.ModelUsed)
+	}
+	if created.GeminiTriageResult.Confidence < 0.90 {
+		t.Errorf("expected confidence >= 0.90, got %f", created.GeminiTriageResult.Confidence)
+	}
+}
+
+func TestSubmitRoadkillIncidentAutoRegistersCarcass(t *testing.T) {
+	router := setupTestServer()
+
+	newRoadkill := model.IncidentDto{
+		Category: "ROADKILL",
+		Species:  "DEER",
+		Location: model.GeoLocationDto{
+			Latitude:  39.7200,
+			Longitude: 141.1600,
+		},
+		Region:       "JAPAN",
+		Description:  "Freshly struck deer carcass in Route 4 median.",
+		ReporterId:   "usr_commuter_55",
+		ReporterRole: "CITIZEN",
+	}
+	bodyBytes, _ := json.Marshal(newRoadkill)
+
+	req := httptest.NewRequest("POST", "/api/v1/incidents", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	// Verify carcass registered in /api/v1/roadkills
+	reqRk := httptest.NewRequest("GET", "/api/v1/roadkills", nil)
+	wRk := httptest.NewRecorder()
+	router.ServeHTTP(wRk, reqRk)
+
+	var roadkills []model.RoadkillRecordDto
+	if err := json.Unmarshal(wRk.Body.Bytes(), &roadkills); err != nil {
+		t.Fatalf("failed to decode roadkills: %v", err)
+	}
+
+	found := false
+	for _, rk := range roadkills {
+		if rk.Species == "DEER" && rk.Location.Latitude == 39.7200 {
+			found = true
+			if rk.ClearanceStatus != "REPORTED" {
+				t.Errorf("expected clearanceStatus REPORTED, got %s", rk.ClearanceStatus)
+			}
+			if rk.AttractantThreatScore <= 0 {
+				t.Errorf("expected positive attractant threat score")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected auto-registered roadkill record in roadkills list")
+	}
+}
+
+func TestGetRoadkillsEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/roadkills", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var roadkills []model.RoadkillRecordDto
+	if err := json.Unmarshal(w.Body.Bytes(), &roadkills); err != nil {
+		t.Fatalf("failed to decode roadkills: %v", err)
+	}
+
+	if len(roadkills) < 3 {
+		t.Errorf("expected at least 3 seed roadkills, got %d", len(roadkills))
+	}
+}
+
+func TestUpdateRoadkillStatusEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	// 1. Dispatch sanitation crew: REPORTED -> DISPATCHED
+	dispatchBody, _ := json.Marshal(model.UpdateRoadkillStatusRequestDto{
+		Status:             "DISPATCHED",
+		AssignedOfficialId: "OFFICER-SANITATION-09",
+	})
+	req := httptest.NewRequest("POST", "/api/v1/roadkills/rk_4412/status", bytes.NewReader(dispatchBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var dispatched model.RoadkillRecordDto
+	if err := json.Unmarshal(w.Body.Bytes(), &dispatched); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if dispatched.ClearanceStatus != "DISPATCHED" {
+		t.Errorf("expected DISPATCHED status, got %s", dispatched.ClearanceStatus)
+	}
+	if dispatched.AssignedOfficialId != "OFFICER-SANITATION-09" {
+		t.Errorf("expected assigned official OFFICER-SANITATION-09, got %s", dispatched.AssignedOfficialId)
+	}
+
+	// 2. Mark carcass as Cleared: DISPATCHED -> CLEARED
+	clearBody, _ := json.Marshal(model.UpdateRoadkillStatusRequestDto{
+		Status: "CLEARED",
+	})
+	req2 := httptest.NewRequest("POST", "/api/v1/roadkills/rk_4412/status", bytes.NewReader(clearBody))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w2.Code, w2.Body.String())
+	}
+
+	var cleared model.RoadkillRecordDto
+	if err := json.Unmarshal(w2.Body.Bytes(), &cleared); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if cleared.ClearanceStatus != "CLEARED" {
+		t.Errorf("expected CLEARED status, got %s", cleared.ClearanceStatus)
+	}
+	if cleared.ClearedAt == "" {
+		t.Errorf("expected ClearedAt timestamp set upon clearance")
+	}
+}
+
+
 
 
 

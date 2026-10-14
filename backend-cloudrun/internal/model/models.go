@@ -290,3 +290,61 @@ type CorroborationResponse struct {
 	ModelUsed          string                `json:"modelUsed"` // "gemini-3.8-flash"
 }
 
+// Crowdsourced Incidents & Roadkill Mitigation Models
+
+type GeoLocationDto struct {
+	Latitude  float64  `json:"latitude"`
+	Longitude float64  `json:"longitude"`
+	Altitude  *float64 `json:"altitude,omitempty"`
+}
+
+type GeminiTriageResultDto struct {
+	DetectedLabel   string   `json:"detectedLabel,omitempty"`
+	CommonName      string   `json:"commonName,omitempty"`
+	Confidence      float64  `json:"confidence"`
+	ForensicTags    []string `json:"forensicTags,omitempty"`
+	DecayState      string   `json:"decayState,omitempty"`
+	FruitLoadLevel  string   `json:"fruitLoadLevel,omitempty"`
+	TraceType       string   `json:"traceType,omitempty"`
+	TraumaType      string   `json:"traumaType,omitempty"`
+	Notes           string   `json:"notes,omitempty"`
+	ModelUsed       string   `json:"modelUsed,omitempty"`
+	InferenceTimeMs int64    `json:"inferenceTimeMs,omitempty"`
+}
+
+type IncidentDto struct {
+	Id                 string                 `json:"id"`
+	Category           string                 `json:"category"` // WILDLIFE_SIGHTING, PHYSICAL_TRACE, ROADKILL, LIVESTOCK_DEPREDATION, ATTRACTANT_FRUIT_TREE
+	Species            string                 `json:"species"`
+	Location           GeoLocationDto         `json:"location"`
+	Timestamp          string                 `json:"timestamp"`
+	Region             string                 `json:"region"`
+	Description        string                 `json:"description,omitempty"`
+	PhotoUrls          []string               `json:"photoUrls,omitempty"`
+	GeminiTriageResult *GeminiTriageResultDto `json:"geminiTriageResult,omitempty"`
+	ReporterId         string                 `json:"reporterId"`
+	ReporterRole       string                 `json:"reporterRole"`
+	VerificationStatus string                 `json:"verificationStatus"` // PENDING, VERIFIED, REJECTED
+}
+
+
+type RoadkillRecordDto struct {
+	Id                    string         `json:"id"`
+	IncidentId            string         `json:"incidentId"`
+	Species               string         `json:"species"`
+	Location              GeoLocationDto `json:"location"`
+	DecayState            string         `json:"decayState"` // FRESH, BLOATED, DECOMPOSING, SKELETAL
+	AttractantThreatScore float64        `json:"attractantThreatScore"`
+	ClearanceStatus       string         `json:"clearanceStatus"` // REPORTED, DISPATCHED, CLEARED
+	AssignedOfficialId    string         `json:"assignedOfficialId,omitempty"`
+	PhotoUrls             []string       `json:"photoUrls,omitempty"`
+	ReportedAt            string         `json:"reportedAt"`
+	ClearedAt             string         `json:"clearedAt,omitempty"`
+}
+
+type UpdateRoadkillStatusRequestDto struct {
+	Status             string `json:"status"` // REPORTED, DISPATCHED, CLEARED
+	AssignedOfficialId string `json:"assignedOfficialId,omitempty"`
+}
+
+

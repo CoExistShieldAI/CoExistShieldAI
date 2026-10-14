@@ -1,8 +1,11 @@
 package ai.coexistshield.repository
 
+import ai.coexistshield.model.ClearanceStatus
 import ai.coexistshield.model.Incident
 import ai.coexistshield.model.ReportCategory
+import ai.coexistshield.model.RoadkillRecord
 import ai.coexistshield.model.VerificationStatus
+import ai.coexistshield.network.UpdateRoadkillStatusRequestDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -20,16 +23,29 @@ class IncidentRepository(
     private val _offlineIncidentsQueue = MutableStateFlow<List<Incident>>(emptyList())
     val offlineIncidentsQueue: Flow<List<Incident>> = _offlineIncidentsQueue.asStateFlow()
 
-    suspend fun submitIncident(incident: Incident): Result<Unit> {
+    fun getOfflineQueueCount(): Int = _offlineIncidentsQueue.value.size
+
+    fun enqueueOfflineIncident(incident: Incident) {
+        _offlineIncidentsQueue.value = _offlineIncidentsQueue.value + incident
+    }
+
+    suspend fun uploadIncidentDirect(incident: Incident): Result<Unit> {
         return runCatching {
-            httpClient.post("/api/v1/incidents") {
+            val response = httpClient.post("/api/v1/incidents") {
                 contentType(ContentType.Application.Json)
                 setBody(incident)
             }
+            if (response.status.value !in 200..299) {
+                error("Upload failed with HTTP ${response.status}")
+            }
             Unit
-        }.onFailure {
-            // Enqueue locally for offline persistence
-            _offlineIncidentsQueue.value = _offlineIncidentsQueue.value + incident
+        }
+    }
+
+
+    suspend fun submitIncident(incident: Incident): Result<Unit> {
+        return uploadIncidentDirect(incident).onFailure {
+            enqueueOfflineIncident(incident)
         }
     }
 
@@ -55,7 +71,7 @@ class IncidentRepository(
         val remaining = mutableListOf<Incident>()
 
         for (item in queue) {
-            val result = submitIncident(item)
+            val result = uploadIncidentDirect(item)
             if (result.isSuccess) {
                 syncedCount++
             } else {
@@ -65,4 +81,29 @@ class IncidentRepository(
         _offlineIncidentsQueue.value = remaining
         return syncedCount
     }
+
+    suspend fun getRoadkills(): Result<List<RoadkillRecord>> {
+        return runCatching {
+            httpClient.get("/api/v1/roadkills").body()
+        }
+    }
+
+    suspend fun updateRoadkillStatus(
+        roadkillId: String,
+        status: ClearanceStatus,
+        assignedOfficialId: String? = null
+    ): Result<RoadkillRecord> {
+        return runCatching {
+            httpClient.post("/api/v1/roadkills/$roadkillId/status") {
+                contentType(ContentType.Application.Json)
+                setBody(
+                    UpdateRoadkillStatusRequestDto(
+                        status = status.name,
+                        assignedOfficialId = assignedOfficialId
+                    )
+                )
+            }.body()
+        }
+    }
 }
+

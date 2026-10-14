@@ -1,6 +1,15 @@
 package ai.coexistshield.network
 
+import ai.coexistshield.model.ClearanceStatus
+import ai.coexistshield.model.DecayState
+import ai.coexistshield.model.GeoLocation
+import ai.coexistshield.model.Incident
+import ai.coexistshield.model.ReportCategory
+import ai.coexistshield.model.RoadkillRecord
+import ai.coexistshield.model.WildlifeSpecies
 import ai.coexistshield.repository.GeofenceRepository
+import ai.coexistshield.repository.IncidentRepository
+
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -1000,7 +1009,151 @@ class ApiClientTest {
         assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, zones[0].tier)
         assertEquals(750.0, zones[0].radiusMeters)
     }
+
+    @Test
+    fun testIncidentSubmissionAndRecentIncidentsApi() = runTest {
+        val mockJsonResponse = """
+            [
+                {
+                    "id": "inc_iwate_01",
+                    "category": "WILDLIFE_SIGHTING",
+                    "species": "BEAR",
+                    "location": {"latitude": 39.7020, "longitude": 141.1520},
+                    "timestamp": "2026-10-14T01:30:00Z",
+                    "region": "JAPAN",
+                    "description": "Adult Asian Black Bear spotted near forest edge",
+                    "reporterId": "usr_citizen_88",
+                    "reporterRole": "CITIZEN",
+                    "verificationStatus": "VERIFIED"
+                }
+            ]
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = IncidentRepository(httpClient)
+
+        val submitRes = repository.submitIncident(
+            Incident(
+                id = "inc_iwate_01",
+                category = ReportCategory.WILDLIFE_SIGHTING,
+                species = WildlifeSpecies.BEAR,
+                location = GeoLocation(39.7020, 141.1520),
+                timestamp = "2026-10-14T01:30:00Z",
+                reporterId = "usr_citizen_88"
+            )
+        )
+        assertTrue(submitRes.isSuccess)
+        assertEquals(0, repository.getOfflineQueueCount())
+
+        val listRes = repository.getRecentIncidents(category = ReportCategory.WILDLIFE_SIGHTING)
+        assertTrue(listRes.isSuccess)
+        val items = listRes.getOrNull()!!
+        assertEquals(1, items.size)
+        assertEquals("inc_iwate_01", items[0].id)
+        assertEquals(WildlifeSpecies.BEAR, items[0].species)
+    }
+
+    @Test
+    fun testIncidentOfflineQueueAndSync() = runTest {
+        // Create an HTTP client that fails initially with 503 Service Unavailable
+        var shouldSucceed = false
+        val mockEngine = MockEngine { _ ->
+            if (shouldSucceed) {
+                respond(
+                    content = """{"status": "created"}""",
+                    status = HttpStatusCode.Created,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+            } else {
+                respond(
+                    content = """{"error": "offline"}""",
+                    status = HttpStatusCode.ServiceUnavailable,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+            }
+        }
+        val httpClient = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true })
+            }
+        }
+        val repository = IncidentRepository(httpClient)
+
+        val incident = Incident(
+            id = "inc_offline_01",
+            category = ReportCategory.PHYSICAL_TRACE,
+            species = WildlifeSpecies.BEAR,
+            location = GeoLocation(39.7045, 141.1490),
+            timestamp = "2026-10-14T02:00:00Z",
+            reporterId = "usr_field_agent"
+        )
+
+        // 1. Submit when network fails -> should auto-enqueue
+        val failRes = repository.submitIncident(incident)
+        assertFalse(failRes.isSuccess)
+        assertEquals(1, repository.getOfflineQueueCount())
+
+        // 2. Reconnect network and sync queue -> should drain queue
+        shouldSucceed = true
+        val synced = repository.syncOfflineQueue()
+        assertEquals(1, synced)
+        assertEquals(0, repository.getOfflineQueueCount())
+    }
+
+    @Test
+    fun testGetRoadkillsAndStatusUpdateApi() = runTest {
+        val mockRoadkillsJson = """
+            [
+                {
+                    "id": "rk_4412",
+                    "incidentId": "inc_iwate_03",
+                    "species": "WILD_BOAR",
+                    "location": {"latitude": 39.7120, "longitude": 141.1480},
+                    "decayState": "BLOATED",
+                    "attractantThreatScore": 0.88,
+                    "clearanceStatus": "REPORTED",
+                    "reportedAt": "2026-10-14T03:00:00Z"
+                }
+            ]
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockRoadkillsJson)
+        val repository = IncidentRepository(httpClient)
+
+        val listRes = repository.getRoadkills()
+        assertTrue(listRes.isSuccess)
+        val records = listRes.getOrNull()!!
+        assertEquals(1, records.size)
+        assertEquals("rk_4412", records[0].id)
+        assertEquals(WildlifeSpecies.WILD_BOAR, records[0].species)
+        assertEquals(DecayState.BLOATED, records[0].decayState)
+        assertEquals(ClearanceStatus.REPORTED, records[0].clearanceStatus)
+        assertEquals(0.88, records[0].attractantThreatScore)
+
+        val updateMockJson = """
+            {
+                "id": "rk_4412",
+                "incidentId": "inc_iwate_03",
+                "species": "WILD_BOAR",
+                "location": {"latitude": 39.7120, "longitude": 141.1480},
+                "decayState": "BLOATED",
+                "attractantThreatScore": 0.88,
+                "clearanceStatus": "DISPATCHED",
+                "assignedOfficialId": "OFFICER-SANITATION-09",
+                "reportedAt": "2026-10-14T03:00:00Z"
+            }
+        """.trimIndent()
+        val updateClient = createMockHttpClient(updateMockJson)
+        val updateRepo = IncidentRepository(updateClient)
+
+        val updateRes = updateRepo.updateRoadkillStatus("rk_4412", ClearanceStatus.DISPATCHED, "OFFICER-SANITATION-09")
+        assertTrue(updateRes.isSuccess)
+        val updated = updateRes.getOrNull()!!
+        assertEquals(ClearanceStatus.DISPATCHED, updated.clearanceStatus)
+        assertEquals("OFFICER-SANITATION-09", updated.assignedOfficialId)
+    }
 }
+
 
 
 

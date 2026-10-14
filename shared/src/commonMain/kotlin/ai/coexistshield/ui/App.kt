@@ -1,8 +1,12 @@
 package ai.coexistshield.ui
 
 import ai.coexistshield.model.AlertTier
+import ai.coexistshield.model.ClearanceStatus
+import ai.coexistshield.model.DecayState
 import ai.coexistshield.model.GeoLocation
+import ai.coexistshield.model.Incident
 import ai.coexistshield.model.ReportCategory
+import ai.coexistshield.model.RoadkillRecord
 import ai.coexistshield.model.UserRole
 import ai.coexistshield.model.WildlifeSpecies
 import ai.coexistshield.ui.admin.AdminConsoleScreen
@@ -68,11 +72,23 @@ fun App() {
         var currentRole by remember { mutableStateOf(UserRole.CITIZEN) }
         var currentTier by remember { mutableStateOf(AlertTier.TIER_2_WARNING) }
 
+        // Simulation toggles for offline connectivity and siren
+        var isAppOffline by remember { mutableStateOf(false) }
+        var isSirenPlaying by remember { mutableStateOf(false) }
+        var offlinePendingCount by remember { mutableStateOf(0) }
+
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
 
-        // 1. Dynamic HUD State synchronized with interactive demo controllers
-        val hudState = remember(currentRole, currentTier) {
+        val geofenceRepository = remember {
+            ai.coexistshield.repository.GeofenceRepository(ai.coexistshield.network.ApiClient.createHttpClient())
+        }
+        val incidentRepository = remember {
+            ai.coexistshield.repository.IncidentRepository(ai.coexistshield.network.ApiClient.createHttpClient())
+        }
+
+        // 1. Dynamic HUD State synchronized with interactive demo controllers (Issue #1)
+        val hudState = remember(currentRole, currentTier, isAppOffline, isSirenPlaying) {
             val (species, distance, explanation) = when (currentTier) {
                 AlertTier.SAFE -> Triple(
                     emptyList(),
@@ -95,17 +111,68 @@ fun App() {
                     "IMMEDIATE DANGER: Fresh livestock kill-site located 180m away. High probability of tiger returning within 72 hours."
                 )
             }
+
+            val detour = when (currentTier) {
+                AlertTier.TIER_2_WARNING -> "Bypass Forestry Route 4 via Prefectural Highway 396 (+1.2km • 0% Encounter Probability)"
+                AlertTier.TIER_3_DANGER -> "EVACUATE IMMEDIATELY: Divert 90° away from downwind scent corridor to Shelter Hub #2"
+                else -> null
+            }
+
             MainHudUiState(
                 currentTier = currentTier,
                 targetSpecies = species,
                 closestDistanceMeters = distance,
                 causalExplanation = explanation,
-                isOfflineMode = false,
+                isOfflineMode = isAppOffline,
+                isSirenPlaying = isSirenPlaying,
+                isHapticActive = currentTier == AlertTier.TIER_3_DANGER,
+                suggestedDetour = detour,
                 activeRole = currentRole
             )
         }
 
-        // 2. Map State
+        // 2. Roadkill Lifecycle State (Issue #3)
+        var roadkillList by remember {
+            mutableStateOf(
+                listOf(
+                    RoadkillRecord(
+                        id = "rk_4412",
+                        incidentId = "inc_iwate_03",
+                        species = WildlifeSpecies.WILD_BOAR,
+                        location = GeoLocation(39.7120, 141.1480),
+                        decayState = DecayState.BLOATED,
+                        attractantThreatScore = 0.88,
+                        clearanceStatus = ClearanceStatus.REPORTED,
+                        reportedAt = "2026-10-14T03:00:00Z"
+                    ),
+                    RoadkillRecord(
+                        id = "rk_3901",
+                        incidentId = "inc_iwate_04",
+                        species = WildlifeSpecies.DEER,
+                        location = GeoLocation(39.6410, 141.9520),
+                        decayState = DecayState.DECOMPOSING,
+                        attractantThreatScore = 0.75,
+                        clearanceStatus = ClearanceStatus.DISPATCHED,
+                        assignedOfficialId = "OFFICER-IWATE-42",
+                        reportedAt = "2026-10-13T18:00:00Z"
+                    ),
+                    RoadkillRecord(
+                        id = "rk_2105",
+                        incidentId = "inc_iwate_05",
+                        species = WildlifeSpecies.UNKNOWN,
+                        location = GeoLocation(39.6800, 141.1300),
+                        decayState = DecayState.SKELETAL,
+                        attractantThreatScore = 0.20,
+                        clearanceStatus = ClearanceStatus.CLEARED,
+                        assignedOfficialId = "OFFICER-IWATE-18",
+                        reportedAt = "2026-10-12T09:00:00Z",
+                        clearedAt = "2026-10-12T14:30:00Z"
+                    )
+                )
+            )
+        }
+
+        // 3. Map State
         var mapLayers by remember {
             mutableStateOf(
                 setOf(
@@ -119,23 +186,33 @@ fun App() {
         var mapSelectedEntity by remember { mutableStateOf<ai.coexistshield.ui.map.SelectedEntityDetails?>(null) }
         val mapState = GisMapUiState(
             userLocation = GeoLocation(39.702, 141.152),
+            roadkills = roadkillList,
             activeLayers = mapLayers,
             selectedEntity = mapSelectedEntity,
             userRole = currentRole
         )
 
-        // 3. Report State
+        // 4. Report State (Issue #2)
         var reportCategory by remember { mutableStateOf(ReportCategory.ATTRACTANT_FRUIT_TREE) }
+        var reportSpecies by remember { mutableStateOf(WildlifeSpecies.BEAR) }
+        var reportTraceType by remember { mutableStateOf("CLAW_MARK_BARK_STRIPPING") }
+        var reportDecayState by remember { mutableStateOf(DecayState.BLOATED) }
         var reportPropertyTag by remember { mutableStateOf(ai.coexistshield.model.PropertyContextTag.VACANT_HOUSE) }
         var reportNearSchoolRoute by remember { mutableStateOf(true) }
+
         val reportState = IncidentReportUiState(
             selectedCategory = reportCategory,
+            selectedSpecies = reportSpecies,
+            selectedTraceType = reportTraceType,
+            selectedDecayState = reportDecayState,
             selectedPropertyTag = reportPropertyTag,
             isNearSchoolRoute = reportNearSchoolRoute,
+            isOfflineMode = isAppOffline,
+            offlineQueueCount = offlinePendingCount,
             userRole = currentRole
         )
 
-        // 4. Admin State & Continuous Retraining Engine
+        // 5. Admin State & Continuous Retraining Engine
         var adminRetrainTimestamp by remember { mutableStateOf("2026-10-14 02:30 UTC") }
         var adminModelAucScore by remember { mutableStateOf(0.86) }
         var adminIsRetraining by remember { mutableStateOf(false) }
@@ -160,10 +237,6 @@ fun App() {
             )
         )
 
-        val geofenceRepository = remember {
-            ai.coexistshield.repository.GeofenceRepository(ai.coexistshield.network.ApiClient.createHttpClient())
-        }
-
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
@@ -177,6 +250,11 @@ fun App() {
                     },
                     onTierChange = { newTier ->
                         currentTier = newTier
+                        if (newTier == AlertTier.TIER_3_DANGER) {
+                            isSirenPlaying = true
+                        } else {
+                            isSirenPlaying = false
+                        }
                         scope.launch { snackbarHostState.showSnackbar("Simulated Hazard: ${newTier.name}") }
                     }
                 )
@@ -218,6 +296,16 @@ fun App() {
                         onOpenMapClick = { currentDestination = AppNavDestination.MAP },
                         onQuickReportClick = { currentDestination = AppNavDestination.REPORT },
                         onOfficialDispatchClick = { currentDestination = AppNavDestination.ADMIN },
+                        onToggleSirenClick = { isSirenPlaying = !isSirenPlaying },
+                        onToggleOfflineClick = {
+                            isAppOffline = !isAppOffline
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (isAppOffline) "Offline Cache Mode Active (Local Geofences Stored)"
+                                    else "Reconnected Live Network"
+                                )
+                            }
+                        },
                         onEmergencySosClick = {
                             scope.launch { snackbarHostState.showSnackbar("EMERGENCY SOS: Rangers and Municipal Responders Notified!") }
                         }
@@ -229,6 +317,26 @@ fun App() {
                             mapLayers = if (mapLayers.contains(layer)) mapLayers - layer else mapLayers + layer
                         },
                         onSelectEntity = { mapSelectedEntity = it },
+                        onUpdateRoadkillStatus = { rkId, newStatus ->
+                            roadkillList = roadkillList.map { rk ->
+                                if (rk.id == rkId) {
+                                    rk.copy(
+                                        clearanceStatus = newStatus,
+                                        assignedOfficialId = if (newStatus == ClearanceStatus.DISPATCHED) "OFFICER-SANITATION-09" else rk.assignedOfficialId
+                                    )
+                                } else rk
+                            }
+                            mapSelectedEntity = null
+                            scope.launch {
+                                incidentRepository.updateRoadkillStatus(rkId, newStatus, "OFFICER-SANITATION-09")
+                                val msg = if (newStatus == ClearanceStatus.DISPATCHED) {
+                                    "Sanitation Crew Dispatched for carcass $rkId! Lure mitigation underway."
+                                } else {
+                                    "Carcass $rkId Cleared & Removed! Predator attractant hazard neutralized."
+                                }
+                                snackbarHostState.showSnackbar(msg)
+                            }
+                        },
                         onOfficialActionClick = { entityId ->
                             scope.launch {
                                 if (entityId.startsWith("th_plot")) {
@@ -248,14 +356,76 @@ fun App() {
                         state = reportState,
                         onBackClick = { currentDestination = AppNavDestination.HUD },
                         onCategoryChange = { reportCategory = it },
+                        onSpeciesChange = { reportSpecies = it },
+                        onTraceTypeChange = { reportTraceType = it },
+                        onDecayStateChange = { reportDecayState = it },
                         onPropertyTagChange = { reportPropertyTag = it },
                         onNearSchoolRouteChange = { reportNearSchoolRoute = it },
+                        onToggleOfflineMode = {
+                            isAppOffline = it
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (isAppOffline) "Offline Mode Simulated: Reports queue locally"
+                                    else "Online Mode Restored"
+                                )
+                            }
+                        },
                         onRetakePhotoClick = {
                             scope.launch { snackbarHostState.showSnackbar("Camera reopened — New photo captured.") }
                         },
+                        onSyncOfflineQueueClick = {
+                            scope.launch {
+                                val count = incidentRepository.syncOfflineQueue()
+                                offlinePendingCount = incidentRepository.getOfflineQueueCount()
+                                snackbarHostState.showSnackbar(
+                                    if (count > 0) "Synchronized $count offline report(s) to Cloud Run!"
+                                    else "All reports already synced."
+                                )
+                            }
+                        },
                         onSubmitReportClick = {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Report submitted successfully! Verified by Gemini Vision.")
+                                val incidentId = "inc_${kotlin.random.Random.nextInt(1000, 9999)}"
+                                val newIncident = Incident(
+                                    id = incidentId,
+                                    category = reportCategory,
+                                    species = reportSpecies,
+                                    location = GeoLocation(39.702, 141.152),
+                                    timestamp = "2026-10-14T15:00:00Z",
+                                    region = "JAPAN",
+                                    description = "Crowdsourced report for $reportCategory ($reportSpecies)",
+                                    reporterId = "usr_current_device",
+                                    reporterRole = currentRole
+                                )
+
+                                // If Roadkill, immediately register into roadkillList
+                                if (reportCategory == ReportCategory.ROADKILL) {
+                                    val rkRecord = RoadkillRecord(
+                                        id = "rk_${kotlin.random.Random.nextInt(5000, 9999)}",
+                                        incidentId = incidentId,
+                                        species = reportSpecies,
+                                        location = GeoLocation(39.702, 141.152),
+                                        decayState = reportDecayState,
+                                        attractantThreatScore = 0.88,
+                                        clearanceStatus = ClearanceStatus.REPORTED,
+                                        reportedAt = "2026-10-14T15:00:00Z"
+                                    )
+                                    roadkillList = listOf(rkRecord) + roadkillList
+                                }
+
+                                if (isAppOffline) {
+                                    incidentRepository.enqueueOfflineIncident(newIncident)
+                                    offlinePendingCount = incidentRepository.getOfflineQueueCount()
+                                    snackbarHostState.showSnackbar("Offline Mode: Report stored in local queue ($offlinePendingCount pending upload).")
+                                } else {
+                                    val res = incidentRepository.submitIncident(newIncident)
+                                    if (res.isSuccess) {
+                                        snackbarHostState.showSnackbar("Report submitted successfully! Verified by Gemini 3.8 Flash.")
+                                    } else {
+                                        offlinePendingCount = incidentRepository.getOfflineQueueCount()
+                                        snackbarHostState.showSnackbar("Network timeout: Report stored in offline queue.")
+                                    }
+                                }
                                 currentDestination = AppNavDestination.MAP
                             }
                         }
@@ -290,7 +460,14 @@ fun App() {
                             }
                         },
                         onDispatchCarcassTruck = { id ->
-                            scope.launch { snackbarHostState.showSnackbar("Dispatch Sent: Sanitation truck assigned to carcass $id.") }
+                            scope.launch {
+                                roadkillList = roadkillList.map { rk ->
+                                    if (rk.id == id) rk.copy(clearanceStatus = ClearanceStatus.DISPATCHED, assignedOfficialId = "OFFICER-SANITATION-09")
+                                    else rk
+                                }
+                                incidentRepository.updateRoadkillStatus(id, ClearanceStatus.DISPATCHED, "OFFICER-SANITATION-09")
+                                snackbarHostState.showSnackbar("Dispatch Sent: Sanitation truck assigned to carcass $id.")
+                            }
                         },
                         onExportRspoReport = {
                             scope.launch {

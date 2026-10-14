@@ -558,6 +558,13 @@ data class CorroborationResponseDto(
     val modelUsed: String
 )
 
+@Serializable
+data class UpdateRoadkillStatusRequestDto(
+    val status: String,
+    val assignedOfficialId: String? = null
+)
+
+
 
 
 
