@@ -17,6 +17,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,9 +73,13 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CoroutineScope
 import kotlin.math.sin
 
 enum class MapLayerType(val label: String) {
@@ -92,7 +98,9 @@ data class SelectedEntityDetails(
     val geminiBadgeText: String? = null,
     val canMarkResolved: Boolean = false,
     val isRoadkill: Boolean = false,
-    val roadkillStatus: ClearanceStatus? = null
+    val roadkillStatus: ClearanceStatus? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 data class GisMapUiState(
@@ -151,7 +159,7 @@ fun GisHazardMapScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Google Maps", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("GIS Hazard Map", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
@@ -159,7 +167,7 @@ fun GisHazardMapScreen(
                                 .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
-                            Text("GIS LIVE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                            Text("LIVE TILES", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
                         }
                     }
                 },
@@ -184,7 +192,7 @@ fun GisHazardMapScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 1. Google Maps Vector & Dynamic GeoJSON Canvas Engine
+            // 1. Live Web Mercator Raster Tile & Dynamic GeoJSON Canvas Engine
             GoogleMapsVectorCanvas(
                 region = selectedRegion,
                 state = state,
@@ -206,7 +214,9 @@ fun GisHazardMapScreen(
                             geminiBadgeText = pin.geminiBadge,
                             canMarkResolved = true,
                             isRoadkill = pin.isRoadkill,
-                            roadkillStatus = pin.roadkillStatus
+                            roadkillStatus = pin.roadkillStatus,
+                            latitude = pin.lat,
+                            longitude = pin.lon
                         )
                     )
                 }
@@ -334,7 +344,7 @@ fun GisHazardMapScreen(
                 }
             }
 
-            // 4. Google Maps Watermark & Scale Indicator (Bottom Left)
+            // 4. ESRI Dark Canvas Attribution & Scale Indicator (Bottom Left)
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -347,9 +357,9 @@ fun GisHazardMapScreen(
                         .padding(horizontal = 6.dp, vertical = 3.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Google", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("ESRI Dark Canvas", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Maps", fontSize = 12.sp, fontWeight = FontWeight.Light, color = Color(0xFF94A3B8))
+                        Text("• GIS", fontSize = 11.sp, fontWeight = FontWeight.Light, color = Color(0xFF94A3B8))
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(modifier = Modifier.width(30.dp).height(2.dp).background(Color.White))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -534,6 +544,10 @@ fun GoogleMapsVectorCanvas(
         }
     }
 
+    val coroutineScope = rememberCoroutineScope()
+    val tileManager = remember { TileManager() }
+    val cacheVersion = tileManager.cacheVersion // trigger recomposition on tile arrival
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -552,42 +566,71 @@ fun GoogleMapsVectorCanvas(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f + panOffsetX, size.height / 2f + panOffsetY)
 
-            // 1. Google Maps Dark Mode Base (Landmass)
+            // 1. Base Dark Ground
             drawRect(
-                color = Color(0xFF181A1F), // Google Maps Dark Base
+                color = Color(0xFF181A1F),
                 size = size
             )
 
-            // 2. City Blocks / Cadastral Polygons
-            drawCityBlocks(center, zoomLevel)
+            // 2. Real Slippy Map Raster Tiles (CartoDB Dark Matter / OpenStreetMap)
+            drawCartoDbTiles(
+                region = region,
+                zoomLevel = zoomLevel,
+                panOffsetX = panOffsetX,
+                panOffsetY = panOffsetY,
+                tileManager = tileManager,
+                scope = coroutineScope
+            )
 
-            // 3. Mountains, Forest & Protected Conservation Reserves
+            // 3. Fallback vector features while initial tiles load
+            if (tileManager.cacheVersion == 0) {
+                drawCityBlocks(center, zoomLevel)
+                drawRiversAndWaterways(center, zoomLevel, region)
+                drawRoadwaysNetwork(center, zoomLevel, region)
+            }
+
+            // 4. Mountains, Forest & Protected Conservation Reserves
             drawTopographyAndForest(center, zoomLevel, region)
 
-            // 4. Waterways & Rivers (Kitakami River, Nakatsu River, etc.)
-            drawRiversAndWaterways(center, zoomLevel, region)
-
-            // 5. Roadways Network (Highways, Arterials, Forestry Routes)
-            drawRoadwaysNetwork(center, zoomLevel, region)
-
-            // 6. Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON Simulation)
+            // 5. Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON Simulation)
             drawGeofencePolygons(center, zoomLevel, region)
 
-            // 7. Scent Plume & Wind Vector (Causal Layer)
+            // 6. Scent Plume & Wind Vector (Causal Layer)
             drawCausalScentPlumes(center, zoomLevel, region)
 
-            // 8. User GPS Location with 800m Hazard Radar Pulse
+            // 7. User GPS Location with 800m Hazard Radar Pulse
             val userScreenPos = Offset(center.x, center.y + 10f * zoomLevel)
             drawUserLocationWithRadar(userScreenPos, radarPulse, zoomLevel)
         }
 
-        // Overlay Interactive Clickable Pin Badges on the Screen
+        // Overlay Interactive Clickable Pin Badges on the Screen (Slippy Tile Coordinate aligned)
+        val discreteZoom = when {
+            zoomLevel >= 2.0f -> 14
+            zoomLevel >= 1.0f -> 13
+            else -> 12
+        }
+        val baseZoomLevel = when (discreteZoom) {
+            14 -> 2.0f
+            13 -> 1.0f
+            else -> 0.5f
+        }
+        val scale = (zoomLevel / baseZoomLevel).coerceIn(0.6f, 2.0f)
+        val tileSizePx = 256f * scale
+
+        val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
+        val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)
+        val currentCenterTileX = centerTileX - (panOffsetX / tileSizePx)
+        val currentCenterTileY = centerTileY - (panOffsetY / tileSizePx)
+
         pins.forEach { pin ->
-            // Map lat/lon delta to screen coordinates relative to region center
-            val dLat = (pin.lat - region.centerLat).toFloat()
-            val dLon = (pin.lon - region.centerLon).toFloat()
-            val pinX = (centerX + (dLon * 8000f * zoomLevel) - 50f).coerceIn(10f, screenW - 130f).dp
-            val pinY = (centerY - (dLat * 8000f * zoomLevel) - 25f).coerceIn(110f, screenH - 120f).dp
+            val pinTileX = TileCoordinateUtils.lonToTileX(pin.lon, discreteZoom)
+            val pinTileY = TileCoordinateUtils.latToTileY(pin.lat, discreteZoom)
+
+            val pinPxX = (screenW / 2f) + (pinTileX - currentCenterTileX).toFloat() * tileSizePx - 50f
+            val pinPxY = (screenH / 2f) + (pinTileY - currentCenterTileY).toFloat() * tileSizePx - 25f
+
+            val pinX = pinPxX.coerceIn(10f, screenW - 130f).dp
+            val pinY = pinPxY.coerceIn(110f, screenH - 120f).dp
 
             Box(
                 modifier = Modifier
@@ -608,6 +651,75 @@ fun GoogleMapsVectorCanvas(
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+        }
+    }
+}
+
+// Draw real CartoDB Dark Matter / OpenStreetMap raster tiles
+private fun DrawScope.drawCartoDbTiles(
+    region: MapRegion,
+    zoomLevel: Float,
+    panOffsetX: Float,
+    panOffsetY: Float,
+    tileManager: TileManager,
+    scope: CoroutineScope
+) {
+    val discreteZoom = when {
+        zoomLevel >= 2.0f -> 14
+        zoomLevel >= 1.0f -> 13
+        else -> 12
+    }
+    val baseZoomLevel = when (discreteZoom) {
+        14 -> 2.0f
+        13 -> 1.0f
+        else -> 0.5f
+    }
+    val scale = (zoomLevel / baseZoomLevel).coerceIn(0.6f, 2.0f)
+    val tileSizePx = 256f * scale
+
+    val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
+    val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)
+
+    val currentCenterTileX = centerTileX - (panOffsetX / tileSizePx)
+    val currentCenterTileY = centerTileY - (panOffsetY / tileSizePx)
+
+    val screenCenterX = size.width / 2f
+    val screenCenterY = size.height / 2f
+
+    val tilesXNeeded = (screenCenterX / tileSizePx).toInt() + 2
+    val tilesYNeeded = (screenCenterY / tileSizePx).toInt() + 2
+
+    val minTileX = (currentCenterTileX - tilesXNeeded).toInt()
+    val maxTileX = (currentCenterTileX + tilesXNeeded).toInt()
+    val minTileY = (currentCenterTileY - tilesYNeeded).toInt()
+    val maxTileY = (currentCenterTileY + tilesYNeeded).toInt()
+
+    for (tx in minTileX..maxTileX) {
+        for (ty in minTileY..maxTileY) {
+            val bitmap = tileManager.getTile(discreteZoom, tx, ty, scope)
+            val posX = screenCenterX + (tx - currentCenterTileX).toFloat() * tileSizePx
+            val posY = screenCenterY + (ty - currentCenterTileY).toFloat() * tileSizePx
+
+            if (bitmap != null) {
+                drawImage(
+                    image = bitmap,
+                    dstOffset = IntOffset(posX.toInt(), posY.toInt()),
+                    dstSize = IntSize(tileSizePx.toInt(), tileSizePx.toInt())
+                )
+            } else {
+                // Subtle grid placeholder while loading tile
+                drawRect(
+                    color = Color(0xFF1E293B).copy(alpha = 0.4f),
+                    topLeft = Offset(posX, posY),
+                    size = Size(tileSizePx, tileSizePx)
+                )
+                drawRect(
+                    color = Color(0xFF334155).copy(alpha = 0.2f),
+                    topLeft = Offset(posX, posY),
+                    size = Size(tileSizePx, tileSizePx),
+                    style = Stroke(1f)
+                )
             }
         }
     }
@@ -1060,10 +1172,26 @@ fun EntityDetailCard(
             ) {
                 OutlinedButton(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.9f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text("Close", fontSize = 12.sp, color = Color.White)
+                }
+
+                // Quick jump to real Google Maps external navigation & street view
+                val uriHandler = LocalUriHandler.current
+                if (entity.latitude != null && entity.longitude != null) {
+                    OutlinedButton(
+                        onClick = {
+                            val url = "https://www.google.com/maps/search/?api=1&query=${entity.latitude},${entity.longitude}"
+                            uriHandler.openUri(url)
+                        },
+                        modifier = Modifier.weight(1.3f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color(0xFF38BDF8))
+                    ) {
+                        Text("🗺️ Google Maps", fontSize = 11.sp, color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 // If roadkill progression
