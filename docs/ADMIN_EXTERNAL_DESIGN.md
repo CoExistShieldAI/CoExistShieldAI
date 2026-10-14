@@ -96,21 +96,27 @@ The web application uses a persistent left sidebar with desktop-optimized layout
   - **Tier 2 (Alert / Warning):** Orange fill (`#FB923C`, opacity 0.35), orange border.
   - **Tier 3 (Critical Danger):** Red fill (`#EF4444`, opacity 0.45), red pulsing border.
   - **Manual Geofences:** Distinct Cyan/Purple border with a `[MANUAL]` badge in info windows.
-- **Manual Geofence Authoring Tools:**
-  - **Circle Tool:** Click center point, enter radius in meters (or drag perimeter).
-  - **Polygon Tool:** Freeform polygon drawing by clicking coordinate vertices, double-click to close.
-  - **Properties Modal on Creation:**
-    - Name / Label (e.g., `Emergency Buffer - Kaeng Krachan Sector 4`)
-    - Target Species (Asian Elephant, Tiger, Bear, Multi-species)
-    - Threat Tier (Tier 1, Tier 2, Tier 3)
-    - Reason / Debug Notes
-    - Expiration (Optional date/time or Indefinite)
-    - Persistence Flag: `is_persistent = true` (Ensures AI auto-refresh sweeps never overwrite or prune this geofence).
+- **Multi-Layer Empirical GIS Overlay (Issue #60, #61):**
+  - **Layer Visibility Toggles (Checkboxes in Toolbar):**
+    - `AI Fences` (Blue indicator)
+    - `Manual Fences` (Purple indicator)
+    - `Wildlife Sightings` (Cyan circular symbol with Tier 1/2/3 badge)
+    - `Roadkill Carcasses` (Rose/Amber symbol with pulsing `[FRESH]` scent-plume alert for <6h carcasses)
+    - `Attractant Layers` (Emerald/Orange/Purple/Cyan circles calibrated to ecological radius)
+  - **Dynamic Entity Inspector:** Clicking any marker or circle displays entity metadata, attached field photos, and immediate action buttons.
+- **Temporal & Date Filtering (Issue #62):**
+  - Quick-select time windows: `Past 24h`, `Past 7d`, `Past 30d`, `All Time`.
+  - Custom date range picker: From Date / To Date with real-time incident filtering.
+  - Dynamic signal counter: `X Active Geofences • Y Empirical Signals`.
+  - Secondary filters: Target species dropdown and threat tier selector.
+- **One-Click Geofence from Incident & Attractant (Issue #63):**
+  - Instant transition from an inspected sighting, carcass, or crop zone to an active geofence.
+  - Auto-populates coordinates, target species, threat level, and context-calibrated radii (e.g., Fresh Roadkill 4500m, Wildlife 3000-4000m, Attractant layer radius).
+- **Interactive Map-Click Placement (Issue #63):**
+  - Toggle interactive drawing mode (`🎯 Click on Map to Position`).
+  - Click map canvas directly to set Circle center point or append Polygon vertices while observing adjacent incident markers.
 - **Bulk Cleanup Action:**
-  - `[Clear All Manual Geofences]` button in toolbar.
-  - Requires explicit confirmation dialog (`"Are you sure you want to purge all manual geofences? AI-generated fences will remain untouched."`).
-- **AI Recalculation Button:**
-  - `[Recalculate AI Geofences Now]` executes real-time pipeline inference, refreshes map layers via SSE/WebSocket/polling.
+  - `[Clear Manual Fences]` button in toolbar with confirmation dialog.
 
 ---
 

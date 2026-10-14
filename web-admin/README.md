@@ -10,12 +10,15 @@ Built with **Angular 22 (Latest version)**, **Google Maps API**, and **Tailwind 
 
 ### 🗺️ JAPAC Dynamic Geofence Console (`/geofences`)
 - **Interactive Google Map:** Centered on the entire JAPAC theater (`lat: 15.0, lng: 105.0, zoom: 4`) covering Japan, Southeast Asia, and South Asia.
-- **AI Geofence Visualization:** Render 3-tier predictive danger boundaries (Tier 1 Caution, Tier 2 Alert, Tier 3 Critical Danger).
-- **Manual Debug & Exception Overrides:**
-  - Create manual geofences with **both Circles (Center + Radius in meters) and Polygons (Multi-point vertices)**.
-  - **Persistent Protection:** Manual fences are marked `is_persistent: true` and are preserved during AI automated model sweeps.
-  - **Bulk Purge:** One-click `"Clear All Manual Fences"` button for rapid debug reset.
-- **AI Recalculation Trigger:** Instant execution of predictive geofencing models across multi-source streams.
+- **AI & Manual Geofence Visualization:** Render 3-tier predictive danger boundaries (Tier 1 Caution, Tier 2 Alert, Tier 3 Critical Danger) with circle/polygon authoring.
+- **Multi-Layer Empirical GIS Overlay (Epic #60):**
+  - **Layer Visibility Checkboxes:** Toggle AI Fences, Manual Fences, Wildlife Sightings, Roadkill Carcasses, and Attractant Layers directly in the toolbar.
+  - **Temporal & Date Filtering:** Quick-select time windows (`Past 24h`, `Past 7d`, `Past 30d`, `All Time`) plus custom date ranges (`From` - `To`) for incident investigation.
+  - **Secondary Filters:** Narrow by Target Species (`Asian Elephant`, `Sumatran Tiger`, `Bear`, etc.) and Threat Level (`Tier 1`, `Tier 2`, `Tier 3`).
+  - **One-Click Geofence from Empirical Incidents:** Convert inspected wildlife encounters, fresh roadkills, or crop attractants into active geofences with pre-populated coordinates and context-calibrated radii.
+  - **Interactive Map-Click Placement:** Click anywhere on the map canvas to set circular centers or draw polygon boundary vertices with live visual preview.
+  - **High-Risk Visual Callouts:** Pulsing alerts for fresh roadkill (<6h) scent-plume attractants and Tier 3 Critical incursions.
+  - **Bulk Purge & Reset:** One-click `"Clear Manual Fences"` and `"Reset JAPAC View"`.
 
 ### 🦌 Wildlife Encounter Registry (`/incidents/wildlife`)
 - Real-time logging of apex carnivores and megafauna incursions (Asian Elephants, Sumatran Tigers, Bengal Tigers, Brown/Black Bears).
