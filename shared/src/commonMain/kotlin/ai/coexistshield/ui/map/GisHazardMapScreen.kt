@@ -214,100 +214,124 @@ fun MapCanvasPlaceholder(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Sample Interactive Pin 1: Abandoned Persimmon Tree
-            PinButton(
-                title = "Kaki Tree #kt_1120 (Top 5% Hazard)",
-                color = TierDanger,
-                onClick = {
-                    onPinClick(
-                        SelectedEntityDetails(
-                            id = "kt_1120",
-                            title = "Abandoned Persimmon Tree",
-                            subtitle = "Vacant House • Near Elementary School Route (120m)",
-                            speciesOrType = "Diospyros kaki",
-                            threatTier = AlertTier.TIER_2_WARNING,
-                            geminiBadgeText = "Gemini Vision: Abundant Fruit Load • Overripe Falling",
-                            canMarkResolved = true
+            // Sample Interactive Pin 1: Abandoned Persimmon Tree (Japan)
+            if (state.activeLayers.contains(MapLayerType.PERSIMMON_TREES)) {
+                PinButton(
+                    title = "Kaki Tree #kt_1120 (Top 5% Hazard)",
+                    color = TierDanger,
+                    onClick = {
+                        onPinClick(
+                            SelectedEntityDetails(
+                                id = "kt_1120",
+                                title = "Abandoned Persimmon Tree",
+                                subtitle = "Vacant House • Near Elementary School Route (120m)",
+                                speciesOrType = "Diospyros kaki",
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                geminiBadgeText = "Gemini Vision: Abundant Fruit Load • Overripe Falling",
+                                canMarkResolved = true
+                            )
                         )
-                    )
-                }
-            )
+                    }
+                )
+            }
 
             // Sample Interactive Pin 2: Roadkill Carcass
-            PinButton(
-                title = "Roadkill Carcass #rk_4412 (Wild Boar)",
-                color = TierWarning,
-                onClick = {
-                    onPinClick(
-                        SelectedEntityDetails(
-                            id = "rk_4412",
-                            title = "Decomposing Wild Boar Carcass",
-                            subtitle = "Route 4 Northbound • Active Attractant Magnet",
-                            speciesOrType = "Sus scrofa",
-                            threatTier = AlertTier.TIER_2_WARNING,
-                            geminiBadgeText = "Gemini Forensics: Bloated Decay • Threat Index 0.88",
-                            canMarkResolved = true
+            if (state.activeLayers.contains(MapLayerType.ROADKILL)) {
+                PinButton(
+                    title = "Roadkill Carcass #rk_4412 (Wild Boar)",
+                    color = TierWarning,
+                    onClick = {
+                        onPinClick(
+                            SelectedEntityDetails(
+                                id = "rk_4412",
+                                title = "Decomposing Wild Boar Carcass",
+                                subtitle = "Route 4 Northbound • Active Attractant Magnet",
+                                speciesOrType = "Sus scrofa",
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                geminiBadgeText = "Gemini Forensics: Bloated Decay • Threat Index 0.88",
+                                canMarkResolved = true
+                            )
                         )
-                    )
-                }
-            )
+                    }
+                )
+            }
 
-            // Sample Interactive Pin 3: Tiger Kill-Site
-            PinButton(
-                title = "Tiger Kill-Site #ls_901 (72h Caching)",
-                color = TierDanger,
-                onClick = {
-                    onPinClick(
-                        SelectedEntityDetails(
-                            id = "ls_901",
-                            title = "Tiger Cattle Kill-Site (Sumatra)",
-                            subtitle = "Forest Border Pasture • High Risk of Return",
-                            speciesOrType = "Panthera tigris sumatrae",
-                            threatTier = AlertTier.TIER_3_DANGER,
-                            geminiBadgeText = "Gemini Forensics: Canine Bite Pattern Confirmed",
-                            canMarkResolved = false
+            // Sample Interactive Pins 3: Sumatra Tiger Depredation & Night Corral (Indonesia)
+            if (state.activeLayers.contains(MapLayerType.LIVESTOCK_PREDATION)) {
+                PinButton(
+                    title = "Tiger Kill-Site #ls_sumatra_01 (72h Caching)",
+                    color = TierDanger,
+                    onClick = {
+                        onPinClick(
+                            SelectedEntityDetails(
+                                id = "ls_sumatra_01",
+                                title = "Bukit Kesuma Cattle Kill-Site (Sumatra)",
+                                subtitle = "320m to Forest Edge • Active 72h Feeding Return Cycle",
+                                speciesOrType = "Panthera tigris sumatrae (Sumatran Tiger)",
+                                threatTier = AlertTier.TIER_3_DANGER,
+                                geminiBadgeText = "Gemini Forensics: 72mm Canine Puncture Match • 3km Village Alert Active",
+                                canMarkResolved = true
+                            )
                         )
-                    )
-                }
-            )
+                    }
+                )
+                PinButton(
+                    title = "Night Corral #ls_sumatra_02 (Water Buffalo)",
+                    color = TierNotice,
+                    onClick = {
+                        onPinClick(
+                            SelectedEntityDetails(
+                                id = "ls_sumatra_02",
+                                title = "Sungai Rawa Water Buffalo Corral",
+                                subtitle = "850m to Forest Edge • Predator-Proof Night Enclosure",
+                                speciesOrType = "Bubalus bubalis (Protected Corral)",
+                                threatTier = AlertTier.TIER_1_NOTICE,
+                                geminiBadgeText = "Corral Factor: 65% Risk Reduction Active",
+                                canMarkResolved = false
+                            )
+                        )
+                    }
+                )
+            }
 
-            // Sample Interactive Pin 4: Thailand Asian Elephant Crop Attractant Plot (HEC)
-            PinButton(
-                title = "Elephant Attractant #th_plot_kb_01 (Sugarcane)",
-                color = TierDanger,
-                onClick = {
-                    onPinClick(
-                        SelectedEntityDetails(
-                            id = "th_plot_kb_01",
-                            title = "Kui Buri Sugarcane Estate #1 (14.5 ha)",
-                            subtitle = "Prachuap Khiri Khan • 650m to National Park Border",
-                            speciesOrType = "Saccharum officinarum (Elephant Calorie Magnet)",
-                            threatTier = AlertTier.TIER_3_DANGER,
-                            geminiBadgeText = "Gemini Vision: High Sucrose Spike • 2.8km Scent Corridor blowing West into Reserve",
-                            canMarkResolved = true
+            // Sample Interactive Pins 4 & 5: Thailand Asian Elephant Crop Attractant Plots (HEC)
+            if (state.activeLayers.contains(MapLayerType.ELEPHANT_CROPS)) {
+                PinButton(
+                    title = "Elephant Attractant #th_plot_kb_01 (Sugarcane)",
+                    color = TierDanger,
+                    onClick = {
+                        onPinClick(
+                            SelectedEntityDetails(
+                                id = "th_plot_kb_01",
+                                title = "Kui Buri Sugarcane Estate #1 (14.5 ha)",
+                                subtitle = "Prachuap Khiri Khan • 650m to National Park Border",
+                                speciesOrType = "Saccharum officinarum (Elephant Calorie Magnet)",
+                                threatTier = AlertTier.TIER_3_DANGER,
+                                geminiBadgeText = "Gemini Vision: High Sucrose Spike • 2.8km Scent Corridor blowing West into Reserve",
+                                canMarkResolved = true
+                            )
                         )
-                    )
-                }
-            )
+                    }
+                )
 
-            // Sample Interactive Pin 5: Thailand Khao Daeng Jackfruit Grove
-            PinButton(
-                title = "Jackfruit Odor Corridor #th_plot_kb_02 (Ripening)",
-                color = TierWarning,
-                onClick = {
-                    onPinClick(
-                        SelectedEntityDetails(
-                            id = "th_plot_kb_02",
-                            title = "Khao Daeng Jackfruit Grove (8.2 ha)",
-                            subtitle = "Kui Buri Buffer • 1100m to Forest Edge",
-                            speciesOrType = "Artocarpus heterophyllus (High Volatile Esters)",
-                            threatTier = AlertTier.TIER_2_WARNING,
-                            geminiBadgeText = "Gemini Vision: Aromatic Ester Emission 0.85 • Dynamic Buffer Expanded",
-                            canMarkResolved = true
+                PinButton(
+                    title = "Jackfruit Odor Corridor #th_plot_kb_02 (Ripening)",
+                    color = TierWarning,
+                    onClick = {
+                        onPinClick(
+                            SelectedEntityDetails(
+                                id = "th_plot_kb_02",
+                                title = "Khao Daeng Jackfruit Grove (8.2 ha)",
+                                subtitle = "Kui Buri Buffer • 1100m to Forest Edge",
+                                speciesOrType = "Artocarpus heterophyllus (High Volatile Esters)",
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                geminiBadgeText = "Gemini Vision: Aromatic Ester Emission 0.85 • Dynamic Buffer Expanded",
+                                canMarkResolved = true
+                            )
                         )
-                    )
-                }
-            )
+                    }
+                )
+            }
         }
     }
 }

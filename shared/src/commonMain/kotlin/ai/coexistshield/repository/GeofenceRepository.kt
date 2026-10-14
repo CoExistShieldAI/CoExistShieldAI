@@ -148,6 +148,31 @@ class GeofenceRepository(
             }.body()
         }
     }
+
+    suspend fun getTigerPastures(): Result<ai.coexistshield.network.TigerPasturesResponseDto> {
+        return runCatching {
+            httpClient.get("/api/v1/analytics/sumatra-tiger/pastures").body()
+        }
+    }
+
+    suspend fun reportTigerDepredation(
+        request: ai.coexistshield.network.ReportDepredationRequestDto
+    ): Result<ai.coexistshield.network.TigerDepredationResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/analytics/sumatra-tiger/depredation/report") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
+
+    suspend fun clearTigerCarcass(
+        enclosureId: String
+    ): Result<ai.coexistshield.network.LivestockEnclosureDto> {
+        return runCatching {
+            httpClient.post("/api/v1/analytics/sumatra-tiger/pastures/$enclosureId/clear").body()
+        }
+    }
 }
 
 

@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ApiClientTest {
@@ -438,6 +439,143 @@ class ApiClientTest {
         assertEquals("HARVESTED_CLEARED", data.growthStage)
         assertEquals(ai.coexistshield.model.AlertTier.SAFE, data.alertTier)
         assertEquals(0.12, data.activeRiskScore)
+    }
+
+    @Test
+    fun testTigerPasturesApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "pastures": [
+                    {
+                        "id": "ls_sumatra_01",
+                        "name": "Bukit Kesuma Cattle Pasture",
+                        "province": "Riau",
+                        "village": "Desa Bukit Kesuma",
+                        "livestockType": "CATTLE",
+                        "headCount": 35,
+                        "hasNightCorral": false,
+                        "latitude": 0.1280,
+                        "longitude": 101.4480,
+                        "distanceToForestEdgeM": 320.0,
+                        "isActiveKillSite": true,
+                        "hoursSinceKill": 14.0,
+                        "returnProbability": 0.643,
+                        "activeThreatScore": 0.95,
+                        "alertTier": "TIER_3_DANGER",
+                        "scentBufferMeters": 3000.0,
+                        "updatedAt": "2026-10-14T08:00:00Z"
+                    }
+                ],
+                "count": 1,
+                "updatedAt": "2026-10-14T08:00:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getTigerPastures()
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals(1, data.count)
+        assertEquals("ls_sumatra_01", data.pastures[0].id)
+        assertTrue(data.pastures[0].isActiveKillSite)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_3_DANGER, data.pastures[0].alertTier)
+    }
+
+    @Test
+    fun testReportTigerDepredationApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "enclosure": {
+                    "id": "ls_sumatra_02",
+                    "name": "Sungai Rawa Water Buffalo Corral",
+                    "province": "Riau",
+                    "village": "Dusun Sungai Rawa",
+                    "livestockType": "WATER_BUFFALO",
+                    "headCount": 20,
+                    "hasNightCorral": true,
+                    "latitude": 0.1320,
+                    "longitude": 101.4580,
+                    "distanceToForestEdgeM": 850.0,
+                    "isActiveKillSite": true,
+                    "hoursSinceKill": 0.0,
+                    "returnProbability": 0.95,
+                    "activeThreatScore": 0.95,
+                    "alertTier": "TIER_3_DANGER",
+                    "scentBufferMeters": 3000.0,
+                    "updatedAt": "2026-10-14T08:10:00Z"
+                },
+                "alert": {
+                    "alertId": "alert_tiger_12345",
+                    "tier": "TIER_3_DANGER",
+                    "killSiteLat": 0.1320,
+                    "killSiteLon": 101.4580,
+                    "villagesIn3kmRadius": ["Dusun Sungai Rawa", "Desa Bukit Kesuma"],
+                    "returnWindowHoursRemaining": 72.0,
+                    "canineForensicsConfirmed": true,
+                    "causalReasoning": "Fresh WATER_BUFFALO kill cached. 72-hour tiger return feeding cycle active.",
+                    "issuedAt": "2026-10-14T08:10:00Z"
+                }
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.reportTigerDepredation(
+            ReportDepredationRequestDto(
+                enclosureId = "ls_sumatra_02",
+                livestockSpecies = "WATER_BUFFALO",
+                headCountLost = 1,
+                latitude = 0.1320,
+                longitude = 101.4580,
+                hasNightCorral = true,
+                canineBiteSpreadMm = 75.0
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertTrue(data.enclosure.isActiveKillSite)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_3_DANGER, data.alert.tier)
+        assertTrue(data.alert.canineForensicsConfirmed)
+        assertEquals(2, data.alert.villagesIn3kmRadius.size)
+    }
+
+    @Test
+    fun testClearTigerCarcassApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "id": "ls_sumatra_01",
+                "name": "Bukit Kesuma Cattle Pasture",
+                "province": "Riau",
+                "village": "Desa Bukit Kesuma",
+                "livestockType": "CATTLE",
+                "headCount": 35,
+                "hasNightCorral": false,
+                "latitude": 0.1280,
+                "longitude": 101.4480,
+                "distanceToForestEdgeM": 320.0,
+                "isActiveKillSite": false,
+                "hoursSinceKill": 0.0,
+                "returnProbability": 0.0,
+                "activeThreatScore": 0.65,
+                "alertTier": "TIER_2_WARNING",
+                "scentBufferMeters": 800.0,
+                "updatedAt": "2026-10-14T08:15:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.clearTigerCarcass("ls_sumatra_01")
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertFalse(data.isActiveKillSite)
+        assertEquals(0.0, data.returnProbability)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, data.alertTier)
     }
 }
 

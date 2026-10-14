@@ -221,6 +221,9 @@ fun App() {
                                 if (entityId.startsWith("th_plot")) {
                                     geofenceRepository.updateCropHarvestStage(entityId, "HARVESTED_CLEARED")
                                     snackbarHostState.showSnackbar("HEC Mitigation: Plot $entityId marked Harvested & Cleared! Scent plume corridor neutralized.")
+                                } else if (entityId.startsWith("ls_")) {
+                                    geofenceRepository.clearTigerCarcass(entityId)
+                                    snackbarHostState.showSnackbar("Tiger Mitigation: Kill-site carcass at $entityId removed! 72-hour caching hazard neutralized.")
                                 } else {
                                     snackbarHostState.showSnackbar("Official Action Logged: #$entityId marked Resolved / Cleared!")
                                 }

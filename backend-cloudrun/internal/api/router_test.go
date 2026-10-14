@@ -14,6 +14,7 @@ import (
 	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
+	"ai.coexistshield/backend/internal/tiger"
 )
 
 func setupTestServer() *Router {
@@ -22,7 +23,8 @@ func setupTestServer() *Router {
 	memoryBank := memory.NewBank()
 	mlPipeline := ml.NewRetrainingPipeline()
 	elephantEngine := elephant.NewEngine()
-	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine)
+	tigerEngine := tiger.NewEngine()
+	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine)
 }
 
 func TestHealthz(t *testing.T) {
@@ -550,6 +552,137 @@ func TestThailandPlotActionEndpoint(t *testing.T) {
 		t.Errorf("expected risk score <= 0.40 after clearing, got %.3f", updated.ActiveRiskScore)
 	}
 }
+
+func TestTigerPasturesEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/analytics/sumatra-tiger/pastures", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Pastures []tiger.LivestockEnclosure `json:"pastures"`
+		Count    int                        `json:"count"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Count < 3 {
+		t.Errorf("expected at least 3 enclosures, got %d", resp.Count)
+	}
+}
+
+func TestTigerDepredationReportEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := TigerDepredationReportRequestBody{
+		ReportDepredationRequest: tiger.ReportDepredationRequest{
+			EnclosureID:           "ls_sumatra_02",
+			LivestockSpecies:      "WATER_BUFFALO",
+			HeadCountLost:         1,
+			Latitude:              0.1320,
+			Longitude:             101.4580,
+			HasNightCorral:        true,
+			DragTrailLengthMeters: 45.0,
+			CanineBiteSpreadMm:    74.0, // Valid Sumatran tiger canine distance
+		},
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/analytics/sumatra-tiger/depredation/report", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Enclosure tiger.LivestockEnclosure `json:"enclosure"`
+		Alert     tiger.TigerDepredationAlert `json:"alert"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !resp.Enclosure.IsActiveKillSite {
+		t.Errorf("expected enclosure to be active kill site")
+	}
+	if resp.Alert.Tier != "TIER_3_DANGER" {
+		t.Errorf("expected TIER_3_DANGER alert, got %s", resp.Alert.Tier)
+	}
+	if !resp.Alert.CanineForensicsConfirmed {
+		t.Errorf("expected canine forensics confirmed for 74mm bite spread")
+	}
+	if len(resp.Alert.VillagesIn3kmRadius) == 0 {
+		t.Errorf("expected at least one village in 3km radius alert")
+	}
+}
+
+func TestTigerRecalculateEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := TigerRecalculateRequest{
+		Weather: &model.WeatherConditions{
+			WindSpeedKmh:     15.0,
+			WindDirectionDeg: 180.0,
+			MoonIllumination: 0.05,
+		},
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/analytics/sumatra-tiger/recalculate", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Pastures []tiger.LivestockEnclosure `json:"pastures"`
+		Count    int                        `json:"count"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Count < 3 {
+		t.Errorf("expected at least 3 pastures, got %d", resp.Count)
+	}
+}
+
+func TestTigerPastureClearEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("POST", "/api/v1/analytics/sumatra-tiger/pastures/ls_sumatra_01/clear", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var cleared tiger.LivestockEnclosure
+	if err := json.Unmarshal(w.Body.Bytes(), &cleared); err != nil {
+		t.Fatalf("failed to decode cleared pasture: %v", err)
+	}
+
+	if cleared.IsActiveKillSite {
+		t.Errorf("expected isActiveKillSite to be false after clear")
+	}
+	if cleared.ReturnProbability > 0.0 {
+		t.Errorf("expected return probability 0.0 after clear, got %.2f", cleared.ReturnProbability)
+	}
+}
+
 
 
 

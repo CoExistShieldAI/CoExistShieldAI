@@ -14,6 +14,7 @@ import (
 	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
+	"ai.coexistshield/backend/internal/tiger"
 )
 
 type Router struct {
@@ -23,6 +24,7 @@ type Router struct {
 	memoryBank     *memory.Bank
 	mlPipeline     *ml.RetrainingPipeline
 	elephantEngine *elephant.Engine
+	tigerEngine    *tiger.Engine
 }
 
 func NewRouter(
@@ -31,6 +33,7 @@ func NewRouter(
 	memoryBank *memory.Bank,
 	mlPipeline *ml.RetrainingPipeline,
 	elephantEngine *elephant.Engine,
+	tigerEngine *tiger.Engine,
 ) *Router {
 	r := &Router{
 		mux:            http.NewServeMux(),
@@ -39,6 +42,7 @@ func NewRouter(
 		memoryBank:     memoryBank,
 		mlPipeline:     mlPipeline,
 		elephantEngine: elephantEngine,
+		tigerEngine:    tigerEngine,
 	}
 	r.registerRoutes()
 	return r
@@ -74,6 +78,10 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/crop-plots", r.handleThailandCropPlots)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/recalculate", r.handleThailandHecRecalculate)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/plots/", r.handleThailandPlotAction)
+	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/pastures", r.handleTigerPastures)
+	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/depredation/report", r.handleTigerDepredationReport)
+	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/recalculate", r.handleTigerRecalculate)
+	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/pastures/", r.handleTigerPastureAction)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -424,6 +432,114 @@ func (r *Router) handleThailandPlotAction(w http.ResponseWriter, req *http.Reque
 	}
 
 	updated, err := r.elephantEngine.UpdateHarvestStage(plotID, updateReq.GrowthStage, updateReq.Weather)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (r *Router) handleTigerPastures(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	pastures := r.tigerEngine.GetEnclosures()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"pastures":  pastures,
+		"count":     len(pastures),
+		"updatedAt": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+type TigerDepredationReportRequestBody struct {
+	tiger.ReportDepredationRequest
+	Weather *model.WeatherConditions `json:"weather,omitempty"`
+}
+
+func (r *Router) handleTigerDepredationReport(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqBody TigerDepredationReportRequestBody
+	if err := json.NewDecoder(req.Body).Decode(&reqBody); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	weather := model.WeatherConditions{
+		WindSpeedKmh:     10.0,
+		WindDirectionDeg: 180.0,
+		MoonIllumination: 0.10,
+	}
+	if reqBody.Weather != nil {
+		weather = *reqBody.Weather
+	}
+
+	enclosure, alert, err := r.tigerEngine.ReportDepredation(reqBody.ReportDepredationRequest, weather)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"enclosure": enclosure,
+		"alert":     alert,
+	})
+}
+
+type TigerRecalculateRequest struct {
+	Weather *model.WeatherConditions `json:"weather,omitempty"`
+}
+
+func (r *Router) handleTigerRecalculate(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var recalcReq TigerRecalculateRequest
+	if req.Body != nil {
+		_ = json.NewDecoder(req.Body).Decode(&recalcReq)
+	}
+
+	weather := model.WeatherConditions{
+		WindSpeedKmh:     10.0,
+		WindDirectionDeg: 180.0,
+		MoonIllumination: 0.10,
+	}
+	if recalcReq.Weather != nil {
+		weather = *recalcReq.Weather
+	}
+
+	pastures := r.tigerEngine.RecalculateAll(weather)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"pastures":       pastures,
+		"count":          len(pastures),
+		"recalculatedAt": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (r *Router) handleTigerPastureAction(w http.ResponseWriter, req *http.Request) {
+	// Path pattern: /api/v1/analytics/sumatra-tiger/pastures/{id}/clear
+	path := strings.TrimPrefix(req.URL.Path, "/api/v1/analytics/sumatra-tiger/pastures/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 || parts[1] != "clear" {
+		http.NotFound(w, req)
+		return
+	}
+
+	pastureID := parts[0]
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	updated, err := r.tigerEngine.ClearKillSite(pastureID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return

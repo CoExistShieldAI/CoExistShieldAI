@@ -274,6 +274,71 @@ data class UpdateHarvestStageRequestDto(
     val growthStage: String
 )
 
+@Serializable
+data class LivestockEnclosureDto(
+    val id: String,
+    val name: String,
+    val province: String,
+    val village: String,
+    val livestockType: String,
+    val headCount: Int,
+    val hasNightCorral: Boolean,
+    val latitude: Double,
+    val longitude: Double,
+    val distanceToForestEdgeM: Double,
+    val isActiveKillSite: Boolean,
+    val killReportedAt: String? = null,
+    val hoursSinceKill: Double = 0.0,
+    val cachingRiskExpiry: String? = null,
+    val returnProbability: Double = 0.0,
+    val activeThreatScore: Double = 0.0,
+    val alertTier: AlertTier,
+    val scentBufferMeters: Double = 0.0,
+    val killSiteGeofence: GeoJsonPolygonDto? = null,
+    val forensicNotes: String? = null,
+    val updatedAt: String
+)
+
+@Serializable
+data class ReportDepredationRequestDto(
+    val enclosureId: String,
+    val livestockSpecies: String,
+    val headCountLost: Int,
+    val latitude: Double,
+    val longitude: Double,
+    val hasNightCorral: Boolean,
+    val photoUrl: String? = null,
+    val dragTrailLengthMeters: Double = 0.0,
+    val canineBiteSpreadMm: Double = 0.0
+)
+
+@Serializable
+data class TigerDepredationAlertDto(
+    val alertId: String,
+    val tier: AlertTier,
+    val killSiteLat: Double,
+    val killSiteLon: Double,
+    val villagesIn3kmRadius: List<String> = emptyList(),
+    val returnWindowHoursRemaining: Double = 0.0,
+    val canineForensicsConfirmed: Boolean = false,
+    val causalReasoning: String = "",
+    val issuedAt: String = ""
+)
+
+@Serializable
+data class TigerPasturesResponseDto(
+    val pastures: List<LivestockEnclosureDto> = emptyList(),
+    val count: Int,
+    val updatedAt: String
+)
+
+@Serializable
+data class TigerDepredationResponseDto(
+    val enclosure: LivestockEnclosureDto,
+    val alert: TigerDepredationAlertDto
+)
+
+
 
 
 
