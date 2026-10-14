@@ -4,8 +4,8 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 
 test.describe('Live Backend API Integration & Core User Workflows', () => {
   // 1. Service Health & Discovery
-  test('Backend service is healthy and responds on /healthz and /api/v1/health', async ({ request }) => {
-    const res = await request.get(`${BACKEND_URL}/healthz`);
+  test('Backend service is healthy and responds on /health and /api/v1/health', async ({ request }) => {
+    const res = await request.get(`${BACKEND_URL}/health`);
     expect(res.status()).toBe(200);
 
     const body = await res.json();
@@ -201,7 +201,7 @@ test.describe('Live Backend API Integration & Core User Workflows', () => {
     expect(box!.height).toBeGreaterThan(100);
 
     // Verify backend is concurrently responsive
-    const healthCheck = await page.request.get(`${BACKEND_URL}/healthz`);
+    const healthCheck = await page.request.get(`${BACKEND_URL}/health`);
     expect(healthCheck.status()).toBe(200);
   });
 });

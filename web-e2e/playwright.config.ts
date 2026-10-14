@@ -49,7 +49,7 @@ export default defineConfig({
         },
         {
           command: 'cd ../backend-cloudrun && PORT=8080 DEV_MODE=true ENABLE_SEED_DATA=true go run ./cmd/server',
-          url: 'http://localhost:8080/healthz',
+          url: 'http://localhost:8080/health',
           reuseExistingServer: !process.env.CI,
           timeout: 60000,
         },
