@@ -33,18 +33,22 @@ type RetrainResult struct {
 
 // RetrainingPipeline coordinates continuous training, validation gates, and model lifecycle.
 type RetrainingPipeline struct {
-	mu            sync.RWMutex
-	activeModel   *IncursionModel
-	history       []RetrainResult
-	sampleStore   []TrainingSample
+	mu                 sync.RWMutex
+	activeModel        *IncursionModel
+	history            []RetrainResult
+	sampleStore        []TrainingSample
+	eventAccumulator   int
+	isRetraining       bool
+	promotionListeners []func(IncursionModel)
 }
 
 // NewRetrainingPipeline initializes a pipeline with the baseline model and sample incident lake.
 func NewRetrainingPipeline() *RetrainingPipeline {
 	p := &RetrainingPipeline{
-		activeModel: DefaultBaselineProductionModel(),
-		history:     make([]RetrainResult, 0),
-		sampleStore: generateSeedTrainingDataset(),
+		activeModel:        DefaultBaselineProductionModel(),
+		history:            make([]RetrainResult, 0),
+		sampleStore:        generateSeedTrainingDataset(),
+		promotionListeners: make([]func(IncursionModel), 0),
 	}
 	return p
 }
@@ -65,12 +69,37 @@ func (p *RetrainingPipeline) RetrainingHistory() []RetrainResult {
 	return copied
 }
 
-// IngestIncidentSample appends a newly verified field incident to the training lake.
-func (p *RetrainingPipeline) IngestIncidentSample(sample TrainingSample) int {
+// RegisterPromotionListener registers a callback invoked when a new candidate model is promoted to production.
+func (p *RetrainingPipeline) RegisterPromotionListener(listener func(IncursionModel)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.promotionListeners = append(p.promotionListeners, listener)
+}
+
+// EventAccumulator returns the count of new verified events accumulated since the last retraining run.
+func (p *RetrainingPipeline) EventAccumulator() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.eventAccumulator
+}
+
+// IngestIncidentSample appends a newly verified field incident to the training lake.
+// When accumulated verified events reach >= 50, autonomous continuous retraining is triggered (Issue #21).
+func (p *RetrainingPipeline) IngestIncidentSample(sample TrainingSample) int {
+	p.mu.Lock()
 	p.sampleStore = append(p.sampleStore, sample)
-	return len(p.sampleStore)
+	p.eventAccumulator++
+	shouldTrigger := p.eventAccumulator >= 50 && !p.isRetraining
+	count := len(p.sampleStore)
+	p.mu.Unlock()
+
+	if shouldTrigger {
+		go func() {
+			_, _ = p.Retrain(context.Background(), "event_accumulated_50", false)
+		}()
+	}
+
+	return count
 }
 
 // Retrain executes the continuous retraining workflow:
@@ -80,7 +109,7 @@ func (p *RetrainingPipeline) IngestIncidentSample(sample TrainingSample) int {
 // 4. Applies Validation & Promotion Gate (AUC >= 0.82, Precision@Top20 >= 0.75, Zero regression).
 func (p *RetrainingPipeline) Retrain(ctx context.Context, trigger string, forcePromote bool) (*RetrainResult, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.isRetraining = true
 
 	now := time.Now().UTC()
 	runID := fmt.Sprintf("train-run-%d", now.UnixNano())
@@ -88,6 +117,8 @@ func (p *RetrainingPipeline) Retrain(ctx context.Context, trigger string, forceP
 	samples := p.sampleStore
 	totalCount := len(samples)
 	if totalCount < 20 {
+		p.isRetraining = false
+		p.mu.Unlock()
 		return nil, fmt.Errorf("insufficient training samples: have %d, required minimum 20", totalCount)
 	}
 
@@ -124,12 +155,18 @@ func (p *RetrainingPipeline) Retrain(ctx context.Context, trigger string, forceP
 		metrics.AucRoc, aucPassed, metrics.PrecisionTop20, precPassed, currentAuc)
 
 	promoted := false
+	var listenersToNotify []func(IncursionModel)
 	if gatePassed {
 		candidateModel.Metrics.Promoted = true
 		candidateModel.Metrics.PromotionReason = "Validation gate passed: Meets AUC-ROC >= 0.82 and Precision@Top20% >= 0.75"
 		p.activeModel = &candidateModel
+		p.eventAccumulator = 0 // Reset accumulated event counter upon successful promotion
 		promoted = true
 		notes += " => PROMOTED TO PRODUCTION"
+
+		// Copy listeners
+		listenersToNotify = make([]func(IncursionModel), len(p.promotionListeners))
+		copy(listenersToNotify, p.promotionListeners)
 	} else {
 		candidateModel.Metrics.Promoted = false
 		candidateModel.Metrics.PromotionReason = "Validation gate rejected: candidate failed criteria or regressed"
@@ -152,6 +189,14 @@ func (p *RetrainingPipeline) Retrain(ctx context.Context, trigger string, forceP
 	}
 
 	p.history = append(p.history, result)
+	p.isRetraining = false
+	p.mu.Unlock()
+
+	// Notify registered listeners outside lock synchronously
+	for _, l := range listenersToNotify {
+		l(candidateModel)
+	}
+
 	return &result, nil
 }
 

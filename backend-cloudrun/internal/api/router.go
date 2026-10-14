@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ type Router struct {
 	geofenceEngine      *geofence.Engine
 	memoryBank          *memory.Bank
 	mlPipeline          *ml.RetrainingPipeline
+	bigqueryReplicator  *ml.BigQueryGISReplicator
 	elephantEngine      *elephant.Engine
 	tigerEngine         *tiger.Engine
 	complianceEngine    *compliance.Engine
@@ -52,11 +54,20 @@ func NewRouter(
 		geofenceEngine:      geofenceEngine,
 		memoryBank:          memoryBank,
 		mlPipeline:          mlPipeline,
+		bigqueryReplicator:  ml.NewBigQueryGISReplicator(mlPipeline),
 		elephantEngine:      elephantEngine,
 		tigerEngine:         tigerEngine,
 		complianceEngine:    complianceEngine,
 		corroborationEngine: corroborationEngine,
 	}
+
+	// Dynamic model promotion listener (Issue #21): updates live geofencing engine without server restart
+	if mlPipeline != nil && geofenceEngine != nil {
+		mlPipeline.RegisterPromotionListener(func(promoted ml.IncursionModel) {
+			geofenceEngine.ApplyPromotedWeights(promoted.Version, promoted.Weights)
+		})
+	}
+
 	r.initSeedData()
 	r.registerRoutes()
 	return r
@@ -99,6 +110,9 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/ml/retrain", r.handleMlRetrain)
 	r.mux.HandleFunc("/api/v1/ml/predict", r.handleMlPredict)
 	r.mux.HandleFunc("/api/v1/ml/query", r.handleMlQuery)
+	r.mux.HandleFunc("/api/v1/bigquery/stream-sync", r.handleBigQueryStreamSync)
+	r.mux.HandleFunc("/api/v1/bigquery/sync-status", r.handleBigQuerySyncStatus)
+	r.mux.HandleFunc("/api/v1/bigquery/staged-samples", r.handleBigQueryStagedSamples)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/crop-plots", r.handleThailandCropPlots)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/recalculate", r.handleThailandHecRecalculate)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/plots/", r.handleThailandPlotAction)
@@ -393,17 +407,18 @@ func (r *Router) handleAlertExplanation(w http.ResponseWriter, req *http.Request
 	}
 
 	explainReq.Tier = effectiveTier
-	explanation, err := r.geminiClient.GenerateExplainableAlert(req.Context(), explainReq, analogs)
+	explanation, recs, err := r.geminiClient.GenerateExplainableAlert(req.Context(), explainReq, analogs)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Explanation synthesis error: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, model.CausalAlertExplanationResponse{
-		Explanation:       explanation,
-		HistoricalAnalogs: analogs,
-		ElevatedFromTier:  elevatedFrom,
-		EffectiveTier:     effectiveTier,
+		Explanation:             explanation,
+		HistoricalAnalogs:       analogs,
+		ElevatedFromTier:        elevatedFrom,
+		EffectiveTier:           effectiveTier,
+		DispatchRecommendations: recs,
 	})
 }
 
@@ -506,6 +521,77 @@ func (r *Router) handleMlQuery(w http.ResponseWriter, req *http.Request) {
 		"query":            sql,
 		"resolution":       8,
 		"slaTargetSeconds": 45,
+	})
+}
+
+func (r *Router) handleBigQueryStreamSync(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var batch []ml.IncidentStreamingEvent
+	if req.Body != nil {
+		bodyBytes, err := io.ReadAll(req.Body)
+		if err == nil && len(bodyBytes) > 0 {
+			var single ml.IncidentStreamingEvent
+			if errSingle := json.Unmarshal(bodyBytes, &single); errSingle == nil && single.IncidentID != "" {
+				batch = append(batch, single)
+			} else {
+				_ = json.Unmarshal(bodyBytes, &batch)
+			}
+		}
+	}
+
+	// If empty body, simulate a real-time field sync event
+	if len(batch) == 0 {
+		batch = append(batch, ml.IncidentStreamingEvent{
+			EventID:           fmt.Sprintf("sync_%d", time.Now().UnixNano()),
+			IncidentID:        fmt.Sprintf("inc_sim_%d", time.Now().UnixNano()%10000),
+			Species:           "BEAR",
+			Category:          "WILDLIFE_SIGHTING",
+			Latitude:          39.7020,
+			Longitude:         141.1520,
+			Timestamp:         time.Now().UTC(),
+			IsIncursion:       1,
+			VerificationState: "VERIFIED",
+		})
+	}
+
+	count, err := r.bigqueryReplicator.StreamSyncBatch(batch)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("BigQuery stream sync failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	status := r.bigqueryReplicator.GetSyncStatus()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"syncedEventsCount": count,
+		"syncStatus":        status,
+		"stagedLakeSamples": len(r.bigqueryReplicator.GetStagedSamples()),
+	})
+}
+
+func (r *Router) handleBigQuerySyncStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	status := r.bigqueryReplicator.GetSyncStatus()
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (r *Router) handleBigQueryStagedSamples(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	samples := r.bigqueryReplicator.GetStagedSamples()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"samples": samples,
+		"count":   len(samples),
 	})
 }
 
@@ -937,6 +1023,25 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 			TargetCenterLatitude:  dto.Location.Latitude,
 			TargetCenterLongitude: dto.Location.Longitude,
 			RadiusKm:              5.0,
+		})
+	}
+
+	// Issue #20: Replicate incident event in real time to BigQuery GIS for feature enrichment & ML staging (<60s SLA)
+	if r.bigqueryReplicator != nil && dto.Location.Latitude != 0 && dto.Location.Longitude != 0 {
+		incursionVal := 0
+		if dto.VerificationStatus == "VERIFIED" {
+			incursionVal = 1
+		}
+		_, _ = r.bigqueryReplicator.ReplicateIncidentEvent(ml.IncidentStreamingEvent{
+			EventID:           fmt.Sprintf("evt_%s", dto.Id),
+			IncidentID:        dto.Id,
+			Species:           dto.Species,
+			Category:          dto.Category,
+			Latitude:          dto.Location.Latitude,
+			Longitude:         dto.Location.Longitude,
+			Timestamp:         time.Now().UTC(),
+			IsIncursion:       incursionVal,
+			VerificationState: dto.VerificationStatus,
 		})
 	}
 

@@ -149,11 +149,17 @@ func TestGenerateExplainableAlertGemini38Flash(t *testing.T) {
 		},
 	}
 
-	explanation, err := client.GenerateExplainableAlert(ctx, req, nil)
+	explanation, recs, err := client.GenerateExplainableAlert(ctx, req, nil)
 	if err != nil {
 		t.Fatalf("unexpected error in explanation: %v", err)
 	}
 	if explanation == "" {
 		t.Errorf("expected non-empty explanation")
+	}
+	if len(recs) == 0 {
+		t.Errorf("expected non-empty dispatch recommendations, got 0")
+	}
+	if recs[0].Priority != "IMMEDIATE" {
+		t.Errorf("expected IMMEDIATE priority on primary recommendation, got %s", recs[0].Priority)
 	}
 }

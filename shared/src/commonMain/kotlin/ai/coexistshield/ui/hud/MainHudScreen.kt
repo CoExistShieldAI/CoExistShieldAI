@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ai.coexistshield.network.DispatchRecommendationDto
 import androidx.compose.ui.unit.sp
 
 data class MainHudUiState(
@@ -63,7 +64,8 @@ data class MainHudUiState(
     val isSirenPlaying: Boolean = false,
     val isHapticActive: Boolean = false,
     val suggestedDetour: String? = null,
-    val activeRole: UserRole = UserRole.CITIZEN
+    val activeRole: UserRole = UserRole.CITIZEN,
+    val dispatchRecommendations: List<DispatchRecommendationDto> = emptyList()
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,6 +148,13 @@ fun MainHudScreen(
                 explanation = state.causalExplanation,
                 tier = state.currentTier
             )
+
+            // 5b. Prioritized Municipal Action Tasks (Dispatch Recommendations)
+            if (state.dispatchRecommendations.isNotEmpty()) {
+                ActionableDispatchRecommendationsCard(
+                    recommendations = state.dispatchRecommendations
+                )
+            }
 
             // 6. Species-Specific Safety Guidance Protocol
             if (state.targetSpecies.isNotEmpty()) {
@@ -692,6 +701,92 @@ fun ActionFooter(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Official Console", fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ActionableDispatchRecommendationsCard(
+    recommendations: List<DispatchRecommendationDto>
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🎯", fontSize = 16.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Prioritized Municipal Action Tasks",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .background(TierDanger.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text("AGENT DISPATCH", color = TierDanger, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            recommendations.forEachIndexed { idx, rec ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${idx + 1}. [${rec.actionType}] ${rec.location}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        if (rec.priority == "IMMEDIATE") TierDanger else TierWarning,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = rec.priority,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        Text(
+                            text = rec.justification,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

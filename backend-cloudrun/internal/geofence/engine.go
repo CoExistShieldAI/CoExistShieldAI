@@ -16,13 +16,17 @@ const (
 )
 
 type Engine struct {
-	mu          sync.RWMutex
-	activeZones map[string]model.ActiveGeofenceZone
+	mu                 sync.RWMutex
+	activeZones        map[string]model.ActiveGeofenceZone
+	activeModelVersion string
+	modelWeights       map[string]float64
 }
 
 func NewEngine() *Engine {
 	e := &Engine{
-		activeZones: make(map[string]model.ActiveGeofenceZone),
+		activeZones:        make(map[string]model.ActiveGeofenceZone),
+		activeModelVersion: "v2026.10.01-baseline",
+		modelWeights:       make(map[string]float64),
 	}
 	e.seedDefaultGeofenceZones()
 	return e
@@ -564,4 +568,21 @@ func (e *Engine) GetTopHazardPersimmonTrees(municipalityCode string, limit int) 
 		Top5PercentCutoffHazardScore: 0.89,
 		PriorityTrees:                trees,
 	}
+}
+
+// ApplyPromotedWeights updates the live geofencing engine with newly promoted model weights without server restart.
+func (e *Engine) ApplyPromotedWeights(version string, weights map[string]float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.activeModelVersion = version
+	if weights != nil {
+		e.modelWeights = weights
+	}
+}
+
+// ActiveModelVersion returns the active model version currently governing geofence inferences.
+func (e *Engine) ActiveModelVersion() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.activeModelVersion
 }

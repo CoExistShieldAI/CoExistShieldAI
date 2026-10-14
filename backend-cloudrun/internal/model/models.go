@@ -96,11 +96,20 @@ type CausalAlertExplanationRequest struct {
 	RetrieveMemory    bool                   `json:"retrieveMemory,omitempty"`
 }
 
+type DispatchRecommendation struct {
+	ActionType      string `json:"actionType"`      // "FELL_PERSIMMON_TREE", "CLEAR_ROADKILL_CARCASS", "PATROL_CORRIDOR", "ALERT_SCHOOL_ROUTE"
+	Priority        string `json:"priority"`        // "IMMEDIATE", "HIGH", "SCHEDULED"
+	TargetEntityRef string `json:"targetEntityRef"` // e.g. "kt_1120", "rk_4412"
+	Location        string `json:"location"`        // e.g. "Takamatsu 3-chome School Route (120m)"
+	Justification   string `json:"justification"`   // e.g. "Overripe persimmon tree directly upwind of residential perimeter matching 3 historical bear intrusions."
+}
+
 type CausalAlertExplanationResponse struct {
-	Explanation          string                 `json:"explanation"`
-	HistoricalAnalogs    []IncidentMemoryRecord `json:"historicalAnalogs,omitempty"`
-	ElevatedFromTier     string                 `json:"elevatedFromTier,omitempty"`
-	EffectiveTier        string                 `json:"effectiveTier"`
+	Explanation             string                   `json:"explanation"`
+	HistoricalAnalogs       []IncidentMemoryRecord   `json:"historicalAnalogs,omitempty"`
+	ElevatedFromTier        string                   `json:"elevatedFromTier,omitempty"`
+	EffectiveTier           string                   `json:"effectiveTier"`
+	DispatchRecommendations []DispatchRecommendation `json:"dispatchRecommendations,omitempty"`
 }
 
 

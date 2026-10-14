@@ -310,7 +310,7 @@ func (e *Engine) Corroborate(ctx context.Context, req model.CorroborationRequest
 				{"independentSources": distinctSources, "nearbyEventsCount": len(nearbyEvents)},
 			},
 		}
-		justification, err := e.geminiClient.GenerateExplainableAlert(ctx, explanationReq, nil)
+		justification, _, err := e.geminiClient.GenerateExplainableAlert(ctx, explanationReq, nil)
 		if err == nil && justification != "" {
 			aiJustification = justification
 		}

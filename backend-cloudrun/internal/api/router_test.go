@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
@@ -341,6 +342,14 @@ func TestAlertExplanationEndpoint(t *testing.T) {
 	if resp.EffectiveTier == "" {
 		t.Errorf("expected effective tier")
 	}
+	if len(resp.DispatchRecommendations) == 0 {
+		t.Errorf("expected non-empty dispatch recommendations")
+	} else {
+		rec := resp.DispatchRecommendations[0]
+		if rec.ActionType == "" || rec.Priority == "" || rec.Justification == "" {
+			t.Errorf("expected populated dispatch recommendation, got %+v", rec)
+		}
+	}
 }
 
 func TestMlStatusEndpoint(t *testing.T) {
@@ -461,6 +470,90 @@ func TestMlQueryEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(sql, "h3_geo_to_h3") {
 		t.Errorf("expected query to contain h3_geo_to_h3")
+	}
+}
+
+func TestBigQueryStreamSyncEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	event := ml.IncidentStreamingEvent{
+		EventID:           "sync_evt_test_01",
+		IncidentID:        "inc_test_01",
+		Species:           "BEAR",
+		Category:          "WILDLIFE_SIGHTING",
+		Latitude:          39.7020,
+		Longitude:         141.1520,
+		Timestamp:         time.Now().UTC(),
+		IsIncursion:       1,
+		VerificationState: "VERIFIED",
+	}
+	bodyBytes, _ := json.Marshal(event)
+
+	req := httptest.NewRequest("POST", "/api/v1/bigquery/stream-sync", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	syncedCount, ok := resp["syncedEventsCount"].(float64)
+	if !ok || syncedCount < 1 {
+		t.Errorf("expected syncedEventsCount >= 1, got %v", resp["syncedEventsCount"])
+	}
+}
+
+func TestBigQuerySyncStatusEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/bigquery/sync-status", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var status ml.BigQuerySyncStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatalf("failed to decode status: %v", err)
+	}
+
+	if status.Status != "ACTIVE_STREAMING" {
+		t.Errorf("expected ACTIVE_STREAMING, got %s", status.Status)
+	}
+	if status.SlaTargetSeconds != 60 {
+		t.Errorf("expected 60s SLA, got %d", status.SlaTargetSeconds)
+	}
+	if status.ReplicationLagSeconds > 60.0 {
+		t.Errorf("replication lag exceeds SLA: %f", status.ReplicationLagSeconds)
+	}
+}
+
+func TestBigQueryStagedSamplesEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/bigquery/staged-samples", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if _, ok := resp["samples"]; !ok {
+		t.Errorf("expected 'samples' field in response")
 	}
 }
 

@@ -168,6 +168,15 @@ data class MemorySearchResponseDto(
 )
 
 @Serializable
+data class DispatchRecommendationDto(
+    val actionType: String,
+    val priority: String,
+    val targetEntityRef: String,
+    val location: String,
+    val justification: String
+)
+
+@Serializable
 data class CausalAlertExplanationRequestDto(
     val tier: AlertTier,
     val targetSpecies: String,
@@ -180,7 +189,40 @@ data class CausalAlertExplanationResponseDto(
     val explanation: String,
     val historicalAnalogs: List<IncidentMemoryRecordDto> = emptyList(),
     val elevatedFromTier: AlertTier? = null,
-    val effectiveTier: AlertTier
+    val effectiveTier: AlertTier,
+    val dispatchRecommendations: List<DispatchRecommendationDto> = emptyList()
+)
+
+@Serializable
+data class BigQuerySyncStatusDto(
+    val status: String,
+    val replicationLagSeconds: Double,
+    val slaTargetSeconds: Int = 60,
+    val totalEventsReplicated: Int,
+    val stagedSamplesCount: Int,
+    val tablePartitioning: String,
+    val spatialIndexing: String,
+    val lastSyncAt: String
+)
+
+@Serializable
+data class IncidentStreamingEventDto(
+    val eventId: String,
+    val incidentId: String,
+    val species: String,
+    val category: String,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: String,
+    val isIncursion: Int = 1,
+    val verificationState: String = "VERIFIED"
+)
+
+@Serializable
+data class BigQueryStreamSyncResponseDto(
+    val syncedEventsCount: Int,
+    val syncStatus: BigQuerySyncStatusDto,
+    val stagedLakeSamples: Int
 )
 
 @Serializable

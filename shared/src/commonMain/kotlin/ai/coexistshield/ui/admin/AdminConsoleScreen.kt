@@ -125,7 +125,13 @@ data class AdminConsoleUiState(
     val causalAiJustification: String = "TIER_2_WARNING: Corroborated unharvested persimmon orchard and morning waste schedule (combined confidence: 97.8%) indicating imminent bear intrusion risk.",
     val nlpExtractedSpecies: String = "Ursus thibetanus (Asian Black Bear)",
     val nlpExtractedUrgency: String = "HIGH",
-    val nlpExtractedLandmark: String = "盛岡市松ヶ枝町付近 (小学校通学路南300m)"
+    val nlpExtractedLandmark: String = "盛岡市松ヶ枝町付近 (小学校通学路南300m)",
+    // BigQuery GIS Real-Time Streaming Data Lake (Issue #20)
+    val bigQuerySyncStatus: String = "ACTIVE_STREAMING",
+    val bigQueryReplicationLagSeconds: Double = 12.4,
+    val bigQuerySlaTargetSeconds: Int = 60,
+    val bigQueryStagedSamplesCount: Int = 1420,
+    val bigQuerySpatialIndexing: String = "Uber H3 Res 8 (~460m edge) & S2 Level 13"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -606,6 +612,55 @@ fun SystemAiHealthTab(
                     Text("Retraining in Progress on Cloud Run...", fontSize = 13.sp)
                 } else {
                     Text("Force Retrain Models on Accumulated Incidents", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    // Card 1b: BigQuery GIS Real-Time Streaming Data Lake (Issue #20)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("BigQuery GIS Streaming Data Lake", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .background(TierSafe.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(state.bigQuerySyncStatus, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TierSafe)
+                }
+            }
+
+            Text(
+                text = "Real-time event replication from Cloud Firestore to BigQuery GIS with automated spatio-temporal feature enrichment.",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Replication Lag", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.bigQueryReplicationLagSeconds}s (< ${state.bigQuerySlaTargetSeconds}s SLA)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TierSafe)
+                }
+                Column {
+                    Text("Staged Samples", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.bigQueryStagedSamplesCount} Samples", fontSize = 13.sp, fontWeight = FontWeight.Black)
+                }
+                Column {
+                    Text("Spatial Grid", fontSize = 11.sp, color = Color.Gray)
+                    Text("H3 L8 / S2 L13", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
