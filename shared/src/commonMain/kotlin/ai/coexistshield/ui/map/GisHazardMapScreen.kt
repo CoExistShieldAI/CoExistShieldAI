@@ -81,8 +81,31 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+object MapZoomHelper {
+    const val MIN_ZOOM = 5.0f // Nationwide overview (~1000km)
+    const val MAX_ZOOM = 15.0f // Street & parcel level (~100m)
+    const val DEFAULT_ZOOM = 13.0f // City / district level (~1km)
+
+    data class ZoomMetrics(
+        val discreteZoom: Int,
+        val scale: Float,
+        val tileSizePx: Float
+    )
+
+    fun calculateMetrics(zoomLevel: Float): ZoomMetrics {
+        val clampedZoom = zoomLevel.coerceIn(MIN_ZOOM, MAX_ZOOM)
+        val discreteZoom = clampedZoom.toInt().coerceIn(5, 15)
+        // Fractional part provides smooth continuous scaling: 2^(zoom - discreteZoom)
+        val frac = clampedZoom - discreteZoom
+        val scale = 2.0f.pow(frac)
+        val tileSizePx = 256f * scale
+        return ZoomMetrics(discreteZoom, scale, tileSizePx)
+    }
+}
 
 enum class MapLayerType(val label: String) {
     ROADKILL("Roadkill"),
@@ -154,7 +177,7 @@ fun GisHazardMapScreen(
     var selectedRegion by remember { mutableStateOf(MapRegion.JAPAN_IWATE) }
     var panOffsetX by remember { mutableStateOf(0f) }
     var panOffsetY by remember { mutableStateOf(0f) }
-    var zoomLevel by remember { mutableStateOf(1.0f) }
+    var zoomLevel by remember { mutableStateOf(MapZoomHelper.DEFAULT_ZOOM) }
 
     Scaffold(
         topBar = {
@@ -256,7 +279,7 @@ fun GisHazardMapScreen(
                                     selectedRegion = region
                                     panOffsetX = 0f
                                     panOffsetY = 0f
-                                    zoomLevel = 1.0f
+                                    zoomLevel = MapZoomHelper.DEFAULT_ZOOM
                                 }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
@@ -304,7 +327,7 @@ fun GisHazardMapScreen(
                 }
             }
 
-            // 3. Google Maps Floating Controls (Zoom +/- & Center Reset)
+            // 3. Google Maps Floating Controls (Zoom +/- & Center Reset & Nationwide Jump)
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -312,7 +335,7 @@ fun GisHazardMapScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FloatingActionButton(
-                    onClick = { zoomLevel = (zoomLevel * 1.25f).coerceAtMost(3.0f) },
+                    onClick = { zoomLevel = (zoomLevel + 1.0f).coerceAtMost(MapZoomHelper.MAX_ZOOM) },
                     modifier = Modifier.size(42.dp),
                     containerColor = Color(0xFF1E293B),
                     contentColor = Color.White,
@@ -322,7 +345,7 @@ fun GisHazardMapScreen(
                 }
 
                 FloatingActionButton(
-                    onClick = { zoomLevel = (zoomLevel / 1.25f).coerceAtLeast(0.5f) },
+                    onClick = { zoomLevel = (zoomLevel - 1.0f).coerceAtLeast(MapZoomHelper.MIN_ZOOM) },
                     modifier = Modifier.size(42.dp),
                     containerColor = Color(0xFF1E293B),
                     contentColor = Color.White,
@@ -331,11 +354,12 @@ fun GisHazardMapScreen(
                     Text("−", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
 
+                // 🎯 Reset to City / District Level (Zoom 13)
                 FloatingActionButton(
                     onClick = {
                         panOffsetX = 0f
                         panOffsetY = 0f
-                        zoomLevel = 1.0f
+                        zoomLevel = MapZoomHelper.DEFAULT_ZOOM
                     },
                     modifier = Modifier.size(42.dp),
                     containerColor = Color(0xFF0284C7),
@@ -343,6 +367,21 @@ fun GisHazardMapScreen(
                     elevation = FloatingActionButtonDefaults.elevation(4.dp)
                 ) {
                     Text("🎯", fontSize = 16.sp)
+                }
+
+                // 🗾 Quick Jump to Nationwide Overview (Zoom 5)
+                FloatingActionButton(
+                    onClick = {
+                        panOffsetX = 0f
+                        panOffsetY = 0f
+                        zoomLevel = MapZoomHelper.MIN_ZOOM
+                    },
+                    modifier = Modifier.size(42.dp),
+                    containerColor = Color(0xFF1E293B),
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Text("🗾", fontSize = 16.sp)
                 }
             }
 
@@ -366,11 +405,26 @@ fun GisHazardMapScreen(
                         Box(modifier = Modifier.width(30.dp).height(2.dp).background(Color.White))
                         Spacer(modifier = Modifier.width(4.dp))
                         val scaleText = when {
-                            zoomLevel >= 2.0f -> "200m"
-                            zoomLevel >= 1.0f -> "1 km"
-                            else -> "5 km"
+                            zoomLevel >= 15.0f -> "100m"
+                            zoomLevel >= 14.0f -> "250m"
+                            zoomLevel >= 13.0f -> "1 km"
+                            zoomLevel >= 12.0f -> "2 km"
+                            zoomLevel >= 11.0f -> "5 km"
+                            zoomLevel >= 10.0f -> "10 km"
+                            zoomLevel >= 9.0f -> "25 km"
+                            zoomLevel >= 8.0f -> "50 km"
+                            zoomLevel >= 7.0f -> "100 km"
+                            zoomLevel >= 6.0f -> "250 km"
+                            else -> "500 km"
                         }
-                        Text(scaleText, fontSize = 10.sp, color = Color(0xFFE2E8F0))
+                        val zoomLabel = when {
+                            zoomLevel <= 6.0f -> "Nationwide"
+                            zoomLevel <= 8.0f -> "Regional"
+                            zoomLevel <= 10.0f -> "Prefecture"
+                            zoomLevel <= 12.0f -> "City"
+                            else -> "Street"
+                        }
+                        Text("$scaleText ($zoomLabel z${zoomLevel.toInt()})", fontSize = 10.sp, color = Color(0xFFE2E8F0))
                     }
                 }
             }
@@ -567,6 +621,7 @@ fun GoogleMapsVectorCanvas(
         val screenCenterY = screenHPx / 2f
 
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val relativeZoom = 2.0f.pow(zoomLevel - 13.0f)
             val center = Offset(size.width / 2f + panOffsetX, size.height / 2f + panOffsetY)
 
             // 1. Base Dark Ground
@@ -575,7 +630,7 @@ fun GoogleMapsVectorCanvas(
                 size = size
             )
 
-            // 2. Real Slippy Map Raster Tiles (CartoDB Dark Matter / OpenStreetMap)
+            // 2. Real Slippy Map Raster Tiles (CartoDB Dark Matter / ESRI Dark Canvas)
             drawCartoDbTiles(
                 region = region,
                 zoomLevel = zoomLevel,
@@ -587,36 +642,27 @@ fun GoogleMapsVectorCanvas(
 
             // 3. Fallback vector features while initial tiles load
             if (tileManager.cacheVersion == 0) {
-                drawCityBlocks(center, zoomLevel)
-                drawRiversAndWaterways(center, zoomLevel, region)
-                drawRoadwaysNetwork(center, zoomLevel, region)
-                drawTopographyAndForest(center, zoomLevel, region)
+                drawCityBlocks(center, relativeZoom)
+                drawRiversAndWaterways(center, relativeZoom, region)
+                drawRoadwaysNetwork(center, relativeZoom, region)
+                drawTopographyAndForest(center, relativeZoom, region)
             }
 
             // 5. Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON Simulation)
-            drawGeofencePolygons(center, zoomLevel, region)
+            drawGeofencePolygons(center, relativeZoom, region)
 
             // 6. Scent Plume & Wind Vector (Causal Layer)
-            drawCausalScentPlumes(center, zoomLevel, region)
+            drawCausalScentPlumes(center, relativeZoom, region)
 
             // 7. User GPS Location with 800m Hazard Radar Pulse
-            val userScreenPos = Offset(center.x, center.y + 10f * zoomLevel)
-            drawUserLocationWithRadar(userScreenPos, radarPulse, zoomLevel)
+            val userScreenPos = Offset(center.x, center.y + 10f * relativeZoom)
+            drawUserLocationWithRadar(userScreenPos, radarPulse, relativeZoom)
         }
 
         // Overlay Interactive Clickable Pin Badges on the Screen (Slippy Tile Coordinate aligned)
-        val discreteZoom = when {
-            zoomLevel >= 2.0f -> 14
-            zoomLevel >= 1.0f -> 13
-            else -> 12
-        }
-        val baseZoomLevel = when (discreteZoom) {
-            14 -> 2.0f
-            13 -> 1.0f
-            else -> 0.5f
-        }
-        val scale = (zoomLevel / baseZoomLevel).coerceIn(0.6f, 2.0f)
-        val tileSizePx = 256f * scale
+        val metrics = MapZoomHelper.calculateMetrics(zoomLevel)
+        val discreteZoom = metrics.discreteZoom
+        val tileSizePx = metrics.tileSizePx
 
         val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
         val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)
@@ -631,29 +677,51 @@ fun GoogleMapsVectorCanvas(
 
             // Only render pins that are near or within visible screen area to optimize performance
             if (pinPxX >= -200f && pinPxX <= screenWPx + 200f && pinPxY >= -100f && pinPxY <= screenHPx + 100f) {
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                (pinPxX - 55f).roundToInt(),
-                                (pinPxY - 16f).roundToInt()
+                if (zoomLevel <= 9.0f) {
+                    // Compact circular hazard emoji badge for nationwide / regional overview
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    (pinPxX - 16f).roundToInt(),
+                                    (pinPxY - 16f).roundToInt()
+                                )
+                            }
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0F172A).copy(alpha = 0.94f))
+                            .border(2.dp, pin.pinColor, CircleShape)
+                            .clickable { onSelectPin(pin) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(pin.iconEmoji, fontSize = 16.sp)
+                    }
+                } else {
+                    // Rich descriptive badge for city / district / street view
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    (pinPxX - 55f).roundToInt(),
+                                    (pinPxY - 16f).roundToInt()
+                                )
+                            }
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF0F172A).copy(alpha = 0.94f))
+                            .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
+                            .clickable { onSelectPin(pin) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(pin.iconEmoji, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF0F172A).copy(alpha = 0.94f))
-                        .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
-                        .clickable { onSelectPin(pin) }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(pin.iconEmoji, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
             }
@@ -670,18 +738,9 @@ private fun DrawScope.drawCartoDbTiles(
     tileManager: TileManager,
     scope: CoroutineScope
 ) {
-    val discreteZoom = when {
-        zoomLevel >= 2.0f -> 14
-        zoomLevel >= 1.0f -> 13
-        else -> 12
-    }
-    val baseZoomLevel = when (discreteZoom) {
-        14 -> 2.0f
-        13 -> 1.0f
-        else -> 0.5f
-    }
-    val scale = (zoomLevel / baseZoomLevel).coerceIn(0.6f, 2.0f)
-    val tileSizePx = 256f * scale
+    val metrics = MapZoomHelper.calculateMetrics(zoomLevel)
+    val discreteZoom = metrics.discreteZoom
+    val tileSizePx = metrics.tileSizePx
 
     val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
     val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)

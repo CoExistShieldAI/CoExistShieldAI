@@ -27,17 +27,23 @@ test.describe('GIS Hazard Map Screen with Google Maps Vector Engine', () => {
 
     // 3. Click Zoom In floating button (bottom right area)
     await canvas.click({
-      position: { x: Math.floor(box.width - 35), y: Math.floor(box.height - 130) },
+      position: { x: Math.floor(box.width - 35), y: Math.floor(box.height - 180) },
     });
     await page.waitForTimeout(500);
 
-    // 4. Click Region Tab (e.g. Thailand or Sumatra)
+    // 4. Click Nationwide Jump button (bottom right, "🗾") to verify full country overview
+    await canvas.click({
+      position: { x: Math.floor(box.width - 35), y: Math.floor(box.height - 60) },
+    });
+    await page.waitForTimeout(1000);
+
+    // 5. Click Region Tab (e.g. Thailand or Sumatra)
     await canvas.click({
       position: { x: 180, y: 70 },
     });
     await page.waitForTimeout(800);
 
-    // 5. Click Layer Toggle (FilterChip)
+    // 6. Click Layer Toggle (FilterChip)
     await canvas.click({
       position: { x: 100, y: 110 },
     });
