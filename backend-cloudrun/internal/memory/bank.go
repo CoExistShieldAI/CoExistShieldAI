@@ -2,6 +2,7 @@ package memory
 
 import (
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -16,10 +17,28 @@ type Bank struct {
 	memories []model.IncidentMemoryRecord
 }
 
+// NewBank initializes the episodic memory bank.
+// Pre-seeded historical incidents are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewBank() *Bank {
-	b := &Bank{}
-	b.seedHistoricalIncidents()
+	b := &Bank{
+		memories: make([]model.IncidentMemoryRecord, 0),
+	}
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		b.LoadFixtureMemory()
+	}
 	return b
+}
+
+// LoadFixtureMemory populates verified historical incidents across Japan, Thailand, and Indonesia.
+func (b *Bank) LoadFixtureMemory() {
+	b.seedHistoricalIncidents()
+}
+
+// AddMemoryRecord adds an episodic memory incident to the bank.
+func (b *Bank) AddMemoryRecord(rec model.IncidentMemoryRecord) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.memories = append(b.memories, rec)
 }
 
 func (b *Bank) seedHistoricalIncidents() {

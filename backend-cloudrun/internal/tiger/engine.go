@@ -3,6 +3,7 @@ package tiger
 import (
 	"fmt"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -74,14 +75,32 @@ type villageLocation struct {
 	Longitude float64
 }
 
-// NewEngine initializes the Sumatra Tiger Predation Engine with pastoral clusters in Sumatra and Malaysia.
+// NewEngine initializes the Sumatra Tiger Predation Engine.
+// Pre-seeded enclosures and villages are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewEngine() *Engine {
 	e := &Engine{
 		enclosures: make(map[string]LivestockEnclosure),
-		villages:   seedVillages(),
+		villages:   make([]villageLocation, 0),
 	}
-	e.seedInitialEnclosures()
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		e.LoadFixtureData()
+	}
 	return e
+}
+
+// LoadFixtureData populates baseline test villages and pastoral enclosures.
+func (e *Engine) LoadFixtureData() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.villages = seedVillages()
+	e.seedInitialEnclosuresLocked()
+}
+
+// RegisterEnclosure dynamically adds or updates a livestock pasture enclosure.
+func (e *Engine) RegisterEnclosure(enc LivestockEnclosure) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.enclosures[enc.ID] = enc
 }
 
 func seedVillages() []villageLocation {
@@ -94,7 +113,7 @@ func seedVillages() []villageLocation {
 	}
 }
 
-func (e *Engine) seedInitialEnclosures() {
+func (e *Engine) seedInitialEnclosuresLocked() {
 	now := time.Now().UTC()
 	killTime1 := now.Add(-14 * time.Hour) // 14 hours ago (Peak 72h return window)
 	expiry1 := killTime1.Add(72 * time.Hour)

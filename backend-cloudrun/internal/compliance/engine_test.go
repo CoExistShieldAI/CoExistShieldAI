@@ -7,6 +7,7 @@ import (
 
 func TestRspoAuditPackageAndCsv(t *testing.T) {
 	eng := NewEngine()
+	eng.LoadFixtureData()
 
 	pkg, err := eng.GetRspoAuditPackage("wilmar_sumatra_02")
 	if err != nil {
@@ -44,6 +45,7 @@ func TestRspoAuditPackageAndCsv(t *testing.T) {
 
 func TestGcfBudgetImpact(t *testing.T) {
 	eng := NewEngine()
+	eng.LoadFixtureData()
 
 	resp, err := eng.GetGcfBudgetImpact("03201")
 	if err != nil {
@@ -75,6 +77,7 @@ func TestGcfBudgetImpact(t *testing.T) {
 
 func TestPriorityKakiLayer(t *testing.T) {
 	eng := NewEngine()
+	eng.LoadFixtureData()
 
 	layer, err := eng.GetPriorityKakiLayer("03201")
 	if err != nil {
@@ -102,6 +105,7 @@ func TestPriorityKakiLayer(t *testing.T) {
 
 func TestMunicipalActionRBAC(t *testing.T) {
 	eng := NewEngine()
+	eng.LoadFixtureData()
 
 	// 1. Citizen cannot log felling (tampering prevention)
 	citizenReq := MunicipalKakiActionRequest{

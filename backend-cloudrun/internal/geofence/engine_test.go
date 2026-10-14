@@ -205,6 +205,7 @@ func TestTemporalRiskDecayModeling(t *testing.T) {
 
 func TestGeofenceRecalculationAndActiveQuery(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixtureZones()
 
 	// Initial active zones
 	initialActive := engine.GetActiveGeofences(39.7020, 141.1520, 10.0)

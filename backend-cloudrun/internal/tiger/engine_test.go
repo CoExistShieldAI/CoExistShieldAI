@@ -9,6 +9,7 @@ import (
 
 func TestTigerEngineInitialization(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixtureData()
 	enclosures := engine.GetEnclosures()
 
 	if len(enclosures) < 3 {
@@ -44,6 +45,7 @@ func TestTigerEngineInitialization(t *testing.T) {
 
 func TestNightCorralRiskReduction(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixtureData()
 
 	// Compare Sungai Rawa (has night corral) vs Lubuk Mandi (no night corral)
 	encWithCorral, _ := engine.GetEnclosure("ls_sumatra_02")
@@ -65,6 +67,7 @@ func TestNightCorralRiskReduction(t *testing.T) {
 
 func TestReportDepredationAnd3kmAlert(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixtureData()
 
 	weather := model.WeatherConditions{
 		WindSpeedKmh:     12.0,
@@ -111,6 +114,7 @@ func TestReportDepredationAnd3kmAlert(t *testing.T) {
 
 func TestClearKillSiteAction(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixtureData()
 
 	cleared, err := engine.ClearKillSite("ls_sumatra_01")
 	if err != nil {
@@ -130,6 +134,7 @@ func TestClearKillSiteAction(t *testing.T) {
 
 func Test72HourDecayThreshold(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixtureData()
 	now := time.Now().UTC()
 
 	// Check enclosure 80 hours after kill (past 72h window)

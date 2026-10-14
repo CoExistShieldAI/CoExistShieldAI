@@ -9,6 +9,7 @@ import (
 
 func TestBankInitializationAndEmbedding(t *testing.T) {
 	bank := NewBank()
+	bank.LoadFixtureMemory()
 	if bank == nil {
 		t.Fatalf("expected non-nil memory bank")
 	}
@@ -26,6 +27,7 @@ func TestBankInitializationAndEmbedding(t *testing.T) {
 
 func TestSearchAnalogousIncidentsBearAttack(t *testing.T) {
 	bank := NewBank()
+	bank.LoadFixtureMemory()
 
 	req := model.MemorySearchRequest{
 		QueryText:     "Asian Black Bear foraging on abandoned persimmon fruit near school route during new moon",
@@ -58,6 +60,7 @@ func TestSearchAnalogousIncidentsBearAttack(t *testing.T) {
 
 func TestSearchAnalogousIncidentsTigerAmbush(t *testing.T) {
 	bank := NewBank()
+	bank.LoadFixtureMemory()
 
 	req := model.MemorySearchRequest{
 		QueryText:     "Sumatran tiger returning to cached domestic cow carcass in pasture scrub buffer",
@@ -86,6 +89,7 @@ func TestSearchAnalogousIncidentsTigerAmbush(t *testing.T) {
 
 func TestSearchAnalogousIncidentsElephantCropRaid(t *testing.T) {
 	bank := NewBank()
+	bank.LoadFixtureMemory()
 
 	req := model.MemorySearchRequest{
 		QueryText:     "Elephant herd approaching ripening sugarcane plantation border during nighttime",

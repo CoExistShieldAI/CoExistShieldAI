@@ -8,6 +8,7 @@ import (
 
 func TestElephantEngineInitialization(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixturePlots()
 	plots := engine.GetRegisteredPlots()
 
 	if len(plots) < 4 {
@@ -40,6 +41,7 @@ func TestElephantEngineInitialization(t *testing.T) {
 
 func TestWindDirectionCorridorCoupling(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixturePlots()
 
 	// 1. Wind blowing FROM East (90 deg) -> TOWARDS West (270 deg) straight into Kui Buri forest reserve
 	favorableWind := model.WeatherConditions{
@@ -83,6 +85,7 @@ func TestWindDirectionCorridorCoupling(t *testing.T) {
 
 func TestUpdateHarvestStage(t *testing.T) {
 	engine := NewEngine()
+	engine.LoadFixturePlots()
 
 	// Update Kaeng Krachan Cane from Ripening to HARVESTED_CLEARED
 	updated, err := engine.UpdateHarvestStage("th_plot_kk_01", "HARVESTED_CLEARED", nil)

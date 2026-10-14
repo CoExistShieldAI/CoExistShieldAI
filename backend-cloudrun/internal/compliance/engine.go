@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -126,16 +127,35 @@ type Engine struct {
 	plantations  map[string]RspoAuditPackage
 }
 
-// NewEngine initializes the compliance and municipal decision-support engine with initial ground-truth assets.
+// NewEngine initializes the compliance and municipal decision-support engine.
+// Pre-seeded plantations and trees are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewEngine() *Engine {
 	e := &Engine{
 		trees:        make(map[string]MunicipalPriorityKakiTree),
 		fellingLogs:  make([]FellingAuditLog, 0),
-		gcfCompleted: 214,
-		plantations:  seedPlantationData(),
+		gcfCompleted: 0,
+		plantations:  make(map[string]RspoAuditPackage),
 	}
-	e.seedInitialKakiTrees()
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		e.LoadFixtureData()
+	}
 	return e
+}
+
+// LoadFixtureData populates realistic baseline RSPO plantations and priority Kaki trees.
+func (e *Engine) LoadFixtureData() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.gcfCompleted = 214
+	e.plantations = seedPlantationData()
+	e.seedInitialKakiTreesLocked()
+}
+
+// RegisterKakiTree dynamically registers a priority persimmon tree.
+func (e *Engine) RegisterKakiTree(tree MunicipalPriorityKakiTree) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.trees[tree.TreeID] = tree
 }
 
 func seedPlantationData() map[string]RspoAuditPackage {
@@ -193,7 +213,7 @@ func computeSignature(auditID, plantationID string, year int, score float64) str
 	return hex.EncodeToString(hash[:])
 }
 
-func (e *Engine) seedInitialKakiTrees() {
+func (e *Engine) seedInitialKakiTreesLocked() {
 	initial := []MunicipalPriorityKakiTree{
 		{
 			TreeID:                         "kt_1120",

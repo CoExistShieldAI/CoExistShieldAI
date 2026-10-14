@@ -3,6 +3,7 @@ package elephant
 import (
 	"fmt"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -46,13 +47,28 @@ type Engine struct {
 	plots map[string]ElephantCropPlot
 }
 
-// NewEngine initializes the Thailand Elephant HEC Engine with registered plantations near Kui Buri & Kaeng Krachan.
+// NewEngine initializes the Thailand Elephant HEC Engine.
+// Pre-seeded crop plots are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewEngine() *Engine {
 	e := &Engine{
 		plots: make(map[string]ElephantCropPlot),
 	}
-	e.seedInitialPlots()
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		e.LoadFixturePlots()
+	}
 	return e
+}
+
+// LoadFixturePlots populates realistic baseline agricultural estates.
+func (e *Engine) LoadFixturePlots() {
+	e.seedInitialPlots()
+}
+
+// RegisterPlot dynamically adds or updates an agricultural crop plot.
+func (e *Engine) RegisterPlot(plot ElephantCropPlot) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.plots[plot.ID] = plot
 }
 
 func (e *Engine) seedInitialPlots() {

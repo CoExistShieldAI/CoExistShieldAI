@@ -3,6 +3,7 @@ package geofence
 import (
 	"fmt"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -22,14 +23,23 @@ type Engine struct {
 	modelWeights       map[string]float64
 }
 
+// NewEngine initializes the dynamic geofencing engine.
+// Pre-seeded zones are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewEngine() *Engine {
 	e := &Engine{
 		activeZones:        make(map[string]model.ActiveGeofenceZone),
 		activeModelVersion: "v2026.10.01-baseline",
 		modelWeights:       make(map[string]float64),
 	}
-	e.seedDefaultGeofenceZones()
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		e.LoadFixtureZones()
+	}
 	return e
+}
+
+// LoadFixtureZones populates calibrated test geofence zones.
+func (e *Engine) LoadFixtureZones() {
+	e.seedDefaultGeofenceZones()
 }
 
 // CalculateMoonPhase computes astronomical lunar phase, illumination percentage, and nocturnal risk multiplier
