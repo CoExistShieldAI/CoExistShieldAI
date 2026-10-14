@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ai.coexistshield/backend/internal/compliance"
+	"ai.coexistshield/backend/internal/corroboration"
 	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
@@ -19,14 +20,15 @@ import (
 )
 
 type Router struct {
-	mux              *http.ServeMux
-	geminiClient     *gemini.Client
-	geofenceEngine   *geofence.Engine
-	memoryBank       *memory.Bank
-	mlPipeline       *ml.RetrainingPipeline
-	elephantEngine   *elephant.Engine
-	tigerEngine      *tiger.Engine
-	complianceEngine *compliance.Engine
+	mux                 *http.ServeMux
+	geminiClient        *gemini.Client
+	geofenceEngine      *geofence.Engine
+	memoryBank          *memory.Bank
+	mlPipeline          *ml.RetrainingPipeline
+	elephantEngine      *elephant.Engine
+	tigerEngine         *tiger.Engine
+	complianceEngine    *compliance.Engine
+	corroborationEngine *corroboration.Engine
 }
 
 func NewRouter(
@@ -37,16 +39,18 @@ func NewRouter(
 	elephantEngine *elephant.Engine,
 	tigerEngine *tiger.Engine,
 	complianceEngine *compliance.Engine,
+	corroborationEngine *corroboration.Engine,
 ) *Router {
 	r := &Router{
-		mux:              http.NewServeMux(),
-		geminiClient:     geminiClient,
-		geofenceEngine:   geofenceEngine,
-		memoryBank:       memoryBank,
-		mlPipeline:       mlPipeline,
-		elephantEngine:   elephantEngine,
-		tigerEngine:      tigerEngine,
-		complianceEngine: complianceEngine,
+		mux:                 http.NewServeMux(),
+		geminiClient:        geminiClient,
+		geofenceEngine:      geofenceEngine,
+		memoryBank:          memoryBank,
+		mlPipeline:          mlPipeline,
+		elephantEngine:      elephantEngine,
+		tigerEngine:         tigerEngine,
+		complianceEngine:    complianceEngine,
+		corroborationEngine: corroborationEngine,
 	}
 	r.registerRoutes()
 	return r
@@ -90,6 +94,11 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/depredation/report", r.handleTigerDepredationReport)
 	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/recalculate", r.handleTigerRecalculate)
 	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/pastures/", r.handleTigerPastureAction)
+	r.mux.HandleFunc("/api/v1/nlp/ingest/unstructured", r.handleUnstructuredNlpIngest)
+	r.mux.HandleFunc("/api/v1/corroboration/streams", r.handleCorroborationStreams)
+	r.mux.HandleFunc("/api/v1/corroboration/ingest", r.handleCorroborationIngest)
+	r.mux.HandleFunc("/api/v1/corroboration/evaluate", r.handleCorroborationEvaluate)
+	r.mux.HandleFunc("/api/v1/corroboration/poll-cycle", r.handleCorroborationPollCycle)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -640,6 +649,139 @@ func (r *Router) handleTigerPastureAction(w http.ResponseWriter, req *http.Reque
 	}
 
 	writeJSON(w, http.StatusOK, updated)
+}
+
+func (r *Router) handleUnstructuredNlpIngest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var nlpReq model.UnstructuredNlpIngestRequest
+	if err := json.NewDecoder(req.Body).Decode(&nlpReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	channel := nlpReq.SourceChannel
+	if channel == "" {
+		channel = "UNSTRUCTURED_WEB_FEED"
+	}
+
+	entity, err := r.geminiClient.ExtractIncidentEntities(req.Context(), nlpReq.RawText, channel, nlpReq.RegionHint)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("NLP extraction failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Auto-ingest extracted entity into multi-source corroboration engine
+	if r.corroborationEngine != nil && entity.Confidence >= 0.70 {
+		region := nlpReq.RegionHint
+		if region == "" {
+			if entity.Species == "BEAR" {
+				region = "JAPAN"
+			} else if entity.Species == "ELEPHANT" {
+				region = "THAILAND"
+			} else if entity.Species == "TIGER" {
+				region = "INDONESIA"
+			}
+		}
+
+		r.corroborationEngine.IngestStreamItem(model.CausalStreamItem{
+			ItemId:        fmt.Sprintf("nlp-%s", entity.EntityId),
+			StreamType:    model.StreamSocialNLP,
+			Region:        region,
+			Title:         fmt.Sprintf("NLP: %s %s in %s", entity.Species, entity.IncidentType, entity.LocationDescription),
+			Description:   entity.RawText,
+			Latitude:      entity.EstimatedLatitude,
+			Longitude:     entity.EstimatedLongitude,
+			RadiusMeters:  1500,
+			Confidence:    entity.Confidence,
+			TargetSpecies: entity.Species,
+			Timestamp:     entity.ExtractedTimestamp,
+			ExpiresAt:     time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339),
+			Metadata: map[string]interface{}{
+				"urgency":           entity.UrgencyLevel,
+				"attractantContext": entity.AttractantContext,
+				"sourceChannel":     entity.SourceChannel,
+			},
+		})
+	}
+
+	resp := model.UnstructuredNlpIngestResponse{
+		Entity:    *entity,
+		ModelUsed: gemini.GeminiModelVersion,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleCorroborationStreams(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	region := req.URL.Query().Get("region")
+	streamTypeStr := req.URL.Query().Get("type")
+
+	items := r.corroborationEngine.GetActiveStreamItems(region, model.CausalStreamType(streamTypeStr))
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (r *Router) handleCorroborationIngest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var item model.CausalStreamItem
+	if err := json.NewDecoder(req.Body).Decode(&item); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	r.corroborationEngine.IngestStreamItem(item)
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"status": "ingested",
+		"item":   item,
+	})
+}
+
+func (r *Router) handleCorroborationEvaluate(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var evalReq model.CorroborationRequest
+	if err := json.NewDecoder(req.Body).Decode(&evalReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.corroborationEngine.Corroborate(req.Context(), evalReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Corroboration evaluation failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleCorroborationPollCycle(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ingestedCount := r.corroborationEngine.RunIngestionCycle()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":        "cycle_completed",
+		"itemsIngested": ingestedCount,
+		"timestamp":     time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

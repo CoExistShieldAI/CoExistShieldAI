@@ -72,6 +72,7 @@ data class IncidentReportUiState(
         notes = "High-calorie bear attractant cluster detected within 500m of residential structure."
     ),
     val selectedPropertyTag: PropertyContextTag = PropertyContextTag.VACANT_HOUSE,
+    val selectedTraceType: String = "CLAW_MARK_BARK_STRIPPING",
     val isNearSchoolRoute: Boolean = true,
     val isAnalyzing: Boolean = false,
     val isQueuedOffline: Boolean = false,
@@ -86,6 +87,7 @@ fun IncidentReportScreen(
     onBackClick: () -> Unit = {},
     onCategoryChange: (ReportCategory) -> Unit = {},
     onPropertyTagChange: (PropertyContextTag) -> Unit = {},
+    onTraceTypeChange: (String) -> Unit = {},
     onNearSchoolRouteChange: (Boolean) -> Unit = {},
     onRetakePhotoClick: () -> Unit = {},
     onSubmitReportClick: () -> Unit = {}
@@ -140,13 +142,18 @@ fun IncidentReportScreen(
                 isAnalyzing = state.isAnalyzing
             )
 
-            // 4. Context Tags Section (e.g. Vacant House, Near School Route)
+            // 4. Context Tags Section (e.g. Vacant House, Near School Route, or Trace Type)
             if (state.selectedCategory == ReportCategory.ATTRACTANT_FRUIT_TREE) {
                 FruitTreeContextSection(
                     selectedTag = state.selectedPropertyTag,
                     isNearSchoolRoute = state.isNearSchoolRoute,
                     onPropertyTagChange = onPropertyTagChange,
                     onNearSchoolRouteChange = onNearSchoolRouteChange
+                )
+            } else if (state.selectedCategory == ReportCategory.PHYSICAL_TRACE) {
+                PhysicalTraceContextSection(
+                    selectedTraceType = state.selectedTraceType,
+                    onTraceTypeChange = onTraceTypeChange
                 )
             }
 
@@ -334,6 +341,23 @@ fun GeminiTriageCard(
                     fontWeight = FontWeight.Bold
                 )
 
+                result.traceType?.let { trace ->
+                    Text(
+                        text = "Forensic Trace: $trace",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                result.traumaType?.let { trauma ->
+                    Text(
+                        text = "Trauma Analysis: $trauma",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TierDanger
+                    )
+                }
+
                 result.notes?.let { notes ->
                     Text(
                         text = notes,
@@ -366,6 +390,56 @@ fun GeminiTriageCard(
                     fontSize = 13.sp,
                     color = Color.Gray
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PhysicalTraceContextSection(
+    selectedTraceType: String,
+    onTraceTypeChange: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "Wildlife Trace Classification (Gemini 3.8 Forensics)",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Select primary physical trace observable at the scene:",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
+            val traceTypes = listOf(
+                "CLAW_MARK_BARK_STRIPPING" to "Claw Marks (Tree Trunk)",
+                "PUGMARK_SPREAD" to "Paw Print / Pugmark (Mud/Snow)",
+                "SCAT_VEGETATIVE_ACORN" to "Scat / Droppings",
+                "HAIR_RUB_RESIDUE" to "Hair Rub / Fence Snag"
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                traceTypes.forEach { (typeKey, label) ->
+                    FilterChip(
+                        selected = selectedTraceType == typeKey,
+                        onClick = { onTraceTypeChange(typeKey) },
+                        label = { Text(label, fontSize = 11.sp) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
             }
         }
     }

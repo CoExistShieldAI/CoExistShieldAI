@@ -113,11 +113,19 @@ data class AdminConsoleUiState(
     val rspoHcvMonitoredHectares: Double = 42500.0,
     val rspoSafePassagesCount: Int = 342,
     val rspoAuditSignature: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    // System AI Health Data
+    // System AI Health & Multi-Source Corroboration Data
     val lastRetrainTimestamp: String = "2026-10-14 02:30 UTC",
     val modelAucScore: Double = 0.86,
     val activeGeofenceCount: Int = 18,
-    val isRetrainingInProgress: Boolean = false
+    val isRetrainingInProgress: Boolean = false,
+    val geminiModelVersion: String = "gemini-3.8-flash",
+    val activeCausalStreamsCount: Int = 5,
+    val causalCorroborationConfidence: Double = 0.978,
+    val causalCorroboratedSources: List<String> = listOf("AGRICULTURAL_HARVEST", "MUNICIPAL_ATTRACTANT", "SATELLITE_THERMAL"),
+    val causalAiJustification: String = "TIER_2_WARNING: Corroborated unharvested persimmon orchard and morning waste schedule (combined confidence: 97.8%) indicating imminent bear intrusion risk.",
+    val nlpExtractedSpecies: String = "Ursus thibetanus (Asian Black Bear)",
+    val nlpExtractedUrgency: String = "HIGH",
+    val nlpExtractedLandmark: String = "盛岡市松ヶ枝町付近 (小学校通学路南300m)"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -598,6 +606,90 @@ fun SystemAiHealthTab(
                     Text("Retraining in Progress on Cloud Run...", fontSize = 13.sp)
                 } else {
                     Text("Force Retrain Models on Accumulated Incidents", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    // Card 2: Multi-Source Causal Corroboration Engine (Gemini 3.8 Flash & 5 Environmental Streams)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Multi-Source Causal Corroboration Engine", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(state.geminiModelVersion, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            Text(
+                text = "Autonomous Bayesian fusion across 5 environmental streams: Agricultural, Municipal Waste, Satellite FIRMS, Social NLP, and Traffic.",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Active Feeds", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.activeCausalStreamsCount} / 5 Feeds", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TierSafe)
+                }
+                Column {
+                    Text("Sensor Fusion", fontSize = 11.sp, color = Color.Gray)
+                    Text("${(state.causalCorroborationConfidence * 100).toInt()}% Conf", fontSize = 13.sp, fontWeight = FontWeight.Black, color = TierWarning)
+                }
+                Column {
+                    Text("Triggered Tier", fontSize = 11.sp, color = Color.Gray)
+                    Text("TIER 2 WARNING", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TierWarning)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Gemini 3.8 Flash Causal Justification:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(state.causalAiJustification, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // Real-time NLP Sighting Parser Sample
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TierNotice.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Live NLP Entity Extraction (Municipal Radio)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TierNotice)
+                        Text(state.nlpExtractedUrgency, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TierDanger)
+                    }
+                    Text(
+                        text = "Species: ${state.nlpExtractedSpecies} • Loc: ${state.nlpExtractedLandmark}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }

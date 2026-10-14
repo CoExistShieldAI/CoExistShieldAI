@@ -26,6 +26,8 @@ data class GeminiTriageResult(
     val forensicTags: List<String> = emptyList(),
     val decayState: String? = null,
     val fruitLoadLevel: String? = null,
+    val traceType: String? = null,
+    val traumaType: String? = null,
     val notes: String? = null
 )
 

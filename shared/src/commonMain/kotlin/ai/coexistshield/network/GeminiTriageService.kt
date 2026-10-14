@@ -37,7 +37,9 @@ class GeminiTriageService(
                 forensicTags = response.suggestedTags,
                 decayState = response.attributes?.decayState,
                 fruitLoadLevel = response.attributes?.fruitLoadLevel?.name,
-                notes = response.notes ?: "AI forensic analysis completed via Gemini."
+                traceType = response.attributes?.traceType,
+                traumaType = response.attributes?.traumaType,
+                notes = response.notes ?: "AI forensic analysis completed via Gemini 3.8 Flash."
             )
         }.recoverCatching { error ->
             // Robust local fallback when field connectivity drops

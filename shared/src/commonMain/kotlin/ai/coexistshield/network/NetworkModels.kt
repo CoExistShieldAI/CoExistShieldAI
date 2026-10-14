@@ -18,7 +18,9 @@ data class TriageAttributes(
     val fruitLoadLevel: FruitLoadLevel? = null,
     val ripenessStage: RipenessStage? = null,
     val decayState: String? = null,
-    val traumaType: String? = null
+    val traumaType: String? = null,
+    val traceType: String? = null,
+    val traceAgeHours: Double? = null
 )
 
 @Serializable
@@ -444,6 +446,96 @@ data class MunicipalKakiActionResponseDto(
     val message: String,
     val processedAt: String
 )
+
+// Issue #10: Gemini 3.8 Flash NLP Ingestion DTOs
+
+@Serializable
+data class ExtractedIncidentEntityDto(
+    val entityId: String,
+    val sourceChannel: String,
+    val rawText: String,
+    val species: String,
+    val scientificName: String,
+    val commonName: String,
+    val incidentType: String,
+    val locationDescription: String,
+    val estimatedLatitude: Double,
+    val estimatedLongitude: Double,
+    val individualCount: Int,
+    val attractantContext: String,
+    val urgencyLevel: String,
+    val confidence: Double,
+    val extractedTimestamp: String,
+    val corroborationTags: List<String> = emptyList(),
+    val notes: String
+)
+
+@Serializable
+data class UnstructuredNlpIngestRequestDto(
+    val rawText: String,
+    val sourceChannel: String? = null,
+    val regionHint: String? = null
+)
+
+@Serializable
+data class UnstructuredNlpIngestResponseDto(
+    val entity: ExtractedIncidentEntityDto,
+    val modelUsed: String,
+    val createdAt: String
+)
+
+// Issue #4: Multi-Source Causal Corroboration Engine DTOs
+
+@Serializable
+data class CausalStreamItemDto(
+    val itemId: String,
+    val streamType: String,
+    val region: String,
+    val title: String,
+    val description: String,
+    val latitude: Double,
+    val longitude: Double,
+    val radiusMeters: Double,
+    val confidence: Double,
+    val targetSpecies: String,
+    val timestamp: String,
+    val expiresAt: String
+)
+
+@Serializable
+data class CorroborationRequestDto(
+    val targetLatitude: Double,
+    val targetLongitude: Double,
+    val radiusKm: Double = 5.0,
+    val maxAgeHours: Double = 12.0,
+    val region: String? = null
+)
+
+@Serializable
+data class CorroboratedClusterDto(
+    val clusterId: String,
+    val centerLatitude: Double,
+    val centerLongitude: Double,
+    val radiusKm: Double,
+    val targetSpecies: String,
+    val corroboratedSources: List<String> = emptyList(),
+    val independentSourceCount: Int,
+    val combinedConfidence: Double,
+    val elevatedTier: AlertTier,
+    val aiJustification: String,
+    val contributingEvents: List<CausalStreamItemDto> = emptyList(),
+    val actionRecommendation: String,
+    val evaluatedAt: String
+)
+
+@Serializable
+data class CorroborationResponseDto(
+    val clusters: List<CorroboratedClusterDto> = emptyList(),
+    val totalActiveStreams: Int,
+    val evaluatedAt: String,
+    val modelUsed: String
+)
+
 
 
 

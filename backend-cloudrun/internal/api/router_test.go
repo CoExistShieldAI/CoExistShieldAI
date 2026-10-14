@@ -13,6 +13,7 @@ import (
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/compliance"
+	"ai.coexistshield/backend/internal/corroboration"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
 	"ai.coexistshield/backend/internal/tiger"
@@ -26,7 +27,8 @@ func setupTestServer() *Router {
 	elephantEngine := elephant.NewEngine()
 	tigerEngine := tiger.NewEngine()
 	complianceEngine := compliance.NewEngine()
-	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine)
+	corroborationEngine := corroboration.NewEngine(geminiClient)
+	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine, corroborationEngine)
 }
 
 func TestHealthz(t *testing.T) {
@@ -833,6 +835,105 @@ func TestMunicipalKakiActionEndpoint(t *testing.T) {
 		t.Errorf("expected 100%% risk drop, got %.1f", resp.TreeRiskDropPct)
 	}
 }
+
+func TestUnstructuredNlpIngestEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	nlpBody, _ := json.Marshal(model.UnstructuredNlpIngestRequest{
+		RawText:       "盛岡市防災無線：松ヶ枝町付近でクマ目撃。柿の木の近くを徘徊中。児童は通学路を避けてください。",
+		SourceChannel: "MUNICIPAL_DISASTER_RADIO",
+		RegionHint:    "JAPAN",
+	})
+
+	req := httptest.NewRequest("POST", "/api/v1/nlp/ingest/unstructured", bytes.NewReader(nlpBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp model.UnstructuredNlpIngestResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.ModelUsed != "gemini-3.8-flash" {
+		t.Errorf("expected gemini-3.8-flash, got %s", resp.ModelUsed)
+	}
+	if resp.Entity.Species != "BEAR" {
+		t.Errorf("expected species BEAR, got %s", resp.Entity.Species)
+	}
+	if resp.Entity.UrgencyLevel != "HIGH" {
+		t.Errorf("expected urgency HIGH, got %s", resp.Entity.UrgencyLevel)
+	}
+	if resp.Entity.Confidence < 0.90 {
+		t.Errorf("expected confidence >= 0.90, got %f", resp.Entity.Confidence)
+	}
+}
+
+func TestCorroborationStreamsAndEvaluateEndpoints(t *testing.T) {
+	router := setupTestServer()
+
+	// 1. GET /api/v1/corroboration/streams
+	req1 := httptest.NewRequest("GET", "/api/v1/corroboration/streams?region=JAPAN", nil)
+	w1 := httptest.NewRecorder()
+	router.ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w1.Code, w1.Body.String())
+	}
+
+	var streams []model.CausalStreamItem
+	if err := json.Unmarshal(w1.Body.Bytes(), &streams); err != nil {
+		t.Fatalf("failed to parse streams: %v", err)
+	}
+	if len(streams) < 2 {
+		t.Errorf("expected >= 2 streams, got %d", len(streams))
+	}
+
+	// 2. POST /api/v1/corroboration/evaluate
+	evalBody, _ := json.Marshal(model.CorroborationRequest{
+		TargetLatitude:  39.7030,
+		TargetLongitude: 141.1530,
+		RadiusKm:        4.0,
+		Region:          "JAPAN",
+	})
+
+	req2 := httptest.NewRequest("POST", "/api/v1/corroboration/evaluate", bytes.NewReader(evalBody))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w2.Code, w2.Body.String())
+	}
+
+	var evalResp model.CorroborationResponse
+	if err := json.Unmarshal(w2.Body.Bytes(), &evalResp); err != nil {
+		t.Fatalf("failed to parse eval response: %v", err)
+	}
+	if evalResp.ModelUsed != "gemini-3.8-flash" {
+		t.Errorf("expected gemini-3.8-flash, got %s", evalResp.ModelUsed)
+	}
+	if len(evalResp.Clusters) == 0 {
+		t.Fatalf("expected at least 1 corroborated cluster")
+	}
+	if evalResp.Clusters[0].CombinedConfidence < 0.90 {
+		t.Errorf("expected combined confidence >= 0.90, got %f", evalResp.Clusters[0].CombinedConfidence)
+	}
+
+	// 3. POST /api/v1/corroboration/poll-cycle
+	req3 := httptest.NewRequest("POST", "/api/v1/corroboration/poll-cycle", nil)
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+
+	if w3.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w3.Code)
+	}
+}
+
 
 
 

@@ -755,6 +755,184 @@ class ApiClientTest {
         assertEquals(100.0, data.treeRiskDropPct)
         assertEquals(215, data.gcfCompletedFelledTrees)
     }
+
+    @Test
+    fun testGeminiTriagePhysicalTraces() = runTest {
+        val mockJsonResponse = """
+            {
+                "detectedSpecies": "Ursus thibetanus",
+                "commonName": "Asian Black Bear Claw Marks",
+                "confidence": 0.95,
+                "attributes": {
+                    "traceType": "CLAW_MARK_BARK_STRIPPING",
+                    "traceAgeHours": 3.5
+                },
+                "suggestedTags": ["fresh_claw_marks", "conifer_bark_stripped"],
+                "preliminaryThreatIndex": 0.85,
+                "notes": "Fresh Asian Black Bear claw marks on Japanese cedar; estimated < 4 hours old."
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val service = GeminiTriageService(httpClient)
+
+        val result = service.triagePhoto(
+            imageBase64 = "mockTraceBase64",
+            categoryHint = "PHYSICAL_TRACE",
+            latitude = 39.702,
+            longitude = 141.152
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("Ursus thibetanus", data.detectedLabel)
+        assertEquals(0.95, data.confidence)
+        assertEquals("CLAW_MARK_BARK_STRIPPING", data.traceType)
+        assertTrue(data.forensicTags.contains("fresh_claw_marks"))
+    }
+
+    @Test
+    fun testIngestUnstructuredNlpApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "entity": {
+                    "entityId": "nlp-ent-10293",
+                    "sourceChannel": "MUNICIPAL_DISASTER_RADIO",
+                    "rawText": "盛岡市松ヶ枝町付近でクマ目撃。柿の木の近くを徘徊中。",
+                    "species": "BEAR",
+                    "scientificName": "Ursus thibetanus",
+                    "commonName": "Asian Black Bear",
+                    "incidentType": "LIVE_SIGHTING",
+                    "locationDescription": "盛岡市松ヶ枝町付近",
+                    "estimatedLatitude": 39.702,
+                    "estimatedLongitude": 141.152,
+                    "individualCount": 1,
+                    "attractantContext": "Unpicked persimmon tree near residential hedge",
+                    "urgencyLevel": "HIGH",
+                    "confidence": 0.95,
+                    "extractedTimestamp": "2026-10-14T08:30:00Z",
+                    "corroborationTags": ["bear_sighting", "kaki_attractant"],
+                    "notes": "Gemini 3.8 Flash causal NLP extracted bear incident from municipal stream."
+                },
+                "modelUsed": "gemini-3.8-flash",
+                "createdAt": "2026-10-14T08:30:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.ingestUnstructuredNlp(
+            rawText = "盛岡市松ヶ枝町付近でクマ目撃。柿の木の近くを徘徊中。",
+            sourceChannel = "MUNICIPAL_DISASTER_RADIO",
+            regionHint = "JAPAN"
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("gemini-3.8-flash", data.modelUsed)
+        assertEquals("BEAR", data.entity.species)
+        assertEquals("HIGH", data.entity.urgencyLevel)
+        assertEquals(0.95, data.entity.confidence)
+    }
+
+    @Test
+    fun testCorroborationEvaluateApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "clusters": [
+                    {
+                        "clusterId": "cluster-BEAR-48192",
+                        "centerLatitude": 39.703,
+                        "centerLongitude": 141.153,
+                        "radiusKm": 4.0,
+                        "targetSpecies": "BEAR",
+                        "corroboratedSources": ["AGRICULTURAL_HARVEST", "MUNICIPAL_ATTRACTANT"],
+                        "independentSourceCount": 2,
+                        "combinedConfidence": 0.978,
+                        "elevatedTier": "TIER_2_WARNING",
+                        "aiJustification": "Tier 2 Warning: Overripe persimmon orchard combined with curbside morning waste collection schedule elevates bear intrusion risk.",
+                        "contributingEvents": [
+                            {
+                                "itemId": "stream-agri-jp-01",
+                                "streamType": "AGRICULTURAL_HARVEST",
+                                "region": "JAPAN",
+                                "title": "Tohoku Autumn Persimmon Peak Ripening Index",
+                                "description": "Overripe unharvested kaki fruit dropping across abandoned hillside orchards.",
+                                "latitude": 39.7025,
+                                "longitude": 141.1528,
+                                "radiusMeters": 2000.0,
+                                "confidence": 0.88,
+                                "targetSpecies": "BEAR",
+                                "timestamp": "2026-10-14T08:00:00Z",
+                                "expiresAt": "2026-10-15T08:00:00Z"
+                            }
+                        ],
+                        "actionRecommendation": "Broadcast warning to local farmers and secure residential attractants.",
+                        "evaluatedAt": "2026-10-14T08:35:00Z"
+                    }
+                ],
+                "totalActiveStreams": 5,
+                "evaluatedAt": "2026-10-14T08:35:00Z",
+                "modelUsed": "gemini-3.8-flash"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.evaluateCorroboration(
+            targetLatitude = 39.703,
+            targetLongitude = 141.153,
+            radiusKm = 4.0,
+            region = "JAPAN"
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("gemini-3.8-flash", data.modelUsed)
+        assertEquals(1, data.clusters.size)
+        val cluster = data.clusters[0]
+        assertEquals(2, cluster.independentSourceCount)
+        assertEquals(0.978, cluster.combinedConfidence)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, cluster.elevatedTier)
+    }
+
+    @Test
+    fun testCorroborationStreamsAndPollCycleApi() = runTest {
+        val mockStreamsJson = """
+            [
+                {
+                    "itemId": "stream-agri-jp-01",
+                    "streamType": "AGRICULTURAL_HARVEST",
+                    "region": "JAPAN",
+                    "title": "Tohoku Autumn Persimmon Peak Ripening Index",
+                    "description": "Overripe unharvested kaki fruit dropping across abandoned hillside orchards.",
+                    "latitude": 39.7025,
+                    "longitude": 141.1528,
+                    "radiusMeters": 2000.0,
+                    "confidence": 0.88,
+                    "targetSpecies": "BEAR",
+                    "timestamp": "2026-10-14T08:00:00Z",
+                    "expiresAt": "2026-10-15T08:00:00Z"
+                }
+            ]
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockStreamsJson)
+        val repository = GeofenceRepository(httpClient)
+
+        val streamResult = repository.getCorroborationStreams(region = "JAPAN")
+        assertTrue(streamResult.isSuccess)
+        val streams = streamResult.getOrNull()!!
+        assertEquals(1, streams.size)
+        assertEquals("AGRICULTURAL_HARVEST", streams[0].streamType)
+
+        val cycleClient = createMockHttpClient("""{"status":"cycle_completed","itemsIngested":2}""")
+        val cycleRepo = GeofenceRepository(cycleClient)
+        val cycleResult = cycleRepo.runCorroborationPollCycle()
+        assertTrue(cycleResult.isSuccess)
+    }
 }
 
 

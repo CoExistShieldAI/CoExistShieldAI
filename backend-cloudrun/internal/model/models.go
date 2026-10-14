@@ -8,10 +8,12 @@ type ForensicTriageRequest struct {
 }
 
 type TriageAttributes struct {
-	FruitLoadLevel string  `json:"fruitLoadLevel,omitempty"`
-	RipenessStage  string  `json:"ripenessStage,omitempty"`
-	DecayState     *string `json:"decayState,omitempty"`
-	TraumaType     *string `json:"traumaType,omitempty"`
+	FruitLoadLevel string   `json:"fruitLoadLevel,omitempty"`
+	RipenessStage  string   `json:"ripenessStage,omitempty"`
+	DecayState     *string  `json:"decayState,omitempty"`
+	TraumaType     *string  `json:"traumaType,omitempty"`
+	TraceType      *string  `json:"traceType,omitempty"`     // CLAW_MARK, PUGMARK, SCAT, RUB_TREE, FENCE_BREACH
+	TraceAgeHours  *float64 `json:"traceAgeHours,omitempty"` // Estimated age in hours
 }
 
 type ForensicTriageResponse struct {
@@ -152,3 +154,97 @@ type GeneratePlumeGeofencesResponse struct {
 	Count     int               `json:"count"`
 	CreatedAt string            `json:"createdAt"`
 }
+
+// Issue #10: Gemini 3.8 Flash Multimodal & NLP Incident Entity Models
+
+type ExtractedIncidentEntity struct {
+	EntityId            string   `json:"entityId"`
+	SourceChannel       string   `json:"sourceChannel"` // MUNICIPAL_DISASTER_RADIO, X_POST, BLUESKY, CITIZEN_HOTLINE, REGIONAL_BOARD
+	RawText             string   `json:"rawText"`
+	Species             string   `json:"species"`        // BEAR, ELEPHANT, TIGER, WILD_BOAR, DEER, UNKNOWN
+	ScientificName      string   `json:"scientificName"`
+	CommonName          string   `json:"commonName"`
+	IncidentType        string   `json:"incidentType"`   // LIVE_SIGHTING, PHYSICAL_TRACE, CROP_RAID, DEPREDATION, ROADKILL
+	LocationDescription string   `json:"locationDescription"`
+	EstimatedLatitude   float64  `json:"estimatedLatitude"`
+	EstimatedLongitude  float64  `json:"estimatedLongitude"`
+	IndividualCount     int      `json:"individualCount"`
+	AttractantContext   string   `json:"attractantContext"`
+	UrgencyLevel        string   `json:"urgencyLevel"` // LOW, MEDIUM, HIGH, CRITICAL
+	Confidence          float64  `json:"confidence"`
+	ExtractedTimestamp  string   `json:"extractedTimestamp"`
+	CorroborationTags   []string `json:"corroborationTags"`
+	Notes               string   `json:"notes"`
+}
+
+type UnstructuredNlpIngestRequest struct {
+	RawText       string `json:"rawText"`
+	SourceChannel string `json:"sourceChannel,omitempty"`
+	RegionHint    string `json:"regionHint,omitempty"`
+}
+
+type UnstructuredNlpIngestResponse struct {
+	Entity    ExtractedIncidentEntity `json:"entity"`
+	ModelUsed string                  `json:"modelUsed"` // "gemini-3.8-flash"
+	CreatedAt string                  `json:"createdAt"`
+}
+
+// Issue #4: Multi-Source Causal Environmental Data Ingestion Pipeline & Sensor Fusion Corroboration Engine
+
+type CausalStreamType string
+
+const (
+	StreamAgriculturalHarvest CausalStreamType = "AGRICULTURAL_HARVEST"
+	StreamMunicipalAttractant  CausalStreamType = "MUNICIPAL_ATTRACTANT"
+	StreamSatelliteThermal    CausalStreamType = "SATELLITE_THERMAL"
+	StreamSocialNLP           CausalStreamType = "SOCIAL_NLP_STREAM"
+	StreamTrafficCongestion   CausalStreamType = "TRAFFIC_CONGESTION"
+)
+
+type CausalStreamItem struct {
+	ItemId        string                 `json:"itemId"`
+	StreamType    CausalStreamType       `json:"streamType"`
+	Region        string                 `json:"region"` // JAPAN, THAILAND, INDONESIA
+	Title         string                 `json:"title"`
+	Description   string                 `json:"description"`
+	Latitude      float64                `json:"latitude"`
+	Longitude     float64                `json:"longitude"`
+	RadiusMeters  float64                `json:"radiusMeters"`
+	Confidence    float64                `json:"confidence"`
+	TargetSpecies string                 `json:"targetSpecies"` // BEAR, ELEPHANT, TIGER, ALL
+	Timestamp     string                 `json:"timestamp"`
+	ExpiresAt     string                 `json:"expiresAt"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type CorroborationRequest struct {
+	TargetLatitude  float64 `json:"targetLatitude"`
+	TargetLongitude float64 `json:"targetLongitude"`
+	RadiusKm        float64 `json:"radiusKm,omitempty"`    // default 5.0 km
+	MaxAgeHours     float64 `json:"maxAgeHours,omitempty"` // default 12.0 hours
+	Region          string  `json:"region,omitempty"`
+}
+
+type CorroboratedCluster struct {
+	ClusterId              string             `json:"clusterId"`
+	CenterLatitude         float64            `json:"centerLatitude"`
+	CenterLongitude        float64            `json:"centerLongitude"`
+	RadiusKm               float64            `json:"radiusKm"`
+	TargetSpecies          string             `json:"targetSpecies"`
+	CorroboratedSources    []CausalStreamType `json:"corroboratedSources"`
+	IndependentSourceCount int                `json:"independentSourceCount"`
+	CombinedConfidence     float64            `json:"combinedConfidence"` // 1.0 - prod(1 - c_i)
+	ElevatedTier           string             `json:"elevatedTier"`       // SAFE, TIER_1_NOTICE, TIER_2_WARNING, TIER_3_DANGER
+	AiJustification        string             `json:"aiJustification"`    // Generated by Gemini 3.8 Flash
+	ContributingEvents     []CausalStreamItem `json:"contributingEvents"`
+	ActionRecommendation   string             `json:"actionRecommendation"`
+	EvaluatedAt            string             `json:"evaluatedAt"`
+}
+
+type CorroborationResponse struct {
+	Clusters           []CorroboratedCluster `json:"clusters"`
+	TotalActiveStreams int                   `json:"totalActiveStreams"`
+	EvaluatedAt        string                `json:"evaluatedAt"`
+	ModelUsed          string                `json:"modelUsed"` // "gemini-3.8-flash"
+}
+

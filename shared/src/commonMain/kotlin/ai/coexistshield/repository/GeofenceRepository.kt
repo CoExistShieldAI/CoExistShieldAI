@@ -208,6 +208,67 @@ class GeofenceRepository(
             }.body()
         }
     }
+
+    suspend fun ingestUnstructuredNlp(
+        rawText: String,
+        sourceChannel: String? = null,
+        regionHint: String? = null
+    ): Result<ai.coexistshield.network.UnstructuredNlpIngestResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/nlp/ingest/unstructured") {
+                contentType(ContentType.Application.Json)
+                setBody(
+                    ai.coexistshield.network.UnstructuredNlpIngestRequestDto(
+                        rawText = rawText,
+                        sourceChannel = sourceChannel,
+                        regionHint = regionHint
+                    )
+                )
+            }.body()
+        }
+    }
+
+    suspend fun getCorroborationStreams(
+        region: String? = null,
+        streamType: String? = null
+    ): Result<List<ai.coexistshield.network.CausalStreamItemDto>> {
+        return runCatching {
+            httpClient.get("/api/v1/corroboration/streams") {
+                url {
+                    region?.let { parameters.append("region", it) }
+                    streamType?.let { parameters.append("type", it) }
+                }
+            }.body()
+        }
+    }
+
+    suspend fun evaluateCorroboration(
+        targetLatitude: Double,
+        targetLongitude: Double,
+        radiusKm: Double = 5.0,
+        region: String? = null
+    ): Result<ai.coexistshield.network.CorroborationResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/corroboration/evaluate") {
+                contentType(ContentType.Application.Json)
+                setBody(
+                    ai.coexistshield.network.CorroborationRequestDto(
+                        targetLatitude = targetLatitude,
+                        targetLongitude = targetLongitude,
+                        radiusKm = radiusKm,
+                        region = region
+                    )
+                )
+            }.body()
+        }
+    }
+
+    suspend fun runCorroborationPollCycle(): Result<Boolean> {
+        return runCatching {
+            val response = httpClient.post("/api/v1/corroboration/poll-cycle")
+            response.status.value in 200..299
+        }
+    }
 }
 
 
