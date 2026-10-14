@@ -2,6 +2,9 @@ package ml
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -93,6 +96,68 @@ func TestBigQueryStreamSyncBatch(t *testing.T) {
 	status := replicator.GetSyncStatus()
 	if status.TotalEventsReplicated != 2 {
 		t.Errorf("expected 2 replicated events in status, got %d", status.TotalEventsReplicated)
+	}
+}
+
+func TestBigQueryInsertAllWithHttpServer(t *testing.T) {
+	receivedPayloads := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPayloads++
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST method, got %s", r.Method)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-bq-token" {
+			t.Errorf("expected test token in header, got %s", r.Header.Get("Authorization"))
+		}
+
+		var req BigQueryInsertRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("failed to decode insert request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Rows) != 1 {
+			t.Errorf("expected 1 row, got %d", len(req.Rows))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(BigQueryInsertResponse{
+			Kind: "bigquery#tableDataInsertAllResponse",
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("BIGQUERY_API_ENDPOINT", server.URL)
+	t.Setenv("BIGQUERY_AUTH_TOKEN", "test-bq-token")
+	t.Setenv("BIGQUERY_STREAMING_ENABLED", "true")
+
+	pipeline := NewRetrainingPipeline()
+	replicator := NewBigQueryGISReplicator(pipeline)
+
+	events := []IncidentStreamingEvent{
+		{
+			EventID:           "test_bq_evt_1",
+			IncidentID:        "inc_live_1",
+			Species:           "BEAR",
+			Category:          "SIGHTING",
+			Latitude:          39.7020,
+			Longitude:         141.1520,
+			Timestamp:         time.Now().UTC(),
+			IsIncursion:       1,
+			VerificationState: "VERIFIED",
+		},
+	}
+
+	count, err := replicator.StreamSyncBatch(events)
+	if err != nil {
+		t.Fatalf("StreamSyncBatch failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 synced event, got %d", count)
+	}
+	if receivedPayloads != 1 {
+		t.Errorf("expected server to receive 1 payload, got %d", receivedPayloads)
 	}
 }
 

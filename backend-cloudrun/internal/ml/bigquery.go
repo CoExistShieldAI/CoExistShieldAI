@@ -1,8 +1,13 @@
 package ml
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -231,23 +236,49 @@ type AttractantFeaturePoint struct {
 }
 
 // BigQueryGISReplicator performs real-time streaming replication from Firestore to BigQuery GIS
-// and spatio-temporal feature enrichment (Issue #20).
+// and spatio-temporal feature enrichment (Issue #20 & #41).
 type BigQueryGISReplicator struct {
-	mu             sync.RWMutex
-	pipeline       *RetrainingPipeline
+	mu              sync.RWMutex
+	pipeline        *RetrainingPipeline
+	projectID       string
+	datasetID       string
+	tableID         string
+	httpClient      *http.Client
 	totalReplicated int
-	lastSync       time.Time
-	stagedSamples  []TrainingSample
-	knownKakiTrees []AttractantFeaturePoint
-	knownCarcasses []AttractantFeaturePoint
-	knownCrops     []AttractantFeaturePoint
+	lastSync        time.Time
+	stagedSamples   []TrainingSample
+	knownKakiTrees  []AttractantFeaturePoint
+	knownCarcasses  []AttractantFeaturePoint
+	knownCrops      []AttractantFeaturePoint
 }
 
 // NewBigQueryGISReplicator creates a replicator tied to the retraining pipeline with seeded GIS attractants.
 func NewBigQueryGISReplicator(pipeline *RetrainingPipeline) *BigQueryGISReplicator {
+	projectID := os.Getenv("BIGQUERY_PROJECT_ID")
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	if projectID == "" {
+		projectID = os.Getenv("GCP_PROJECT")
+	}
+
+	datasetID := os.Getenv("BIGQUERY_DATASET")
+	if datasetID == "" {
+		datasetID = "coexist_spatiotemporal_lake"
+	}
+
+	tableID := os.Getenv("BIGQUERY_TABLE")
+	if tableID == "" {
+		tableID = "wildlife_incidents_streaming"
+	}
+
 	r := &BigQueryGISReplicator{
-		pipeline: pipeline,
-		lastSync: time.Now().UTC(),
+		pipeline:   pipeline,
+		projectID:  projectID,
+		datasetID:  datasetID,
+		tableID:    tableID,
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		lastSync:   time.Now().UTC(),
 		knownKakiTrees: []AttractantFeaturePoint{
 			{Type: "KAKI", Latitude: 39.7020, Longitude: 141.1520, Weight: 0.95},
 			{Type: "KAKI", Latitude: 39.7045, Longitude: 141.1490, Weight: 0.91},
@@ -350,7 +381,152 @@ func (r *BigQueryGISReplicator) ReplicateIncidentEvent(event IncidentStreamingEv
 	return &sample, nil
 }
 
-// StreamSyncBatch processes a batch of Firestore events into BigQuery GIS.
+// BigQueryInsertRow represents an individual row in a BigQuery tableDataInsertAllRequest.
+type BigQueryInsertRow struct {
+	InsertID string                 `json:"insertId,omitempty"`
+	JSON     map[string]interface{} `json:"json"`
+}
+
+// BigQueryInsertRequest represents a tableDataInsertAllRequest payload.
+type BigQueryInsertRequest struct {
+	Kind string              `json:"kind"`
+	Rows []BigQueryInsertRow `json:"rows"`
+}
+
+// BigQueryInsertError represents an individual error inside a BigQuery insertAll response.
+type BigQueryInsertError struct {
+	Index  int `json:"index"`
+	Errors []struct {
+		Reason  string `json:"reason"`
+		Location string `json:"location"`
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+// BigQueryInsertResponse represents the tableDataInsertAllResponse.
+type BigQueryInsertResponse struct {
+	Kind         string                `json:"kind"`
+	InsertErrors []BigQueryInsertError `json:"insertErrors,omitempty"`
+}
+
+// streamToBigQueryTable streams the given events to BigQuery GIS using the streaming insertAll REST API.
+func (r *BigQueryGISReplicator) streamToBigQueryTable(ctx context.Context, events []IncidentStreamingEvent) error {
+	endpoint := os.Getenv("BIGQUERY_API_ENDPOINT")
+	if endpoint == "" {
+		if r.projectID == "" || r.datasetID == "" || r.tableID == "" {
+			return nil // BigQuery destination not configured, staged locally only
+		}
+		endpoint = fmt.Sprintf("https://bigquery.googleapis.com/bigquery/v2/projects/%s/datasets/%s/tables/%s/insertAll",
+			r.projectID, r.datasetID, r.tableID)
+	}
+
+	rows := make([]BigQueryInsertRow, 0, len(events))
+	for _, ev := range events {
+		h3Res8 := GeoToH3Res8(ev.Latitude, ev.Longitude)
+		// WKT Geography POINT format: POINT(longitude latitude)
+		wktGeo := fmt.Sprintf("POINT(%f %f)", ev.Longitude, ev.Latitude)
+		
+		rowMap := map[string]interface{}{
+			"event_id":           ev.EventID,
+			"incident_id":        ev.IncidentID,
+			"species":            ev.Species,
+			"category":           ev.Category,
+			"geo_location":       wktGeo,
+			"latitude":           ev.Latitude,
+			"longitude":          ev.Longitude,
+			"timestamp":          ev.Timestamp.Format(time.RFC3339Nano),
+			"is_incursion":       ev.IsIncursion,
+			"verification_state": ev.VerificationState,
+			"h3_res8":            h3Res8,
+		}
+		rows = append(rows, BigQueryInsertRow{
+			InsertID: ev.EventID,
+			JSON:     rowMap,
+		})
+	}
+
+	reqPayload := BigQueryInsertRequest{
+		Kind: "bigquery#tableDataInsertAllRequest",
+		Rows: rows,
+	}
+
+	bodyBytes, err := json.Marshal(reqPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal BigQuery insertAll request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create BigQuery HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Set auth token if available (environment variable or metadata server)
+	token := r.getGcpAccessToken(ctx)
+	if token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := r.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("BigQuery insertAll HTTP call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		var errResp bytes.Buffer
+		_, _ = errResp.ReadFrom(resp.Body)
+		return fmt.Errorf("BigQuery insertAll returned HTTP %d: %s", resp.StatusCode, errResp.String())
+	}
+
+	var insertResp BigQueryInsertResponse
+	if err := json.NewDecoder(resp.Body).Decode(&insertResp); err != nil {
+		return fmt.Errorf("failed to decode BigQuery response: %w", err)
+	}
+
+	if len(insertResp.InsertErrors) > 0 {
+		firstErr := insertResp.InsertErrors[0]
+		errMsg := "unknown error"
+		if len(firstErr.Errors) > 0 {
+			errMsg = firstErr.Errors[0].Message
+		}
+		return fmt.Errorf("BigQuery row %d insert error: %s", firstErr.Index, errMsg)
+	}
+
+	return nil
+}
+
+// getGcpAccessToken resolves OAuth2 token from env or metadata server.
+func (r *BigQueryGISReplicator) getGcpAccessToken(ctx context.Context) string {
+	if token := os.Getenv("BIGQUERY_AUTH_TOKEN"); token != "" {
+		return token
+	}
+	if token := os.Getenv("GCP_ACCESS_TOKEN"); token != "" {
+		return token
+	}
+
+	// Try GCE/Cloud Run Metadata Server
+	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", nil)
+	if err == nil {
+		metaReq.Header.Set("Metadata-Flavor", "Google")
+		client := &http.Client{Timeout: 500 * time.Millisecond}
+		metaResp, err := client.Do(metaReq)
+		if err == nil && metaResp.StatusCode == http.StatusOK {
+			defer metaResp.Body.Close()
+			var tokenData struct {
+				AccessToken string `json:"access_token"`
+			}
+			if err := json.NewDecoder(metaResp.Body).Decode(&tokenData); err == nil && tokenData.AccessToken != "" {
+				return tokenData.AccessToken
+			}
+		}
+	}
+
+	return ""
+}
+
+// StreamSyncBatch processes a batch of Firestore events into BigQuery GIS and stages for ML retraining.
 func (r *BigQueryGISReplicator) StreamSyncBatch(events []IncidentStreamingEvent) (int, error) {
 	count := 0
 	for _, ev := range events {
@@ -360,6 +536,16 @@ func (r *BigQueryGISReplicator) StreamSyncBatch(events []IncidentStreamingEvent)
 		}
 		count++
 	}
+
+	// If streaming to BigQuery is enabled and we have events, stream to BigQuery REST API
+	if len(events) > 0 && (os.Getenv("BIGQUERY_STREAMING_ENABLED") == "true" || os.Getenv("BIGQUERY_API_ENDPOINT") != "") {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := r.streamToBigQueryTable(ctx, events); err != nil {
+			return count, fmt.Errorf("streaming insert to BigQuery GIS failed: %w", err)
+		}
+	}
+
 	return count, nil
 }
 
@@ -368,13 +554,12 @@ func (r *BigQueryGISReplicator) GetSyncStatus() BigQuerySyncStatus {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// Simulated streaming replication lag is strictly between 4.2s and 14.8s (well below 60s SLA)
 	now := time.Now().UTC()
-	lag := 12.4
+	var lag float64
 	if !r.lastSync.IsZero() {
-		actualDiff := now.Sub(r.lastSync).Seconds()
-		if actualDiff > 0 && actualDiff < 60.0 {
-			lag = actualDiff
+		lag = now.Sub(r.lastSync).Seconds()
+		if lag < 0 {
+			lag = 0
 		}
 	}
 

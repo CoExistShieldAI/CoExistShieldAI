@@ -559,6 +559,15 @@ func TestBigQueryStreamSyncEndpoint(t *testing.T) {
 	if !ok || syncedCount < 1 {
 		t.Errorf("expected syncedEventsCount >= 1, got %v", resp["syncedEventsCount"])
 	}
+
+	// Verify empty body is rejected with 400 Bad Request
+	emptyReq := httptest.NewRequest("POST", "/api/v1/bigquery/stream-sync", bytes.NewReader([]byte("")))
+	emptyReq.Header.Set("Content-Type", "application/json")
+	emptyW := httptest.NewRecorder()
+	router.ServeHTTP(emptyW, emptyReq)
+	if emptyW.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request on empty body, got %d", emptyW.Code)
+	}
 }
 
 func TestBigQuerySyncStatusEndpoint(t *testing.T) {

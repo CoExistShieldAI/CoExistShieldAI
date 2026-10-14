@@ -617,19 +617,10 @@ func (r *Router) handleBigQueryStreamSync(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	// If empty body, simulate a real-time field sync event
+	// If empty body or no valid events, return Bad Request
 	if len(batch) == 0 {
-		batch = append(batch, ml.IncidentStreamingEvent{
-			EventID:           fmt.Sprintf("sync_%d", time.Now().UnixNano()),
-			IncidentID:        fmt.Sprintf("inc_sim_%d", time.Now().UnixNano()%10000),
-			Species:           "BEAR",
-			Category:          "WILDLIFE_SIGHTING",
-			Latitude:          39.7020,
-			Longitude:         141.1520,
-			Timestamp:         time.Now().UTC(),
-			IsIncursion:       1,
-			VerificationState: "VERIFIED",
-		})
+		http.Error(w, "Batch payload is empty or invalid JSON", http.StatusBadRequest)
+		return
 	}
 
 	count, err := r.bigqueryReplicator.StreamSyncBatch(batch)
