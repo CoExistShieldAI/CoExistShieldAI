@@ -5,24 +5,23 @@ import ai.coexistshield.model.ClearanceStatus
 import ai.coexistshield.model.DecayState
 import ai.coexistshield.model.GeofenceZone
 import ai.coexistshield.model.GeoLocation
-import ai.coexistshield.model.KakiTree
 import ai.coexistshield.model.RoadkillRecord
 import ai.coexistshield.model.UserRole
 import ai.coexistshield.model.WildlifeSpecies
-import ai.coexistshield.ui.theme.Slate900
 import ai.coexistshield.ui.theme.TierDanger
 import ai.coexistshield.ui.theme.TierNotice
 import ai.coexistshield.ui.theme.TierSafe
 import ai.coexistshield.ui.theme.TierWarning
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,6 +45,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -53,13 +55,25 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.sin
 
 enum class MapLayerType(val label: String) {
     ROADKILL("Roadkill"),
@@ -95,6 +109,27 @@ data class GisMapUiState(
     val userRole: UserRole = UserRole.CITIZEN
 )
 
+enum class MapRegion(val label: String, val centerLat: Double, val centerLon: Double) {
+    JAPAN_IWATE("🇯🇵 Iwate, Japan", 39.702, 141.152),
+    THAILAND_KUI_BURI("🇹🇭 Kui Buri, Thailand", 12.052, 99.821),
+    INDONESIA_SUMATRA("🇮🇩 Bukit Kesuma, Sumatra", 0.125, 101.450)
+}
+
+data class MapPinItem(
+    val id: String,
+    val lat: Double,
+    val lon: Double,
+    val iconEmoji: String,
+    val title: String,
+    val subtitle: String,
+    val layerType: MapLayerType,
+    val threatTier: AlertTier,
+    val pinColor: Color,
+    val geminiBadge: String,
+    val isRoadkill: Boolean = false,
+    val roadkillStatus: ClearanceStatus? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GisHazardMapScreen(
@@ -105,11 +140,27 @@ fun GisHazardMapScreen(
     onOfficialActionClick: (String) -> Unit = {},
     onUpdateRoadkillStatus: (String, ClearanceStatus) -> Unit = { _, _ -> }
 ) {
+    var selectedRegion by remember { mutableStateOf(MapRegion.JAPAN_IWATE) }
+    var panOffsetX by remember { mutableStateOf(0f) }
+    var panOffsetY by remember { mutableStateOf(0f) }
+    var zoomLevel by remember { mutableStateOf(1.0f) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("GIS Hazard & Attractant Map", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Google Maps", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF38BDF8).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("GIS LIVE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                        }
+                    }
                 },
                 navigationIcon = {
                     Box(modifier = Modifier.padding(start = 12.dp)) {
@@ -122,7 +173,7 @@ fun GisHazardMapScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = Color(0xFF1E293B)
                 )
             )
         }
@@ -132,13 +183,35 @@ fun GisHazardMapScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 1. Google Maps Vector Canvas Container
-            MapCanvasPlaceholder(
+            // 1. Google Maps Vector & Dynamic GeoJSON Canvas Engine
+            GoogleMapsVectorCanvas(
+                region = selectedRegion,
                 state = state,
-                onPinClick = onSelectEntity
+                panOffsetX = panOffsetX,
+                panOffsetY = panOffsetY,
+                zoomLevel = zoomLevel,
+                onPanChange = { dx, dy ->
+                    panOffsetX += dx
+                    panOffsetY += dy
+                },
+                onSelectPin = { pin ->
+                    onSelectEntity(
+                        SelectedEntityDetails(
+                            id = pin.id,
+                            title = pin.title,
+                            subtitle = pin.subtitle,
+                            speciesOrType = pin.layerType.name,
+                            threatTier = pin.threatTier,
+                            geminiBadgeText = pin.geminiBadge,
+                            canMarkResolved = true,
+                            isRoadkill = pin.isRoadkill,
+                            roadkillStatus = pin.roadkillStatus
+                        )
+                    )
+                }
             )
 
-            // 2. Top Overlays: Layer Filter Bar + Proximity Warning Banner
+            // 2. Top Region Selector & Layer Filter Bar Overlay
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -146,12 +219,51 @@ fun GisHazardMapScreen(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Region Quick-Jump Tabs
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    MapRegion.values().forEach { region ->
+                        val isSelected = selectedRegion == region
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (isSelected) Color(0xFF0284C7) else Color(0xFF1E293B).copy(alpha = 0.85f)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Color(0xFF38BDF8) else Color(0xFF475569),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .clickable {
+                                    selectedRegion = region
+                                    panOffsetX = 0f
+                                    panOffsetY = 0f
+                                    zoomLevel = 1.0f
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = region.label,
+                                color = if (isSelected) Color.White else Color(0xFFCBD5E1),
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Layer Toggles
                 LayerFilterOverlay(
                     activeLayers = state.activeLayers,
                     onToggleLayer = onToggleLayer
                 )
 
-                // Issue #3: Proximity Warning Banner (< 800m to decomposing carcass)
+                // Proximity Warning Banner (< 800m to decomposing carcass)
                 val activeCarcassAlert = state.proximityRoadkillAlert ?: state.roadkills.firstOrNull {
                     it.clearanceStatus != ClearanceStatus.CLEARED && it.attractantThreatScore >= 0.70
                 }
@@ -177,7 +289,78 @@ fun GisHazardMapScreen(
                 }
             }
 
-            // 3. Entity Details Bottom Sheet / Card (Bottom overlay when pin is selected)
+            // 3. Google Maps Floating Controls (Zoom +/- & Center Reset)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = if (state.selectedEntity != null) 230.dp else 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = { zoomLevel = (zoomLevel * 1.25f).coerceAtMost(3.0f) },
+                    modifier = Modifier.size(42.dp),
+                    containerColor = Color(0xFF1E293B),
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+
+                FloatingActionButton(
+                    onClick = { zoomLevel = (zoomLevel / 1.25f).coerceAtLeast(0.5f) },
+                    modifier = Modifier.size(42.dp),
+                    containerColor = Color(0xFF1E293B),
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Text("−", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+
+                FloatingActionButton(
+                    onClick = {
+                        panOffsetX = 0f
+                        panOffsetY = 0f
+                        zoomLevel = 1.0f
+                    },
+                    modifier = Modifier.size(42.dp),
+                    containerColor = Color(0xFF0284C7),
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Text("🎯", fontSize = 16.sp)
+                }
+            }
+
+            // 4. Google Maps Watermark & Scale Indicator (Bottom Left)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = if (state.selectedEntity != null) 230.dp else 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF0F172A).copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Google", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Maps", fontSize = 12.sp, fontWeight = FontWeight.Light, color = Color(0xFF94A3B8))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(modifier = Modifier.width(30.dp).height(2.dp).background(Color.White))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val scaleText = when {
+                            zoomLevel >= 2.0f -> "200m"
+                            zoomLevel >= 1.0f -> "1 km"
+                            else -> "5 km"
+                        }
+                        Text(scaleText, fontSize = 10.sp, color = Color(0xFFE2E8F0))
+                    }
+                }
+            }
+
+            // 5. Selected Entity Details Bottom Sheet
             state.selectedEntity?.let { entity ->
                 EntityDetailCard(
                     entity = entity,
@@ -192,6 +375,494 @@ fun GisHazardMapScreen(
             }
         }
     }
+}
+
+@Composable
+fun GoogleMapsVectorCanvas(
+    region: MapRegion,
+    state: GisMapUiState,
+    panOffsetX: Float,
+    panOffsetY: Float,
+    zoomLevel: Float,
+    onPanChange: (Float, Float) -> Unit,
+    onSelectPin: (MapPinItem) -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition()
+    val radarPulse by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400),
+            repeatMode = RepeatMode.Restart
+        )
+    )
+
+    // Build the pins based on active region and active layers
+    val pins = remember(region, state.activeLayers, state.roadkills) {
+        mutableListOf<MapPinItem>().apply {
+            when (region) {
+                MapRegion.JAPAN_IWATE -> {
+                    // Roadkill Carcasses
+                    if (state.activeLayers.contains(MapLayerType.ROADKILL)) {
+                        state.roadkills.forEach { rk ->
+                            val (badgeColor, statusTitle) = when (rk.clearanceStatus) {
+                                ClearanceStatus.REPORTED -> TierWarning to "REPORTED (Active Lure)"
+                                ClearanceStatus.DISPATCHED -> Color(0xFF38BDF8) to "DISPATCHED (Sanitation En Route)"
+                                ClearanceStatus.CLEARED -> TierSafe to "CLEARED (Neutralized)"
+                            }
+                            add(
+                                MapPinItem(
+                                    id = rk.id,
+                                    lat = rk.location.latitude,
+                                    lon = rk.location.longitude,
+                                    iconEmoji = "🐗",
+                                    title = "Roadkill #${rk.id} (${rk.species.name.replace("_", " ")})",
+                                    subtitle = "Location: Lat ${rk.location.latitude}, Lon ${rk.location.longitude} • $statusTitle",
+                                    layerType = MapLayerType.ROADKILL,
+                                    threatTier = if (rk.clearanceStatus == ClearanceStatus.CLEARED) AlertTier.SAFE else AlertTier.TIER_2_WARNING,
+                                    pinColor = badgeColor,
+                                    geminiBadge = "Gemini Forensics: ${rk.decayState.name} • Threat Score ${rk.attractantThreatScore}",
+                                    isRoadkill = true,
+                                    roadkillStatus = rk.clearanceStatus
+                                )
+                            )
+                        }
+                    }
+
+                    // Kaki Trees (Japan Scalability)
+                    if (state.activeLayers.contains(MapLayerType.PERSIMMON_TREES)) {
+                        add(
+                            MapPinItem(
+                                id = "kt_1120",
+                                lat = 39.718,
+                                lon = 141.162,
+                                iconEmoji = "🍊",
+                                title = "Top 5% Hazard Persimmon #kt_1120",
+                                subtitle = "Morioka Takamatsu 3-chome • 120m to Elementary School Route",
+                                layerType = MapLayerType.PERSIMMON_TREES,
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                pinColor = Color(0xFFEA580C),
+                                geminiBadge = "Gemini Vision: Abundant Fruit Load • High Fall Risk"
+                            )
+                        )
+                        add(
+                            MapPinItem(
+                                id = "kt_0842",
+                                lat = 39.735,
+                                lon = 141.185,
+                                iconEmoji = "🍊",
+                                title = "Abandoned Orchard #kt_0842",
+                                subtitle = "Kami-Yonai Forest Fringe • Ordinance Clearance Candidate",
+                                layerType = MapLayerType.PERSIMMON_TREES,
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                pinColor = Color(0xFFF97316),
+                                geminiBadge = "Gemini Vision: Dense Crown • Pre-Hibernation Target"
+                            )
+                        )
+                    }
+                }
+
+                MapRegion.THAILAND_KUI_BURI -> {
+                    if (state.activeLayers.contains(MapLayerType.ELEPHANT_CROPS)) {
+                        add(
+                            MapPinItem(
+                                id = "th_plot_kb_01",
+                                lat = 12.062,
+                                lon = 99.815,
+                                iconEmoji = "🌾",
+                                title = "Sugarcane Attractant Plot #KB-01",
+                                subtitle = "Kui Buri Border • 14.5 ha Commercial Sugarcane",
+                                layerType = MapLayerType.ELEPHANT_CROPS,
+                                threatTier = AlertTier.TIER_3_DANGER,
+                                pinColor = TierDanger,
+                                geminiBadge = "Gemini Vision: Peak Sucrose Maturation • Downwind Scent Plume"
+                            )
+                        )
+                        add(
+                            MapPinItem(
+                                id = "th_plot_kb_02",
+                                lat = 12.040,
+                                lon = 99.835,
+                                iconEmoji = "🍌",
+                                title = "Banana & Jackfruit Grove #KB-02",
+                                subtitle = "Village Border Buffer • Elephant Foraging Corridor",
+                                layerType = MapLayerType.ELEPHANT_CROPS,
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                pinColor = TierWarning,
+                                geminiBadge = "Gemini Vision: Ripe Odor Dispersal • Early Warning Active"
+                            )
+                        )
+                    }
+                }
+
+                MapRegion.INDONESIA_SUMATRA -> {
+                    if (state.activeLayers.contains(MapLayerType.LIVESTOCK_PREDATION)) {
+                        add(
+                            MapPinItem(
+                                id = "ls_sumatra_01",
+                                lat = 0.132,
+                                lon = 101.442,
+                                iconEmoji = "🐅",
+                                title = "Bukit Kesuma Cattle Kill-Site (Sumatra)",
+                                subtitle = "320m to Forest Edge • Active 72h Predator Caching Zone",
+                                layerType = MapLayerType.LIVESTOCK_PREDATION,
+                                threatTier = AlertTier.TIER_3_DANGER,
+                                pinColor = TierDanger,
+                                geminiBadge = "Gemini Forensics: Canine Bite Match (72mm) • Immediate Evacuation"
+                            )
+                        )
+                        add(
+                            MapPinItem(
+                                id = "ls_sumatra_02",
+                                lat = 0.118,
+                                lon = 101.460,
+                                iconEmoji = "🐄",
+                                title = "Pasture Corral Perimeter #SM-04",
+                                subtitle = "Palm Oil Division 3 • Vulnerable Night Herd Corrals",
+                                layerType = MapLayerType.LIVESTOCK_PREDATION,
+                                threatTier = AlertTier.TIER_2_WARNING,
+                                pinColor = TierWarning,
+                                geminiBadge = "Continuous Causal Inference: New Moon Intrusion Probability 84%"
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onPanChange(dragAmount.x, dragAmount.y)
+                }
+            }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f + panOffsetX, size.height / 2f + panOffsetY)
+
+            // 1. Google Maps Dark Mode Base (Landmass)
+            drawRect(
+                color = Color(0xFF181A1F), // Google Maps Dark Base
+                size = size
+            )
+
+            // 2. City Blocks / Cadastral Polygons
+            drawCityBlocks(center, zoomLevel)
+
+            // 3. Mountains, Forest & Protected Conservation Reserves
+            drawTopographyAndForest(center, zoomLevel, region)
+
+            // 4. Waterways & Rivers (Kitakami River, Nakatsu River, etc.)
+            drawRiversAndWaterways(center, zoomLevel, region)
+
+            // 5. Roadways Network (Highways, Arterials, Forestry Routes)
+            drawRoadwaysNetwork(center, zoomLevel, region)
+
+            // 6. Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON Simulation)
+            drawGeofencePolygons(center, zoomLevel, region)
+
+            // 7. Scent Plume & Wind Vector (Causal Layer)
+            drawCausalScentPlumes(center, zoomLevel, region)
+
+            // 8. User GPS Location with 800m Hazard Radar Pulse
+            val userScreenPos = Offset(center.x, center.y + 10f * zoomLevel)
+            drawUserLocationWithRadar(userScreenPos, radarPulse, zoomLevel)
+        }
+
+        // Overlay Interactive Clickable Pin Badges on the Screen
+        pins.forEach { pin ->
+            // Map lat/lon delta to screen coordinates relative to region center
+            val dLat = (pin.lat - region.centerLat).toFloat()
+            val dLon = (pin.lon - region.centerLon).toFloat()
+            val screenX = (160f + (dLon * 12000f * zoomLevel) + panOffsetX).dp
+            val screenY = (240f - (dLat * 12000f * zoomLevel) + panOffsetY).dp
+
+            Box(
+                modifier = Modifier
+                    .offset(x = screenX, y = screenY)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF0F172A).copy(alpha = 0.92f))
+                    .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
+                    .clickable { onSelectPin(pin) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(pin.iconEmoji, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Draw Google Maps styled city blocks
+private fun DrawScope.drawCityBlocks(center: Offset, zoom: Float) {
+    val blockColor = Color(0xFF20232A)
+    val gridSize = 80f * zoom
+    val cols = (size.width / gridSize).toInt() + 4
+    val rows = (size.height / gridSize).toInt() + 4
+
+    for (c in -cols..cols) {
+        for (r in -rows..rows) {
+            val left = center.x + c * gridSize + 6f
+            val top = center.y + r * gridSize + 6f
+            val blockW = gridSize - 12f
+            val blockH = gridSize - 12f
+
+            if (left + blockW >= 0 && left <= size.width && top + blockH >= 0 && top <= size.height) {
+                drawRect(
+                    color = blockColor,
+                    topLeft = Offset(left, top),
+                    size = Size(blockW, blockH)
+                )
+            }
+        }
+    }
+}
+
+// Draw Topographic Hillslopes & Protected Reserves (Deep Forest Green)
+private fun DrawScope.drawTopographyAndForest(center: Offset, zoom: Float, region: MapRegion) {
+    val forestColor = Color(0xFF132A1C)
+    val reservePath = Path().apply {
+        moveTo(center.x - 300f * zoom, center.y - 400f * zoom)
+        cubicTo(
+            center.x - 100f * zoom, center.y - 350f * zoom,
+            center.x + 200f * zoom, center.y - 450f * zoom,
+            center.x + 450f * zoom, center.y - 300f * zoom
+        )
+        lineTo(center.x + 500f * zoom, center.y - 500f * zoom)
+        lineTo(center.x - 400f * zoom, center.y - 500f * zoom)
+        close()
+    }
+    drawPath(reservePath, color = forestColor, style = Fill)
+
+    // Secondary forest boundary
+    val southForest = Path().apply {
+        moveTo(center.x - 400f * zoom, center.y + 250f * zoom)
+        cubicTo(
+            center.x - 150f * zoom, center.y + 200f * zoom,
+            center.x + 100f * zoom, center.y + 350f * zoom,
+            center.x + 380f * zoom, center.y + 280f * zoom
+        )
+        lineTo(center.x + 400f * zoom, center.y + 500f * zoom)
+        lineTo(center.x - 450f * zoom, center.y + 500f * zoom)
+        close()
+    }
+    drawPath(southForest, color = forestColor.copy(alpha = 0.85f), style = Fill)
+}
+
+// Draw Rivers & Waterways (Kitakami River style)
+private fun DrawScope.drawRiversAndWaterways(center: Offset, zoom: Float, region: MapRegion) {
+    val riverColor = Color(0xFF1A365D) // Deep Map River Blue
+    val riverPath = Path().apply {
+        moveTo(center.x - 220f * zoom, center.y - 500f * zoom)
+        cubicTo(
+            center.x - 180f * zoom, center.y - 200f * zoom,
+            center.x - 260f * zoom, center.y + 100f * zoom,
+            center.x - 160f * zoom, center.y + 500f * zoom
+        )
+    }
+    drawPath(riverPath, color = riverColor, style = Stroke(width = 24f * zoom))
+
+    // Tributary Stream
+    val streamPath = Path().apply {
+        moveTo(center.x - 210f * zoom, center.y - 40f * zoom)
+        cubicTo(
+            center.x - 60f * zoom, center.y - 80f * zoom,
+            center.x + 80f * zoom, center.y - 120f * zoom,
+            center.x + 300f * zoom, center.y - 100f * zoom
+        )
+    }
+    drawPath(streamPath, color = riverColor.copy(alpha = 0.8f), style = Stroke(width = 10f * zoom))
+}
+
+// Draw Roadways Network (Highways, Main Arterials, Secondary Streets)
+private fun DrawScope.drawRoadwaysNetwork(center: Offset, zoom: Float, region: MapRegion) {
+    // 1. National Highway (Route 4 / Asian Highway 2) - Amber / Gold Highway
+    val highwayPath = Path().apply {
+        moveTo(center.x - 30f * zoom, center.y - 500f * zoom)
+        cubicTo(
+            center.x - 10f * zoom, center.y - 150f * zoom,
+            center.x - 60f * zoom, center.y + 150f * zoom,
+            center.x - 20f * zoom, center.y + 500f * zoom
+        )
+    }
+    // Highway border casing
+    drawPath(highwayPath, color = Color(0xFF78350F), style = Stroke(width = 9f * zoom))
+    // Highway inner core
+    drawPath(highwayPath, color = Color(0xFFF59E0B), style = Stroke(width = 6f * zoom))
+
+    // 2. Prefectural Route 396 (Detour Bypass)
+    val bypassPath = Path().apply {
+        moveTo(center.x + 180f * zoom, center.y - 500f * zoom)
+        cubicTo(
+            center.x + 140f * zoom, center.y - 100f * zoom,
+            center.x + 220f * zoom, center.y + 200f * zoom,
+            center.x + 160f * zoom, center.y + 500f * zoom
+        )
+    }
+    drawPath(bypassPath, color = Color(0xFF64748B), style = Stroke(width = 5f * zoom))
+    drawPath(bypassPath, color = Color(0xFF94A3B8), style = Stroke(width = 3.5f * zoom))
+
+    // 3. East-West Connecting Avenues
+    val avenue1 = Path().apply {
+        moveTo(center.x - 500f * zoom, center.y - 60f * zoom)
+        lineTo(center.x + 500f * zoom, center.y - 60f * zoom)
+    }
+    drawPath(avenue1, color = Color(0xFF334155), style = Stroke(width = 4f * zoom))
+
+    val avenue2 = Path().apply {
+        moveTo(center.x - 500f * zoom, center.y + 140f * zoom)
+        lineTo(center.x + 500f * zoom, center.y + 140f * zoom)
+    }
+    drawPath(avenue2, color = Color(0xFF334155), style = Stroke(width = 4f * zoom))
+}
+
+// Draw Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON simulation)
+private fun DrawScope.drawGeofencePolygons(center: Offset, zoom: Float, region: MapRegion) {
+    when (region) {
+        MapRegion.JAPAN_IWATE -> {
+            // Tier 2 Warning Bear Corridor Polygon (Orange)
+            val bearCorridor = Path().apply {
+                moveTo(center.x + 20f * zoom, center.y - 280f * zoom)
+                lineTo(center.x + 260f * zoom, center.y - 240f * zoom)
+                lineTo(center.x + 220f * zoom, center.y - 60f * zoom)
+                lineTo(center.x + 60f * zoom, center.y - 90f * zoom)
+                close()
+            }
+            drawPath(bearCorridor, color = Color(0xFFF97316).copy(alpha = 0.22f), style = Fill)
+            drawPath(
+                bearCorridor,
+                color = Color(0xFFF97316),
+                style = Stroke(
+                    width = 2.5f * zoom,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                )
+            )
+
+            // Tier 1 Notice Zone (Yellow)
+            val noticeZone = Path().apply {
+                moveTo(center.x - 300f * zoom, center.y + 80f * zoom)
+                lineTo(center.x - 120f * zoom, center.y + 100f * zoom)
+                lineTo(center.x - 150f * zoom, center.y + 240f * zoom)
+                lineTo(center.x - 320f * zoom, center.y + 210f * zoom)
+                close()
+            }
+            drawPath(noticeZone, color = Color(0xFFEAB308).copy(alpha = 0.18f), style = Fill)
+            drawPath(
+                noticeZone,
+                color = Color(0xFFEAB308),
+                style = Stroke(width = 1.8f * zoom)
+            )
+        }
+
+        MapRegion.THAILAND_KUI_BURI -> {
+            // Tier 3 Danger Elephant Crop Raid Polygon (Red)
+            val elephantHazard = Path().apply {
+                moveTo(center.x - 80f * zoom, center.y - 120f * zoom)
+                lineTo(center.x + 180f * zoom, center.y - 150f * zoom)
+                lineTo(center.x + 220f * zoom, center.y + 60f * zoom)
+                lineTo(center.x - 40f * zoom, center.y + 90f * zoom)
+                close()
+            }
+            drawPath(elephantHazard, color = Color(0xFFEF4444).copy(alpha = 0.25f), style = Fill)
+            drawPath(
+                elephantHazard,
+                color = Color(0xFFEF4444),
+                style = Stroke(width = 2.5f * zoom)
+            )
+        }
+
+        MapRegion.INDONESIA_SUMATRA -> {
+            // Tier 3 Danger Tiger Kill-Site 72h Caching Circle (Red Pulse)
+            drawCircle(
+                color = Color(0xFFEF4444).copy(alpha = 0.22f),
+                radius = 110f * zoom,
+                center = Offset(center.x + 60f * zoom, center.y - 80f * zoom)
+            )
+            drawCircle(
+                color = Color(0xFFEF4444),
+                radius = 110f * zoom,
+                center = Offset(center.x + 60f * zoom, center.y - 80f * zoom),
+                style = Stroke(
+                    width = 2.5f * zoom,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                )
+            )
+        }
+    }
+}
+
+// Draw Scent Plumes & Wind Vector (Olfactory Causal Modeling)
+private fun DrawScope.drawCausalScentPlumes(center: Offset, zoom: Float, region: MapRegion) {
+    val windColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
+    for (i in 0..4) {
+        val yOffset = center.y - 200f * zoom + (i * 35f * zoom)
+        val startX = center.x + 240f * zoom
+        val endX = center.x + 40f * zoom
+
+        val path = Path().apply {
+            moveTo(startX, yOffset)
+            quadraticBezierTo(
+                startX - 100f * zoom, yOffset + 15f * zoom,
+                endX, yOffset + (sin(i.toDouble()) * 20f * zoom).toFloat()
+            )
+        }
+        drawPath(
+            path,
+            color = windColor,
+            style = Stroke(
+                width = 2f * zoom,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+            )
+        )
+    }
+}
+
+// Draw User Location with Radar Sensor Pulse Ring
+private fun DrawScope.drawUserLocationWithRadar(pos: Offset, pulseProgress: Float, zoom: Float) {
+    val pulseRadius = (40f + pulseProgress * 120f) * zoom
+    val pulseAlpha = (1f - pulseProgress).coerceIn(0f, 1f) * 0.45f
+
+    // Outer Expanding Radar Pulse
+    drawCircle(
+        color = Color(0xFF38BDF8).copy(alpha = pulseAlpha),
+        radius = pulseRadius,
+        center = pos
+    )
+    drawCircle(
+        color = Color(0xFF38BDF8).copy(alpha = pulseAlpha * 0.8f),
+        radius = pulseRadius,
+        center = pos,
+        style = Stroke(width = 2f)
+    )
+
+    // Inner GPS Location Indicator
+    drawCircle(
+        color = Color(0xFF0284C7).copy(alpha = 0.3f),
+        radius = 16f * zoom,
+        center = pos
+    )
+    drawCircle(
+        color = Color.White,
+        radius = 8f * zoom,
+        center = pos
+    )
+    drawCircle(
+        color = Color(0xFF0284C7),
+        radius = 6f * zoom,
+        center = pos
+    )
 }
 
 @Composable
@@ -267,189 +938,15 @@ fun LayerFilterOverlay(
             FilterChip(
                 selected = isSelected,
                 onClick = { onToggleLayer(layer) },
-                label = { Text(layer.label, fontSize = 12.sp) },
+                label = { Text(layer.label, fontSize = 11.sp) },
                 shape = RoundedCornerShape(20.dp),
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    selectedContainerColor = Color(0xFF0284C7),
+                    selectedLabelColor = Color.White,
+                    containerColor = Color(0xFF1E293B).copy(alpha = 0.85f),
+                    labelColor = Color(0xFFCBD5E1)
                 )
             )
-        }
-    }
-}
-
-@Composable
-fun MapCanvasPlaceholder(
-    state: GisMapUiState,
-    onPinClick: (SelectedEntityDetails) -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF1E293B))
-    ) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = "Google Maps Vector Engine Active",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                text = "Rendering Dynamic GeoJSON Polygons & Attractant Layers",
-                color = Color.LightGray,
-                fontSize = 12.sp
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Roadkill Layer Pins with Lifecycle Badges (REPORTED / DISPATCHED / CLEARED)
-            if (state.activeLayers.contains(MapLayerType.ROADKILL)) {
-                if (state.roadkills.isNotEmpty()) {
-                    state.roadkills.forEach { rk ->
-                        val (chipColor, statusLabel) = when (rk.clearanceStatus) {
-                            ClearanceStatus.REPORTED -> TierWarning to "REPORTED (Active Lure)"
-                            ClearanceStatus.DISPATCHED -> Color(0xFF38BDF8) to "DISPATCHED (Sanitation En Route)"
-                            ClearanceStatus.CLEARED -> TierSafe to "CLEARED (Neutralized)"
-                        }
-
-                        PinButton(
-                            title = "Roadkill #${rk.id} (${rk.species.name.replace("_", " ")}) • $statusLabel",
-                            color = chipColor,
-                            onClick = {
-                                onPinClick(
-                                    SelectedEntityDetails(
-                                        id = rk.id,
-                                        title = "Roadkill: ${rk.species.name.replace("_", " ")}",
-                                        subtitle = "Location: Lat ${rk.location.latitude}, Lon ${rk.location.longitude} • State: ${rk.decayState.name}",
-                                        speciesOrType = rk.species.name,
-                                        threatTier = if (rk.clearanceStatus == ClearanceStatus.CLEARED) AlertTier.SAFE else AlertTier.TIER_2_WARNING,
-                                        geminiBadgeText = "Gemini Forensics: Threat Index ${rk.attractantThreatScore} • Status ${rk.clearanceStatus.name}",
-                                        canMarkResolved = true,
-                                        isRoadkill = true,
-                                        roadkillStatus = rk.clearanceStatus
-                                    )
-                                )
-                            }
-                        )
-                    }
-                } else {
-                    // Fallback sample roadkill pins if list is not passed
-                    PinButton(
-                        title = "Roadkill Carcass #rk_4412 (Wild Boar) • REPORTED",
-                        color = TierWarning,
-                        onClick = {
-                            onPinClick(
-                                SelectedEntityDetails(
-                                    id = "rk_4412",
-                                    title = "Decomposing Wild Boar Carcass",
-                                    subtitle = "Route 4 Northbound • Active Attractant Magnet",
-                                    speciesOrType = "Sus scrofa",
-                                    threatTier = AlertTier.TIER_2_WARNING,
-                                    geminiBadgeText = "Gemini Forensics: Bloated Decay • Threat Index 0.88",
-                                    canMarkResolved = true,
-                                    isRoadkill = true,
-                                    roadkillStatus = ClearanceStatus.REPORTED
-                                )
-                            )
-                        }
-                    )
-                }
-            }
-
-            // Kaki Trees Layer (Japan)
-            if (state.activeLayers.contains(MapLayerType.PERSIMMON_TREES)) {
-                PinButton(
-                    title = "Kaki Tree #kt_1120 (Top 5% Hazard)",
-                    color = TierDanger,
-                    onClick = {
-                        onPinClick(
-                            SelectedEntityDetails(
-                                id = "kt_1120",
-                                title = "Abandoned Persimmon Tree",
-                                subtitle = "Vacant House • Near Elementary School Route (120m)",
-                                speciesOrType = "Diospyros kaki",
-                                threatTier = AlertTier.TIER_2_WARNING,
-                                geminiBadgeText = "Gemini Vision: Abundant Fruit Load • Overripe Falling",
-                                canMarkResolved = true,
-                                isRoadkill = false
-                            )
-                        )
-                    }
-                )
-            }
-
-            // Sumatra Tiger Kill-Site Layer (Indonesia)
-            if (state.activeLayers.contains(MapLayerType.LIVESTOCK_PREDATION)) {
-                PinButton(
-                    title = "Tiger Kill-Site #ls_sumatra_01 (72h Caching)",
-                    color = TierDanger,
-                    onClick = {
-                        onPinClick(
-                            SelectedEntityDetails(
-                                id = "ls_sumatra_01",
-                                title = "Bukit Kesuma Cattle Kill-Site (Sumatra)",
-                                subtitle = "320m to Forest Edge • Active 72h Feeding Return Cycle",
-                                speciesOrType = "Panthera tigris sumatrae (Sumatran Tiger)",
-                                threatTier = AlertTier.TIER_3_DANGER,
-                                geminiBadgeText = "Gemini Forensics: 72mm Canine Puncture Match • 3km Village Alert Active",
-                                canMarkResolved = true,
-                                isRoadkill = false
-                            )
-                        )
-                    }
-                )
-            }
-
-            // Thailand Asian Elephant Crop Attractant Plots (HEC)
-            if (state.activeLayers.contains(MapLayerType.ELEPHANT_CROPS)) {
-                PinButton(
-                    title = "Elephant Attractant #th_plot_kb_01 (Sugarcane)",
-                    color = TierDanger,
-                    onClick = {
-                        onPinClick(
-                            SelectedEntityDetails(
-                                id = "th_plot_kb_01",
-                                title = "Kui Buri Sugarcane Estate #1 (14.5 ha)",
-                                subtitle = "Prachuap Khiri Khan • 650m to National Park Border",
-                                speciesOrType = "Saccharum officinarum (Elephant Calorie Magnet)",
-                                threatTier = AlertTier.TIER_3_DANGER,
-                                geminiBadgeText = "Gemini Vision: High Sucrose Spike • 2.8km Scent Corridor blowing West into Reserve",
-                                canMarkResolved = true,
-                                isRoadkill = false
-                            )
-                        )
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PinButton(
-    title: String,
-    color: Color,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.2f))
-            .border(1.dp, color, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -467,7 +964,7 @@ fun EntityDetailCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color(0xFF0F172A).copy(alpha = 0.96f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
@@ -483,33 +980,34 @@ fun EntityDetailCard(
                 Text(
                     text = entity.title,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 15.sp,
+                    color = Color.White
                 )
                 Box(
                     modifier = Modifier
                         .clickable(onClick = onDismiss)
                         .padding(4.dp)
                 ) {
-                    Text("✕", fontSize = 14.sp, color = Color.Gray)
+                    Text("✕", fontSize = 14.sp, color = Color(0xFF94A3B8))
                 }
             }
 
             Text(
                 text = entity.subtitle,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                fontSize = 12.sp,
+                color = Color(0xFF94A3B8)
             )
 
             // Status chip for roadkill
             if (entity.isRoadkill && entity.roadkillStatus != null) {
                 val (chipColor, label) = when (entity.roadkillStatus) {
                     ClearanceStatus.REPORTED -> TierWarning to "STATUS: REPORTED (Pending Sanitation Dispatch)"
-                    ClearanceStatus.DISPATCHED -> Color(0xFF0284C7) to "STATUS: DISPATCHED (Truck Assigned)"
+                    ClearanceStatus.DISPATCHED -> Color(0xFF38BDF8) to "STATUS: DISPATCHED (Truck En Route)"
                     ClearanceStatus.CLEARED -> TierSafe to "STATUS: CLEARED (Mitigation Complete)"
                 }
                 Box(
                     modifier = Modifier
-                        .background(chipColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                        .background(chipColor.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
@@ -524,19 +1022,19 @@ fun EntityDetailCard(
             entity.geminiBadgeText?.let { badge ->
                 Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
+                        .background(Color(0xFF38BDF8).copy(alpha = 0.15f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = badge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = Color(0xFF38BDF8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Action row
             Row(
@@ -548,7 +1046,7 @@ fun EntityDetailCard(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Close", fontSize = 13.sp)
+                    Text("Close", fontSize = 12.sp, color = Color.White)
                 }
 
                 // If roadkill progression
@@ -561,7 +1059,7 @@ fun EntityDetailCard(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                             ) {
-                                Text("Dispatch Sanitation Truck", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Dispatch Sanitation Truck", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         ClearanceStatus.DISPATCHED -> {
@@ -571,7 +1069,7 @@ fun EntityDetailCard(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = TierSafe)
                             ) {
-                                Text("Confirm Carcass Cleared", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Confirm Carcass Cleared", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         ClearanceStatus.CLEARED, null -> {
@@ -592,7 +1090,7 @@ fun EntityDetailCard(
                         modifier = Modifier.weight(1.5f),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Official: Mark Resolved", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Official: Mark Resolved", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

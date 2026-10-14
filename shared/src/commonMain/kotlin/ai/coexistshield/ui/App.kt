@@ -1,5 +1,7 @@
 package ai.coexistshield.ui
 
+import ai.coexistshield.auth.AuthService
+import ai.coexistshield.auth.AuthUser
 import ai.coexistshield.model.AlertTier
 import ai.coexistshield.model.ClearanceStatus
 import ai.coexistshield.model.DecayState
@@ -10,6 +12,7 @@ import ai.coexistshield.model.RoadkillRecord
 import ai.coexistshield.model.UserRole
 import ai.coexistshield.model.WildlifeSpecies
 import ai.coexistshield.ui.admin.AdminConsoleScreen
+import ai.coexistshield.ui.auth.AuthScreen
 import ai.coexistshield.ui.admin.AdminConsoleUiState
 import ai.coexistshield.ui.hud.MainHudScreen
 import ai.coexistshield.ui.hud.MainHudUiState
@@ -44,6 +47,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +74,9 @@ fun App() {
     CoExistShieldTheme {
         var currentDestination by remember { mutableStateOf(AppNavDestination.HUD) }
         var currentRole by remember { mutableStateOf(UserRole.CITIZEN) }
+        var authUser by remember { mutableStateOf<AuthUser?>(null) }
+        var isGuest by remember { mutableStateOf(false) }
+        val authService = remember { AuthService() }
         var currentTier by remember { mutableStateOf(AlertTier.TIER_2_WARNING) }
 
         // Simulation toggles for offline connectivity and siren
@@ -237,6 +244,20 @@ fun App() {
             )
         )
 
+        if (authUser == null && !isGuest) {
+            AuthScreen(
+                authService = authService,
+                onAuthenticated = { user ->
+                    authUser = user
+                    currentRole = user.role
+                    ai.coexistshield.network.ApiClient.setAuthToken(user.idToken)
+                    scope.launch { snackbarHostState.showSnackbar("ようこそ、${user.email}") }
+                },
+                onContinueAsGuest = { isGuest = true }
+            )
+            return@CoExistShieldTheme
+        }
+
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
@@ -244,6 +265,15 @@ fun App() {
                 DemoControlBar(
                     currentRole = currentRole,
                     currentTier = currentTier,
+                    signedInEmail = authUser?.email,
+                    onLoginClick = { isGuest = false },
+                    onLogoutClick = {
+                        authUser = null
+                        isGuest = false
+                        currentRole = UserRole.CITIZEN
+                        currentDestination = AppNavDestination.HUD
+                        ai.coexistshield.network.ApiClient.setAuthToken(null)
+                    },
                     onRoleChange = { newRole ->
                         currentRole = newRole
                         scope.launch { snackbarHostState.showSnackbar("Switched Role to ${newRole.name}") }
@@ -394,7 +424,7 @@ fun App() {
                                     timestamp = "2026-10-14T15:00:00Z",
                                     region = "JAPAN",
                                     description = "Crowdsourced report for $reportCategory ($reportSpecies)",
-                                    reporterId = "usr_current_device",
+                                    reporterId = authUser?.uid ?: "usr_current_device",
                                     reporterRole = currentRole
                                 )
 
@@ -510,7 +540,10 @@ fun DemoControlBar(
     currentRole: UserRole,
     currentTier: AlertTier,
     onRoleChange: (UserRole) -> Unit,
-    onTierChange: (AlertTier) -> Unit
+    onTierChange: (AlertTier) -> Unit,
+    signedInEmail: String? = null,
+    onLoginClick: () -> Unit = {},
+    onLogoutClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -525,6 +558,22 @@ fun DemoControlBar(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (signedInEmail != null) {
+                Text(
+                    text = "👤 $signedInEmail",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onLogoutClick) {
+                    Text("ログアウト", fontSize = 11.sp)
+                }
+            } else {
+                TextButton(onClick = onLoginClick) {
+                    Text("ログイン / 登録", fontSize = 11.sp)
+                }
+            }
+
             Text(
                 text = "DEMO CONTROLS:",
                 color = Color.White,
@@ -532,10 +581,11 @@ fun DemoControlBar(
                 fontWeight = FontWeight.Black
             )
 
-            // Role Switcher Chips
+            // Role Switcher Chips (locked while signed in: role is derived from token claims)
             UserRole.values().forEach { role ->
                 FilterChip(
                     selected = currentRole == role,
+                    enabled = signedInEmail == null,
                     onClick = { onRoleChange(role) },
                     label = { Text(role.name, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                     shape = RoundedCornerShape(12.dp),
