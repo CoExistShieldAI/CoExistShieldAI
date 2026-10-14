@@ -97,6 +97,17 @@
         </div>
         <canvas id="ComposeTarget"></canvas>
     </div>
+    <script src="skiko.js"></script>
+    <script>
+        if (typeof onWasmReady === "function") {
+            onWasmReady(function() {
+                var splash = document.getElementById("splash");
+                if (splash) {
+                    splash.style.display = "none";
+                }
+            });
+        }
+    </script>
     <script src="shared.js"></script>
 </body>
 </html>

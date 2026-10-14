@@ -288,6 +288,9 @@ CoExistShieldAI/
 │   └── src/commonTest/             # Unit tests for serialization and network client
 ├── composeApp/                     # Android Application module (:composeApp)
 │   └── src/androidMain/            # MainActivity.kt, AndroidManifest.xml, resources
+├── web-e2e/                        # Playwright E2E test suite for Compose Web app
+│   ├── tests/                      # Page load, Canvas rendering, offline resilience, perf tests
+│   └── playwright.config.ts        # Multi-viewport (Desktop & Mobile) test configuration
 ├── firestore.rules                 # Cloud Firestore 3-Role RBAC security rules
 ├── firebase-tests/                 # Emulator tests for security rules (@firebase/rules-unit-testing)
 ├── scripts/                        # Deployment helper scripts (e.g., deploy_cloudrun.sh)
@@ -331,13 +334,31 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew :composeApp:assembleDebug
 ```
 
-### 9.3 Deploy to Google Cloud Run (Singapore / asia-southeast1)
+### 9.3 Web Application E2E Tests (Playwright)
+The Compose Multiplatform Web app is verified using an automated Playwright End-to-End (E2E) test suite covering Desktop & Mobile viewports:
+
+```bash
+# 1. Build the production Web distribution
+./gradlew :shared:jsBrowserDistribution
+
+# 2. Run all E2E tests (Desktop Chrome & Mobile Pixel 7)
+cd web-e2e
+npm test
+
+# (Optional) Run tests against the live production deployment
+npm run test:prod
+
+# (Optional) Interactive Playwright UI mode
+npm run test:ui
+```
+
+### 9.4 Deploy to Google Cloud Run (Singapore / asia-southeast1)
 ```bash
 # One-click deployment script targeting Singapore (AI Builders Cup Demo Day region)
 ./scripts/deploy_cloudrun.sh corald asia-southeast1
 ```
 
-### 9.4 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
+### 9.5 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
 The microservices and continuous retraining pipeline are deployed and actively running on Google Cloud Run:
 
 - **Public Base URL:** `https://coexistshield-backend-4cerxfo4wq-as.a.run.app`
@@ -351,7 +372,7 @@ The microservices and continuous retraining pipeline are deployed and actively r
   - `GET /api/v1/ngo/patrol-logs/templates` — Ranger field log standardized templates (CSV, GeoJSON, GPX)
 - **Continuous Retraining Cloud Run Job:** `coexistshield-retrain-job` (automated model retraining with statistical validation gate checks)
 
-### 9.5 Live Review Web Application (Firebase Hosting)
+### 9.6 Live Review Web Application (Firebase Hosting)
 For interactive evaluation by hackathon judges and rangers, the Compose Multiplatform Web app is live:
 
 - **Web Dashboard URL:** **`https://corald.web.app`** (Mirror: `https://corald.firebaseapp.com`)

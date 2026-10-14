@@ -1,0 +1,19 @@
+{
+  "name": "coexist-shield-web-e2e",
+  "version": "1.0.0",
+  "description": "End-to-End tests for CoExist Shield AI Compose Web application",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:prod": "BASE_URL=https://corald.web.app playwright test",
+    "serve": "serve ../shared/build/dist/js/productionExecutable -l 8085"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
+    "serve": "^14.2.4",
+    "typescript": "^5.7.2"
+  }
+}

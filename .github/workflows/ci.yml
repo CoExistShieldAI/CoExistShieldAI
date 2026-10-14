@@ -53,6 +53,18 @@ jobs:
       - name: Build Web Production Distribution
         run: ./gradlew :shared:jsBrowserDistribution --no-daemon
 
+      - name: Set up Node.js for Web E2E Tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright & Run Web E2E Tests
+        run: |
+          cd web-e2e
+          npm ci || npm install
+          npx playwright install --with-deps chromium
+          npm test
+
       - name: Assemble Android Debug APK
         run: ./gradlew :composeApp:assembleDebug --no-daemon
 
