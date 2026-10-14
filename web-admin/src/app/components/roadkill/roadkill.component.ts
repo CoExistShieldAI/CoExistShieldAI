@@ -31,7 +31,7 @@ import { AdminRoadkillRecord, DecayStage, RoadkillStatus } from '../../models/ad
             [class.bg-emerald-600]="activeTab() === 'entry'"
             [class.text-white]="activeTab() === 'entry'"
             class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
-            <span>+ Desktop Big-Screen Entry</span>
+            <span>+ Log Roadkill</span>
           </button>
         </div>
       </div>
@@ -154,7 +154,7 @@ import { AdminRoadkillRecord, DecayStage, RoadkillStatus } from '../../models/ad
           <!-- Left Column: Form (5 Cols) -->
           <form (ngSubmit)="submitRoadkillEntry()" class="lg:col-span-5 space-y-4 text-xs">
             <div class="border-b border-slate-800 pb-3">
-              <h3 class="text-base font-bold text-white">Log Carcass via Desktop Station</h3>
+              <h3 class="text-base font-bold text-white">Report New Roadkill Incident</h3>
               <p class="text-[11px] text-slate-400">Click on the map on the right to pinpoint precise GPS location coordinates.</p>
             </div>
 

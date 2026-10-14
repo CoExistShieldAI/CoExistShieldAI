@@ -1,215 +1,270 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { GoogleMapsModule } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
 import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models/admin.model';
 
 @Component({
   selector: 'app-wildlife',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, GoogleMapsModule],
   template: `
     <div class="p-8 space-y-6 max-w-7xl mx-auto">
-      <!-- Title & Action Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <!-- Title & Tab Switcher (Matching Roadkill style) -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 class="text-2xl font-bold tracking-tight text-white">Wildlife Encounter & Sighting Registry</h2>
           <p class="text-sm text-slate-400">Monitor reported apex carnivore and megafauna incursions in real-time.</p>
         </div>
-        <button
-          (click)="openAddModal()"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white shadow transition-all self-start sm:self-auto">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          + Log Wildlife Report
-        </button>
-      </div>
 
-      <!-- Filters & Search -->
-      <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
-        <div class="flex-1 min-w-[200px]">
-          <input
-            type="text"
-            [(ngModel)]="searchQuery"
-            placeholder="Search by species, road name, or reporter..."
-            class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
-        </div>
-        <div>
-          <select [(ngModel)]="filterSpecies" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
-            <option value="">All Species</option>
-            <option value="Asian Elephant">Asian Elephant</option>
-            <option value="Sumatran Tiger">Sumatran Tiger</option>
-            <option value="Brown Bear">Brown Bear</option>
-            <option value="Asian Black Bear">Asian Black Bear</option>
-          </select>
-        </div>
-        <div>
-          <select [(ngModel)]="filterTier" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
-            <option value="">All Threat Tiers</option>
-            <option value="TIER_3_CRITICAL">Tier 3 (Critical)</option>
-            <option value="TIER_2_ALERT">Tier 2 (Alert)</option>
-            <option value="TIER_1_CAUTION">Tier 1 (Caution)</option>
-          </select>
+        <div class="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+          <button
+            (click)="activeTab.set('history')"
+            [class.bg-slate-800]="activeTab() === 'history'"
+            [class.text-white]="activeTab() === 'history'"
+            class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all">
+            Sightings Registry
+          </button>
+          <button
+            (click)="activeTab.set('entry')"
+            [class.bg-emerald-600]="activeTab() === 'entry'"
+            [class.text-white]="activeTab() === 'entry'"
+            class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+            <span>+ Log Wildlife Sighting</span>
+          </button>
         </div>
       </div>
 
-      <!-- Incidents Data Table -->
-      <div class="rounded-2xl bg-slate-950/60 border border-slate-800 overflow-hidden shadow-sm">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
-              <tr>
-                <th class="py-3 px-4">Reported At</th>
-                <th class="py-3 px-4">Species</th>
-                <th class="py-3 px-4">Location & Coordinates</th>
-                <th class="py-3 px-4">Threat Level</th>
-                <th class="py-3 px-4">Status</th>
-                <th class="py-3 px-4">Reporter / Source</th>
-                <th class="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60">
-              @for (item of filteredList(); track item.id) {
-                <tr class="hover:bg-slate-900/40 transition-colors">
-                  <td class="py-3.5 px-4 text-slate-400 font-mono whitespace-nowrap">
-                    {{ item.reported_at | date:'yyyy-MM-dd HH:mm' }}
-                  </td>
-                  <td class="py-3.5 px-4 font-semibold text-white whitespace-nowrap">
-                    {{ item.species }}
-                  </td>
-                  <td class="py-3.5 px-4 text-slate-300">
-                    <div class="font-medium">{{ item.location.road_name || 'Forest Interface' }}</div>
-                    <div class="text-[11px] text-slate-500 font-mono">{{ item.location.lat | number:'1.3-3' }}, {{ item.location.lng | number:'1.3-3' }}</div>
-                  </td>
-                  <td class="py-3.5 px-4 whitespace-nowrap">
-                    <span [class]="getBadgeClass(item.threat_level)" class="text-[10px] px-2 py-0.5 rounded font-bold uppercase">
-                      {{ item.threat_level.replace('TIER_', 'T') }}
-                    </span>
-                  </td>
-                  <td class="py-3.5 px-4 whitespace-nowrap">
-                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold"
-                      [class]="getStatusClass(item.status)">
-                      {{ item.status }}
-                    </span>
-                  </td>
-                  <td class="py-3.5 px-4 text-slate-400">
-                    {{ item.reporter }}
-                  </td>
-                  <td class="py-3.5 px-4 text-right whitespace-nowrap space-x-2">
-                    @if (item.status === 'UNVERIFIED') {
-                      <button (click)="verifyIncident(item.id)" class="px-2.5 py-1 rounded bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600/50 font-medium">
-                        Verify
-                      </button>
-                    }
-                    <button (click)="deleteIncident(item.id)" class="px-2.5 py-1 rounded bg-rose-600/20 text-rose-300 hover:bg-rose-600/40 font-medium">
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="7" class="py-8 text-center text-slate-500">No wildlife incidents match the active filters.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal: Log Wildlife Sighting -->
-    @if (showAddModal()) {
-      <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 class="text-base font-bold text-white">Log Wildlife Sighting or Encounter</h3>
-            <button (click)="showAddModal.set(false)" class="text-slate-400 hover:text-white">✕</button>
+      <!-- Tab 1: Sightings Registry (Table List & Filters) -->
+      @if (activeTab() === 'history') {
+        <!-- Filters & Search -->
+        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
+          <div class="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              [(ngModel)]="searchQuery"
+              placeholder="Search by species, road name, or reporter..."
+              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
           </div>
+          <div>
+            <select [(ngModel)]="filterSpecies" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
+              <option value="">All Species</option>
+              <option value="Asian Elephant">Asian Elephant</option>
+              <option value="Sumatran Tiger">Sumatran Tiger</option>
+              <option value="Bengal Tiger">Bengal Tiger</option>
+              <option value="Brown Bear">Brown Bear</option>
+              <option value="Asian Black Bear">Asian Black Bear</option>
+            </select>
+          </div>
+          <div>
+            <select [(ngModel)]="filterTier" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
+              <option value="">All Threat Tiers</option>
+              <option value="TIER_3_CRITICAL">Tier 3 (Critical)</option>
+              <option value="TIER_2_ALERT">Tier 2 (Alert)</option>
+              <option value="TIER_1_CAUTION">Tier 1 (Caution)</option>
+            </select>
+          </div>
+        </div>
 
-          <form (ngSubmit)="saveIncident()" class="space-y-4 text-xs">
+        <!-- Incidents Data Table -->
+        <div class="rounded-2xl bg-slate-950/60 border border-slate-800 overflow-hidden shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-4">Reported At</th>
+                  <th class="py-3 px-4">Species</th>
+                  <th class="py-3 px-4">Location & Coordinates</th>
+                  <th class="py-3 px-4">Threat Level</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Reporter / Source</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                @for (item of filteredList(); track item.id) {
+                  <tr class="hover:bg-slate-900/40 transition-colors">
+                    <td class="py-3.5 px-4 text-slate-400 font-mono whitespace-nowrap">
+                      {{ item.reported_at | date:'yyyy-MM-dd HH:mm' }}
+                    </td>
+                    <td class="py-3.5 px-4 font-semibold text-white whitespace-nowrap">
+                      {{ item.species }}
+                    </td>
+                    <td class="py-3.5 px-4 text-slate-300">
+                      <div class="font-medium">{{ item.location.road_name || 'Forest Interface' }}</div>
+                      <div class="text-[11px] text-slate-500 font-mono">{{ item.location.lat | number:'1.3-3' }}, {{ item.location.lng | number:'1.3-3' }}</div>
+                    </td>
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                      <span [class]="getBadgeClass(item.threat_level)" class="text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                        {{ item.threat_level.replace('TIER_', 'T') }}
+                      </span>
+                    </td>
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold"
+                        [class]="getStatusClass(item.status)">
+                        {{ item.status }}
+                      </span>
+                    </td>
+                    <td class="py-3.5 px-4 text-slate-400">
+                      {{ item.reporter }}
+                    </td>
+                    <td class="py-3.5 px-4 text-right whitespace-nowrap space-x-2">
+                      @if (item.status === 'UNVERIFIED') {
+                        <button (click)="verifyIncident(item.id)" class="px-2.5 py-1 rounded bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600/50 font-medium">
+                          Verify
+                        </button>
+                      }
+                      <button (click)="deleteIncident(item.id)" class="px-2.5 py-1 rounded bg-rose-600/20 text-rose-300 hover:bg-rose-600/40 font-medium">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="7" class="py-8 text-center text-slate-500">No wildlife incidents match the active filters.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+      <!-- Tab 2: New Sighting Registration (2-Column Form + Interactive Google Map) -->
+      @if (activeTab() === 'entry') {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-950/60 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <!-- Left Column: Form (5 Cols) -->
+          <form (ngSubmit)="saveIncident()" class="lg:col-span-5 space-y-4 text-xs">
+            <div class="border-b border-slate-800 pb-3">
+              <h3 class="text-base font-bold text-white">Log Wildlife Sighting or Encounter</h3>
+              <p class="text-[11px] text-slate-400">Click on the map on the right to pinpoint precise sighting GPS coordinates.</p>
+            </div>
+
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-slate-300 font-medium mb-1">Target Species</label>
-                <select [(ngModel)]="newItem.species" name="species"
-                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white">
-                  <option value="Asian Elephant">Asian Elephant</option>
-                  <option value="Sumatran Tiger">Sumatran Tiger</option>
-                  <option value="Bengal Tiger">Bengal Tiger</option>
-                  <option value="Brown Bear">Brown Bear</option>
-                  <option value="Asian Black Bear">Asian Black Bear</option>
+                <select [(ngModel)]="newItem.species" name="species" required
+                  class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500">
+                  <option value="Asian Elephant">Asian Elephant (Thailand/India)</option>
+                  <option value="Sumatran Tiger">Sumatran Tiger (Indonesia)</option>
+                  <option value="Bengal Tiger">Bengal Tiger (India/Nepal)</option>
+                  <option value="Brown Bear">Brown Bear (Japan - Hokkaido)</option>
+                  <option value="Asian Black Bear">Asian Black Bear (Japan - Honshu)</option>
                 </select>
               </div>
               <div>
                 <label class="block text-slate-300 font-medium mb-1">Threat Level</label>
-                <select [(ngModel)]="newItem.threat_level" name="threat_level"
-                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white">
-                  <option value="TIER_1_CAUTION">Tier 1 - Caution</option>
-                  <option value="TIER_2_ALERT">Tier 2 - Alert</option>
-                  <option value="TIER_3_CRITICAL">Tier 3 - Critical Danger</option>
+                <select [(ngModel)]="newItem.threat_level" name="threat_level" required
+                  class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500">
+                  <option value="TIER_1_CAUTION">Tier 1 - Caution (Sighting)</option>
+                  <option value="TIER_2_ALERT">Tier 2 - Alert (Crop/Livestock Risk)</option>
+                  <option value="TIER_3_CRITICAL">Tier 3 - Critical Danger (Imminent Attack)</option>
                 </select>
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-slate-300 font-medium mb-1">Latitude</label>
-                <input type="number" step="0.0001" [(ngModel)]="itemLat" name="itemLat"
-                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white">
+            <!-- Auto-populated from Map -->
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-2">
+              <div class="flex items-center justify-between font-semibold text-slate-200">
+                <span>Selected Coordinates</span>
+                <span class="text-[10px] text-emerald-400 font-normal">Click map to adjust pin</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[10px] text-slate-400">Latitude</label>
+                  <input type="number" step="0.00001" [(ngModel)]="pinLat" name="lat" required
+                    class="w-full px-2 py-1 rounded bg-slate-800 border border-slate-600 text-white font-mono">
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400">Longitude</label>
+                  <input type="number" step="0.00001" [(ngModel)]="pinLng" name="lng" required
+                    class="w-full px-2 py-1 rounded bg-slate-800 border border-slate-600 text-white font-mono">
+                </div>
               </div>
               <div>
-                <label class="block text-slate-300 font-medium mb-1">Longitude</label>
-                <input type="number" step="0.0001" [(ngModel)]="itemLng" name="itemLng"
-                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white">
+                <label class="text-[10px] text-slate-400">Road / Sector Name</label>
+                <input type="text" [(ngModel)]="itemRoad" name="roadName" placeholder="e.g. Rural Route 3219, KM 14"
+                  class="w-full px-2 py-1 rounded bg-slate-800 border border-slate-600 text-white">
               </div>
             </div>
 
             <div>
-              <label class="block text-slate-300 font-medium mb-1">Road / Region Description</label>
-              <input type="text" [(ngModel)]="itemRoad" name="itemRoad" placeholder="e.g. Rural Route 3219 KM 14"
-                class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white">
-            </div>
-
-            <div>
-              <label class="block text-slate-300 font-medium mb-1">Reporter / Ranger Name</label>
-              <input type="text" [(ngModel)]="newItem.reporter" name="reporter" placeholder="e.g. Officer Somchai (Field Unit)"
-                class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white">
+              <label class="block text-slate-300 font-medium mb-1">Reporter / Field Unit</label>
+              <input type="text" [(ngModel)]="newItem.reporter" name="reporter" placeholder="e.g. Officer Somchai (Kaeng Krachan Unit)"
+                class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500">
             </div>
 
             <div>
               <label class="block text-slate-300 font-medium mb-1">Description / Observations</label>
-              <textarea rows="3" [(ngModel)]="newItem.description" name="description" placeholder="Observation details, herd size, direction of travel..."
-                class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white"></textarea>
+              <textarea rows="3" [(ngModel)]="newItem.description" name="description"
+                placeholder="Observation details, herd size, direction of travel, animal behavior..."
+                class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500"></textarea>
             </div>
 
-            <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
-              <button type="button" (click)="showAddModal.set(false)" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">
+            <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+              <button type="button" (click)="activeTab.set('history')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">
                 Cancel
               </button>
-              <button type="submit" class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold text-white shadow">
-                Save Incident
+              <button type="submit" class="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow-lg shadow-emerald-600/20">
+                Log Sighting & Deploy Zone
               </button>
             </div>
           </form>
+
+          <!-- Right Column: Interactive Google Map (7 Cols) -->
+          <div class="lg:col-span-7 h-[500px] rounded-xl overflow-hidden border border-slate-700 relative">
+            <google-map
+              [height]="'100%'"
+              [width]="'100%'"
+              [center]="mapCenter"
+              [zoom]="mapZoom"
+              (mapClick)="onMapClick($event)"
+              [options]="mapOptions">
+              <map-marker
+                [position]="{ lat: pinLat, lng: pinLng }"
+                [options]="markerOptions">
+              </map-marker>
+            </google-map>
+
+            <div class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700 text-[11px] text-slate-300">
+              📍 Click anywhere on map to position sighting pin
+            </div>
+          </div>
         </div>
-      </div>
-    }
+      }
+    </div>
   `
 })
 export class WildlifeComponent implements OnInit {
   api = inject(AdminApiService);
+  activeTab = signal<'history' | 'entry'>('history');
   searchQuery = '';
   filterSpecies = '';
   filterTier = '';
-  showAddModal = signal<boolean>(false);
 
+  // Form Fields
   newItem: Partial<AdminWildlifeIncident> = {
     species: 'Asian Elephant',
     threat_level: 'TIER_3_CRITICAL',
-    reporter: 'Admin Console',
+    reporter: 'Field Ranger Patrol',
     description: ''
   };
-  itemLat = 12.865;
-  itemLng = 99.655;
-  itemRoad = 'Rural Highway 3219';
+  pinLat = 12.865;
+  pinLng = 99.655;
+  itemRoad = 'Rural Highway 3219, Sector 4';
+
+  // Map settings
+  mapCenter: google.maps.LatLngLiteral = { lat: 12.865, lng: 99.655 };
+  mapZoom = 12;
+  mapOptions: google.maps.MapOptions = {
+    backgroundColor: '#0f172a',
+    streetViewControl: false
+  };
+  markerOptions: google.maps.MarkerOptions = {
+    draggable: true,
+    title: 'Wildlife Sighting Location'
+  };
 
   ngOnInit() {
     this.api.getWildlife().subscribe();
@@ -228,23 +283,27 @@ export class WildlifeComponent implements OnInit {
     });
   }
 
-  openAddModal() {
-    this.showAddModal.set(true);
+  onMapClick(event: google.maps.MapMouseEvent) {
+    if (event.latLng) {
+      this.pinLat = Number(event.latLng.lat().toFixed(5));
+      this.pinLng = Number(event.latLng.lng().toFixed(5));
+      this.itemRoad = `Geocoded Spot: Lat ${this.pinLat}, Lng ${this.pinLng}`;
+    }
   }
 
   saveIncident() {
     const payload: Partial<AdminWildlifeIncident> = {
       ...this.newItem,
       location: {
-        lat: Number(this.itemLat),
-        lng: Number(this.itemLng),
+        lat: this.pinLat,
+        lng: this.pinLng,
         road_name: this.itemRoad
       },
       status: 'VERIFIED'
     };
     this.api.createWildlife(payload).subscribe({
       next: () => {
-        this.showAddModal.set(false);
+        this.activeTab.set('history');
       }
     });
   }
