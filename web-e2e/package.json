@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
+    "test:integration": "playwright test tests/06_live_api_integration.spec.ts",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:prod": "BASE_URL=https://corald.web.app playwright test",

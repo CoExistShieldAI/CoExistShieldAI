@@ -1,0 +1,38 @@
+services:
+  firestore-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: coexist-firestore-emulator
+    command: gcloud beta emulators firestore start --host-port=0.0.0.0:8080
+    ports:
+      - "8089:8080"
+    environment:
+      - FIRESTORE_PROJECT_ID=demo-coexist
+
+  backend:
+    build:
+      context: ./backend-cloudrun
+      dockerfile: Dockerfile
+    container_name: coexist-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DEV_MODE=true
+      - ENABLE_SEED_DATA=true
+      - FIRESTORE_EMULATOR_HOST=firestore-emulator:8080
+      - GCP_PROJECT_ID=demo-coexist
+      - AUTH_PROJECT_ID=demo-coexist
+    depends_on:
+      - firestore-emulator
+
+  web:
+    image: node:22-alpine
+    container_name: coexist-web
+    working_dir: /app
+    volumes:
+      - ./shared/build/dist/js/productionExecutable:/app/public:ro
+    command: sh -c "npx --yes serve /app/public -l 8085"
+    ports:
+      - "8085:8085"
+    depends_on:
+      - backend

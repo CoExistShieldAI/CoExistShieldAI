@@ -40,10 +40,18 @@ export default defineConfig({
   ],
   webServer: isProduction
     ? undefined
-    : {
-        command: 'node static-server.mjs',
-        url: 'http://localhost:8085',
-        reuseExistingServer: !process.env.CI,
-        timeout: 30000,
-      },
+    : [
+        {
+          command: 'node static-server.mjs',
+          url: 'http://localhost:8085',
+          reuseExistingServer: !process.env.CI,
+          timeout: 30000,
+        },
+        {
+          command: 'cd ../backend-cloudrun && PORT=8080 DEV_MODE=true ENABLE_SEED_DATA=true go run ./cmd/server',
+          url: 'http://localhost:8080/healthz',
+          reuseExistingServer: !process.env.CI,
+          timeout: 60000,
+        },
+      ],
 });
