@@ -246,6 +246,123 @@ class ApiClientTest {
         assertEquals(1, data.historicalAnalogs.size)
         assertTrue(data.explanation.contains("Tier 2 Warning"))
     }
+
+    @Test
+    fun testMlStatusApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "status": "HEALTHY",
+                "activeModel": {
+                    "version": "v2026.10.14-prod",
+                    "trainedAt": "2026-10-14T08:00:00Z",
+                    "trainingSampleSize": 1200,
+                    "bias": -2.15,
+                    "weights": {
+                        "persimmon_proximity": 2.45
+                    },
+                    "featureImportance": {
+                        "persimmon_proximity": 0.28
+                    },
+                    "metrics": {
+                        "aucRoc": 0.865,
+                        "precisionTop20": 0.792,
+                        "recall": 0.820,
+                        "f1Score": 0.805,
+                        "validationLoss": 0.320,
+                        "testSampleSize": 240,
+                        "promoted": true,
+                        "promotionReason": "Validation criteria met"
+                    }
+                },
+                "history": []
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getMlStatus()
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("HEALTHY", data.status)
+        assertEquals("v2026.10.14-prod", data.activeModel.version)
+        assertEquals(0.865, data.activeModel.metrics.aucRoc)
+        assertTrue(data.activeModel.metrics.aucRoc >= 0.82)
+    }
+
+    @Test
+    fun testMlRetrainApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "runId": "train-run-12345",
+                "trainedAt": "2026-10-14T08:30:00Z",
+                "trigger": "admin_manual",
+                "totalSamples": 100,
+                "trainSamples": 80,
+                "holdoutSamples": 20,
+                "candidateModel": {
+                    "version": "v2026.10.14.0830",
+                    "trainedAt": "2026-10-14T08:30:00Z",
+                    "metrics": {
+                        "aucRoc": 0.875,
+                        "precisionTop20": 0.800,
+                        "promoted": true,
+                        "promotionReason": "Validation gate passed"
+                    }
+                },
+                "activeModelVersion": "v2026.10.14.0830",
+                "promotedToProd": true,
+                "gateCheckPassed": true,
+                "gateEvaluationNotes": "AUC: 0.875 >= 0.82 | Prec: 0.800 >= 0.75 => PROMOTED",
+                "regressionDetected": false
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.triggerMlRetrain(MlRetrainRequestDto(trigger = "admin_manual"))
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertTrue(data.gateCheckPassed)
+        assertTrue(data.promotedToProd)
+        assertEquals("v2026.10.14.0830", data.activeModelVersion)
+        assertTrue(data.candidateModel.metrics.aucRoc >= 0.82)
+    }
+
+    @Test
+    fun testMlPredictRiskApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "h3Index": "882f0a123456789",
+                "incursionProbability": 0.84,
+                "alertTier": "TIER_3_DANGER",
+                "dominantFeature": "carcass_proximity",
+                "featureContributions": {
+                    "carcass_proximity": 2.15,
+                    "persimmon_proximity": 1.20
+                }
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.predictRisk(
+            MlPredictRequestDto(
+                latitude = 39.7020,
+                longitude = 141.1520,
+                distNearestCarcassM = 300.0
+            )
+        )
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("882f0a123456789", data.h3Index)
+        assertEquals(0.84, data.incursionProbability)
+        assertEquals(ai.coexistshield.model.AlertTier.TIER_3_DANGER, data.alertTier)
+        assertEquals("carcass_proximity", data.dominantFeature)
+    }
 }
+
 
 

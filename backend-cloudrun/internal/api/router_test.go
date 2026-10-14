@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
+	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
 )
 
@@ -17,7 +19,8 @@ func setupTestServer() *Router {
 	geminiClient := gemini.NewClient()
 	geofenceEngine := geofence.NewEngine()
 	memoryBank := memory.NewBank()
-	return NewRouter(geminiClient, geofenceEngine, memoryBank)
+	mlPipeline := ml.NewRetrainingPipeline()
+	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline)
 }
 
 func TestHealthz(t *testing.T) {
@@ -329,6 +332,127 @@ func TestAlertExplanationEndpoint(t *testing.T) {
 	}
 	if resp.EffectiveTier == "" {
 		t.Errorf("expected effective tier")
+	}
+}
+
+func TestMlStatusEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/ml/status", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse json: %v", err)
+	}
+
+	if resp["status"] != "HEALTHY" {
+		t.Errorf("expected status HEALTHY, got %v", resp["status"])
+	}
+	if resp["activeModel"] == nil {
+		t.Errorf("expected activeModel to be present")
+	}
+}
+
+func TestMlRetrainEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := MlRetrainApiRequest{
+		Trigger: "test_manual_admin",
+		Force:   false,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/ml/retrain", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var result ml.RetrainResult
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to decode RetrainResult: %v", err)
+	}
+
+	if !result.GateCheckPassed {
+		t.Errorf("expected validation gate checks to pass, notes: %s", result.GateEvaluationNotes)
+	}
+	if result.CandidateModel.Metrics.AucRoc < 0.82 {
+		t.Errorf("expected AUC-ROC >= 0.82, got %.3f", result.CandidateModel.Metrics.AucRoc)
+	}
+}
+
+func TestMlPredictEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	reqBody := MlPredictApiRequest{
+		Latitude:               39.7020,
+		Longitude:              141.1520,
+		DistNearestPersimmonM:  180.0,
+		DistNearestCarcassM:    350.0,
+		DistNearestCaneFruitM:  2500.0,
+		WindScentAlignmentDeg:  15.0,
+		MoonDarknessPct:        90.0,
+		PrecipitationMm24h:      0.0,
+		HistoricalIncidents30d: 5.0,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v1/ml/predict", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var pred ml.PredictResult
+	if err := json.Unmarshal(w.Body.Bytes(), &pred); err != nil {
+		t.Fatalf("failed to decode PredictResult: %v", err)
+	}
+
+	if pred.H3Index == "" {
+		t.Errorf("expected valid H3 index in prediction result")
+	}
+	if pred.IncursionProbability < 0.55 {
+		t.Errorf("expected high hazard probability >= 0.55, got %.3f", pred.IncursionProbability)
+	}
+	if pred.AlertTier != "TIER_2_WARNING" && pred.AlertTier != "TIER_3_DANGER" {
+		t.Errorf("expected TIER_2_WARNING or TIER_3_DANGER, got %s", pred.AlertTier)
+	}
+}
+
+func TestMlQueryEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/ml/query", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	sql, ok := resp["query"].(string)
+	if !ok || len(sql) == 0 {
+		t.Fatalf("expected non-empty SQL query string")
+	}
+	if !strings.Contains(sql, "h3_geo_to_h3") {
+		t.Errorf("expected query to contain h3_geo_to_h3")
 	}
 }
 

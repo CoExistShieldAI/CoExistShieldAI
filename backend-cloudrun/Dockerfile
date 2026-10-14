@@ -8,15 +8,17 @@ RUN go mod download
 
 COPY . .
 
-# Compile static binary with optimizations stripped (-s -w)
+# Compile static binaries with optimizations stripped (-s -w)
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o job ./cmd/job
 
-# Final stage: minimal scratch/distroless image (~15MB, near-instant sub-10ms cold start)
+# Final stage: minimal distroless image (~18MB, near-instant sub-10ms cold start)
 FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /
 
 COPY --from=builder /app/server /server
+COPY --from=builder /app/job /job
 
 EXPOSE 8080
 

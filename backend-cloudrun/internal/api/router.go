@@ -10,6 +10,7 @@ import (
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
+	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
 )
 
@@ -18,14 +19,21 @@ type Router struct {
 	geminiClient   *gemini.Client
 	geofenceEngine *geofence.Engine
 	memoryBank     *memory.Bank
+	mlPipeline     *ml.RetrainingPipeline
 }
 
-func NewRouter(geminiClient *gemini.Client, geofenceEngine *geofence.Engine, memoryBank *memory.Bank) *Router {
+func NewRouter(
+	geminiClient *gemini.Client,
+	geofenceEngine *geofence.Engine,
+	memoryBank *memory.Bank,
+	mlPipeline *ml.RetrainingPipeline,
+) *Router {
 	r := &Router{
 		mux:            http.NewServeMux(),
 		geminiClient:   geminiClient,
 		geofenceEngine: geofenceEngine,
 		memoryBank:     memoryBank,
+		mlPipeline:     mlPipeline,
 	}
 	r.registerRoutes()
 	return r
@@ -54,6 +62,10 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.handleRspoExport)
 	r.mux.HandleFunc("/api/v1/memory/search", r.handleMemorySearch)
 	r.mux.HandleFunc("/api/v1/alerts/explain", r.handleAlertExplanation)
+	r.mux.HandleFunc("/api/v1/ml/status", r.handleMlStatus)
+	r.mux.HandleFunc("/api/v1/ml/retrain", r.handleMlRetrain)
+	r.mux.HandleFunc("/api/v1/ml/predict", r.handleMlPredict)
+	r.mux.HandleFunc("/api/v1/ml/query", r.handleMlQuery)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -223,6 +235,108 @@ func (r *Router) handleAlertExplanation(w http.ResponseWriter, req *http.Request
 		HistoricalAnalogs: analogs,
 		ElevatedFromTier:  elevatedFrom,
 		EffectiveTier:     effectiveTier,
+	})
+}
+
+func (r *Router) handleMlStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	active := r.mlPipeline.ActiveModel()
+	history := r.mlPipeline.RetrainingHistory()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":      "HEALTHY",
+		"activeModel": active,
+		"history":     history,
+	})
+}
+
+type MlRetrainApiRequest struct {
+	Trigger string `json:"trigger"`
+	Force   bool   `json:"force"`
+}
+
+func (r *Router) handleMlRetrain(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var retrainReq MlRetrainApiRequest
+	if req.Body != nil && req.ContentLength > 0 {
+		_ = json.NewDecoder(req.Body).Decode(&retrainReq)
+	}
+	if retrainReq.Trigger == "" {
+		retrainReq.Trigger = "admin_manual"
+	}
+
+	result, err := r.mlPipeline.Retrain(req.Context(), retrainReq.Trigger, retrainReq.Force)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Retraining pipeline error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+type MlPredictApiRequest struct {
+	Latitude               float64 `json:"latitude"`
+	Longitude              float64 `json:"longitude"`
+	DistNearestPersimmonM  float64 `json:"distNearestPersimmonM"`
+	DistNearestCarcassM    float64 `json:"distNearestCarcassM"`
+	DistNearestCaneFruitM  float64 `json:"distNearestCaneFruitM"`
+	WindScentAlignmentDeg  float64 `json:"windScentAlignmentDeg"`
+	MoonDarknessPct        float64 `json:"moonDarknessPct"`
+	PrecipitationMm24h      float64 `json:"precipitationMm24h"`
+	HistoricalIncidents30d float64 `json:"historicalIncidents30d"`
+}
+
+func (r *Router) handleMlPredict(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var predReq MlPredictApiRequest
+	if err := json.NewDecoder(req.Body).Decode(&predReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	h3Index := ml.GeoToH3Res8(predReq.Latitude, predReq.Longitude)
+	fv := ml.FeatureVector{
+		H3Index:                h3Index,
+		DistNearestPersimmonM:  predReq.DistNearestPersimmonM,
+		DistNearestCarcassM:    predReq.DistNearestCarcassM,
+		DistNearestCaneFruitM:  predReq.DistNearestCaneFruitM,
+		WindScentAlignmentDeg:  predReq.WindScentAlignmentDeg,
+		MoonDarknessPct:        predReq.MoonDarknessPct,
+		PrecipitationMm24h:      predReq.PrecipitationMm24h,
+		HistoricalIncidents30d: predReq.HistoricalIncidents30d,
+	}
+
+	activeModel := r.mlPipeline.ActiveModel()
+	predResult := activeModel.Predict(fv)
+
+	writeJSON(w, http.StatusOK, predResult)
+}
+
+func (r *Router) handleMlQuery(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg := ml.DefaultBigQueryConfig()
+	sql := ml.GenerateBigQueryFeatureExtractionSQL(cfg)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"query":            sql,
+		"resolution":       8,
+		"slaTargetSeconds": 45,
 	})
 }
 

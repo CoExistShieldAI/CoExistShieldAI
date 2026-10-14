@@ -159,4 +159,86 @@ data class CausalAlertExplanationResponseDto(
     val effectiveTier: AlertTier
 )
 
+@Serializable
+data class MlMetricsDto(
+    val aucRoc: Double,
+    val precisionTop20: Double,
+    val recall: Double = 0.0,
+    val f1Score: Double = 0.0,
+    val validationLoss: Double = 0.0,
+    val testSampleSize: Int = 0,
+    val promoted: Boolean = false,
+    val promotionReason: String = ""
+)
+
+@Serializable
+data class MlModelDto(
+    val version: String,
+    val trainedAt: String,
+    val trainingSampleSize: Int = 0,
+    val bias: Double = 0.0,
+    val weights: Map<String, Double> = emptyMap(),
+    val featureImportance: Map<String, Double> = emptyMap(),
+    val metrics: MlMetricsDto
+)
+
+@Serializable
+data class MlRetrainResponseDto(
+    val runId: String,
+    val trainedAt: String,
+    val trigger: String,
+    val totalSamples: Int,
+    val trainSamples: Int,
+    val holdoutSamples: Int,
+    val candidateModel: MlModelDto,
+    val activeModelVersion: String,
+    val promotedToProd: Boolean,
+    val gateCheckPassed: Boolean,
+    val gateEvaluationNotes: String,
+    val regressionDetected: Boolean
+)
+
+@Serializable
+data class MlStatusResponseDto(
+    val status: String,
+    val activeModel: MlModelDto,
+    val history: List<MlRetrainResponseDto> = emptyList()
+)
+
+@Serializable
+data class MlRetrainRequestDto(
+    val trigger: String = "admin_manual",
+    val force: Boolean = false
+)
+
+@Serializable
+data class MlPredictRequestDto(
+    val latitude: Double,
+    val longitude: Double,
+    val distNearestPersimmonM: Double = 9999.0,
+    val distNearestCarcassM: Double = 9999.0,
+    val distNearestCaneFruitM: Double = 9999.0,
+    val windScentAlignmentDeg: Double = 90.0,
+    val moonDarknessPct: Double = 50.0,
+    val precipitationMm24h: Double = 0.0,
+    val historicalIncidents30d: Double = 0.0
+)
+
+@Serializable
+data class MlPredictResponseDto(
+    val h3Index: String,
+    val incursionProbability: Double,
+    val alertTier: AlertTier,
+    val dominantFeature: String,
+    val featureContributions: Map<String, Double> = emptyMap()
+)
+
+@Serializable
+data class MlQueryResponseDto(
+    val query: String,
+    val resolution: Int = 8,
+    val slaTargetSeconds: Int = 45
+)
+
+
 

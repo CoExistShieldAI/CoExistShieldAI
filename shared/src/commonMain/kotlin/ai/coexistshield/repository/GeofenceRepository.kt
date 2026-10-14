@@ -96,6 +96,40 @@ class GeofenceRepository(
             }.body()
         }
     }
+
+    suspend fun getMlStatus(): Result<ai.coexistshield.network.MlStatusResponseDto> {
+        return runCatching {
+            httpClient.get("/api/v1/ml/status").body()
+        }
+    }
+
+    suspend fun triggerMlRetrain(
+        request: ai.coexistshield.network.MlRetrainRequestDto = ai.coexistshield.network.MlRetrainRequestDto()
+    ): Result<ai.coexistshield.network.MlRetrainResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/ml/retrain") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
+
+    suspend fun predictRisk(
+        request: ai.coexistshield.network.MlPredictRequestDto
+    ): Result<ai.coexistshield.network.MlPredictResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/ml/predict") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
+
+    suspend fun getBigQueryFeatureSql(): Result<ai.coexistshield.network.MlQueryResponseDto> {
+        return runCatching {
+            httpClient.get("/api/v1/ml/query").body()
+        }
+    }
 }
 
 
