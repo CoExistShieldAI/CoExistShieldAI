@@ -4,13 +4,16 @@ import ai.coexistshield.model.UserRole
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.parameters
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -70,6 +73,16 @@ private data class CredentialResponse(
 )
 
 @Serializable
+private data class ResetRequest(val requestType: String = "PASSWORD_RESET", val email: String)
+
+@Serializable
+private data class RefreshResponse(
+    @SerialName("id_token") val idToken: String,
+    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("user_id") val userId: String
+)
+
+@Serializable
 private data class ErrorEnvelope(val error: ErrorBody? = null)
 
 @Serializable
@@ -85,10 +98,62 @@ class AuthService(
     suspend fun signIn(email: String, password: String): Result<AuthUser> =
         call("accounts:signInWithPassword", email, password)
 
+    /** Sends a password reset email. Always reports success for unknown emails (no account enumeration). */
+    suspend fun sendPasswordReset(email: String): Result<Unit> {
+        val apiKey = apiKeyProvider()
+        if (apiKey.isBlank()) return Result.failure(AuthException(NOT_CONFIGURED))
+        return try {
+            val response = client.post("$BASE_URL/accounts:sendOobCode?key=$apiKey") {
+                contentType(ContentType.Application.Json)
+                setBody(ResetRequest(email = email.trim()))
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val code = runCatching { response.body<ErrorEnvelope>().error?.message }.getOrNull().orEmpty()
+                if (code.startsWith("EMAIL_NOT_FOUND")) Result.success(Unit)
+                else Result.failure(AuthException(translateError(code)))
+            }
+        } catch (e: Exception) {
+            Result.failure(AuthException(NETWORK_ERROR))
+        }
+    }
+
+    /** Exchanges a refresh token for a fresh ID token (session restore / periodic renewal). */
+    suspend fun refresh(refreshToken: String): Result<AuthUser> {
+        val apiKey = apiKeyProvider()
+        if (apiKey.isBlank()) return Result.failure(AuthException(NOT_CONFIGURED))
+        return try {
+            val response = client.submitForm(
+                url = "$SECURE_TOKEN_URL?key=$apiKey",
+                formParameters = parameters {
+                    append("grant_type", "refresh_token")
+                    append("refresh_token", refreshToken)
+                }
+            )
+            if (response.status.isSuccess()) {
+                val body: RefreshResponse = response.body()
+                Result.success(
+                    AuthUser(
+                        uid = body.userId,
+                        email = emailFromIdToken(body.idToken),
+                        role = roleFromIdToken(body.idToken),
+                        idToken = body.idToken,
+                        refreshToken = body.refreshToken
+                    )
+                )
+            } else {
+                Result.failure(AuthException("セッションの有効期限が切れました。再ログインしてください"))
+            }
+        } catch (e: Exception) {
+            Result.failure(AuthException(NETWORK_ERROR))
+        }
+    }
+
     private suspend fun call(endpoint: String, email: String, password: String): Result<AuthUser> {
         val apiKey = apiKeyProvider()
         if (apiKey.isBlank()) {
-            return Result.failure(AuthException("認証が未設定です (Firebase API キーを設定してください)"))
+            return Result.failure(AuthException(NOT_CONFIGURED))
         }
         return try {
             val response: HttpResponse = client.post("$BASE_URL/$endpoint?key=$apiKey") {
@@ -111,12 +176,15 @@ class AuthService(
                 Result.failure(AuthException(translateError(code)))
             }
         } catch (e: Exception) {
-            Result.failure(AuthException("ネットワークエラーが発生しました。接続を確認してください"))
+            Result.failure(AuthException(NETWORK_ERROR))
         }
     }
 
     companion object {
         private const val BASE_URL = "https://identitytoolkit.googleapis.com/v1"
+        private const val SECURE_TOKEN_URL = "https://securetoken.googleapis.com/v1/token"
+        private const val NOT_CONFIGURED = "認証が未設定です (Firebase API キーを設定してください)"
+        private const val NETWORK_ERROR = "ネットワークエラーが発生しました。接続を確認してください"
 
         fun createClient(): HttpClient = HttpClient {
             install(ContentNegotiation) {
@@ -137,18 +205,25 @@ class AuthService(
             else -> "認証に失敗しました${if (code.isNotBlank()) " ($code)" else ""}"
         }
 
-        /** Reads the `role` custom claim (set by the backend/Admin SDK); defaults to CITIZEN. */
         @OptIn(ExperimentalEncodingApi::class)
-        fun roleFromIdToken(idToken: String): UserRole {
-            return try {
-                val payload = idToken.split(".").getOrNull(1) ?: return UserRole.CITIZEN
+        private fun claimsOf(idToken: String): JsonObject? = try {
+            val payload = idToken.split(".").getOrNull(1)
+            if (payload == null) null else {
                 val json = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
                     .decode(payload).decodeToString()
-                val claim = (Json.parseToJsonElement(json) as? JsonObject)?.get("role") as? JsonPrimitive
-                UserRole.entries.firstOrNull { it.name == claim?.content } ?: UserRole.CITIZEN
-            } catch (e: Exception) {
-                UserRole.CITIZEN
+                Json.parseToJsonElement(json) as? JsonObject
             }
+        } catch (e: Exception) {
+            null
+        }
+
+        fun emailFromIdToken(idToken: String): String =
+            (claimsOf(idToken)?.get("email") as? JsonPrimitive)?.content.orEmpty()
+
+        /** Reads the `role` custom claim (set by the backend/Admin SDK); defaults to CITIZEN. */
+        fun roleFromIdToken(idToken: String): UserRole {
+            val claim = (claimsOf(idToken)?.get("role") as? JsonPrimitive)?.content
+            return UserRole.entries.firstOrNull { it.name == claim } ?: UserRole.CITIZEN
         }
     }
 }

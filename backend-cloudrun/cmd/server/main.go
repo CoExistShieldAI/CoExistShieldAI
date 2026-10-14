@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"ai.coexistshield/backend/internal/api"
+	"ai.coexistshield/backend/internal/auth"
 	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/corroboration"
 	"ai.coexistshield/backend/internal/elephant"
@@ -33,6 +34,11 @@ func main() {
 	corroborationEngine := corroboration.NewEngine(geminiClient)
 
 	router := api.NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine, corroborationEngine)
+
+	if projectID := os.Getenv("AUTH_PROJECT_ID"); projectID != "" {
+		router.SetAuthVerifier(auth.NewVerifier(projectID, ""))
+		log.Printf("Firebase ID token verification enabled for project %s", projectID)
+	}
 
 	server := &http.Server{
 		Addr:         ":" + port,

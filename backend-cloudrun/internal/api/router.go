@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"ai.coexistshield/backend/internal/auth"
 	"ai.coexistshield/backend/internal/coldstart"
 	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/corroboration"
@@ -34,6 +35,7 @@ type Router struct {
 	complianceEngine    *compliance.Engine
 	corroborationEngine *corroboration.Engine
 	coldstartEngine     *coldstart.Engine
+	verifier            *auth.Verifier
 	mu                  sync.RWMutex
 	incidents           []model.IncidentDto
 	roadkills           []model.RoadkillRecordDto
@@ -87,7 +89,24 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.mux.ServeHTTP(w, req)
+	auth.Middleware(r.verifier, r.mux).ServeHTTP(w, req)
+}
+
+// SetAuthVerifier enables Firebase ID token verification. When unset, all routes stay open
+// (local/demo mode). Privileged routes then require an OFFICIAL or ADMIN role claim.
+func (r *Router) SetAuthVerifier(v *auth.Verifier) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.verifier = v
+}
+
+func (r *Router) officialOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		r.mu.RLock()
+		v := r.verifier
+		r.mu.RUnlock()
+		auth.RequireRole(v, h, "OFFICIAL", "ADMIN")(w, req)
+	}
 }
 
 func (r *Router) registerRoutes() {
@@ -98,34 +117,34 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/forensics/triage", r.handleForensicsTriage)
 	r.mux.HandleFunc("/api/v1/incidents", r.handleIncidents)
 	r.mux.HandleFunc("/api/v1/roadkills", r.handleGetRoadkills)
-	r.mux.HandleFunc("/api/v1/roadkills/", r.handleRoadkillAction)
+	r.mux.HandleFunc("/api/v1/roadkills/", r.officialOnly(r.handleRoadkillAction))
 	r.mux.HandleFunc("/api/v1/geofences/active", r.handleGetActiveGeofences)
 
 	r.mux.HandleFunc("/api/v1/geofences/recalculate", r.handleGeofencesRecalculate)
 	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
 	r.mux.HandleFunc("/api/v1/meteorology/current", r.handleGetCurrentMeteorology)
 	r.mux.HandleFunc("/api/v1/analytics/japan-kaki/top-hazards", r.handleTopHazards)
-	r.mux.HandleFunc("/api/v1/compliance/rspo/package", r.handleRspoPackage)
-	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.handleRspoExport)
+	r.mux.HandleFunc("/api/v1/compliance/rspo/package", r.officialOnly(r.handleRspoPackage))
+	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.officialOnly(r.handleRspoExport))
 	r.mux.HandleFunc("/api/v1/compliance/gcf/budget-impact", r.handleGcfBudgetImpact)
 	r.mux.HandleFunc("/api/v1/municipal/kaki/priority-layer", r.handlePriorityKakiLayer)
-	r.mux.HandleFunc("/api/v1/municipal/kaki/action", r.handleMunicipalKakiAction)
+	r.mux.HandleFunc("/api/v1/municipal/kaki/action", r.officialOnly(r.handleMunicipalKakiAction))
 	r.mux.HandleFunc("/api/v1/memory/search", r.handleMemorySearch)
 	r.mux.HandleFunc("/api/v1/alerts/explain", r.handleAlertExplanation)
 	r.mux.HandleFunc("/api/v1/ml/status", r.handleMlStatus)
-	r.mux.HandleFunc("/api/v1/ml/retrain", r.handleMlRetrain)
+	r.mux.HandleFunc("/api/v1/ml/retrain", r.officialOnly(r.handleMlRetrain))
 	r.mux.HandleFunc("/api/v1/ml/predict", r.handleMlPredict)
 	r.mux.HandleFunc("/api/v1/ml/query", r.handleMlQuery)
-	r.mux.HandleFunc("/api/v1/bigquery/stream-sync", r.handleBigQueryStreamSync)
+	r.mux.HandleFunc("/api/v1/bigquery/stream-sync", r.officialOnly(r.handleBigQueryStreamSync))
 	r.mux.HandleFunc("/api/v1/bigquery/sync-status", r.handleBigQuerySyncStatus)
 	r.mux.HandleFunc("/api/v1/bigquery/staged-samples", r.handleBigQueryStagedSamples)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/crop-plots", r.handleThailandCropPlots)
 	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/recalculate", r.handleThailandHecRecalculate)
-	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/plots/", r.handleThailandPlotAction)
+	r.mux.HandleFunc("/api/v1/analytics/thailand-hec/plots/", r.officialOnly(r.handleThailandPlotAction))
 	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/pastures", r.handleTigerPastures)
 	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/depredation/report", r.handleTigerDepredationReport)
 	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/recalculate", r.handleTigerRecalculate)
-	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/pastures/", r.handleTigerPastureAction)
+	r.mux.HandleFunc("/api/v1/analytics/sumatra-tiger/pastures/", r.officialOnly(r.handleTigerPastureAction))
 	r.mux.HandleFunc("/api/v1/nlp/ingest/unstructured", r.handleUnstructuredNlpIngest)
 	r.mux.HandleFunc("/api/v1/corroboration/streams", r.handleCorroborationStreams)
 	r.mux.HandleFunc("/api/v1/corroboration/ingest", r.handleCorroborationIngest)
@@ -133,9 +152,9 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/corroboration/poll-cycle", r.handleCorroborationPollCycle)
 
 	// Cold-Start & Conservation NGO bulk ingestion routes (Issue #23)
-	r.mux.HandleFunc("/api/v1/coldstart/gbif-firms/bootstrap", r.handleColdStartBootstrap)
+	r.mux.HandleFunc("/api/v1/coldstart/gbif-firms/bootstrap", r.officialOnly(r.handleColdStartBootstrap))
 	r.mux.HandleFunc("/api/v1/coldstart/status", r.handleColdStartStatus)
-	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/bulk-import", r.handleNgoBulkImport)
+	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/bulk-import", r.officialOnly(r.handleNgoBulkImport))
 	r.mux.HandleFunc("/api/v1/ngo/patrol-logs/templates", r.handleNgoTemplates)
 }
 

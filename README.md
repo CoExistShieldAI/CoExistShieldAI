@@ -382,3 +382,12 @@ For interactive evaluation by hackathon judges and rangers, the Compose Multipla
   - GIS Hazard Map with H3 Hexagonal Incursion Probability Layers
   - Decision-Support Console: Japan Municipal GCF, APAC Plantation RSPO Zero-Deforestation Auditing, and Cold-Start & NGO Bulk Patrol Ingestion
 
+
+## Authentication setup (Terraform + CI/CD)
+
+The web Firebase API key (`COEXIST_FIREBASE_API_KEY`) is provisioned by Terraform and injected at deploy time; do not commit it.
+
+1. Create a GCS bucket for Terraform state and set the GitHub repository **variable** `TF_STATE_BUCKET`. The `GCP_SA_KEY` secret needs permission to manage API keys / Identity Platform and read the state bucket.
+2. `Infra (Terraform)` workflow: `plan` on PRs, `apply` on `main` (`infra/terraform`). It enables Email/Password sign-in and creates a referrer-restricted API key.
+3. `Deploy Web Dashboard` reads `terraform output firebase_web_api_key` and writes `config.js` into the build (`scripts/render_web_config.sh`).
+4. Cloud Run deploy sets `AUTH_PROJECT_ID`, which enables Firebase ID token verification; privileged routes (dispatch, retrain, exports, ...) then require an `OFFICIAL`/`ADMIN` `role` claim. Without it, the API stays open (local/demo).

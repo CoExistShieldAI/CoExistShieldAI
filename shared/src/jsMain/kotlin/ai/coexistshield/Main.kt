@@ -1,6 +1,7 @@
 package ai.coexistshield
 
 import ai.coexistshield.auth.AuthConfig
+import ai.coexistshield.auth.LocalStorageSessionStore
 import ai.coexistshield.ui.App
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
@@ -14,7 +15,7 @@ fun main() {
             title = "CoExist Shield AI",
             canvasElementId = "ComposeTarget"
         ) {
-            App()
+            App(sessionStore = LocalStorageSessionStore())
         }
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -264,10 +265,11 @@ fun GisHazardMapScreen(
                 )
 
                 // Proximity Warning Banner (< 800m to decomposing carcass)
+                var isWarningBannerDismissed by remember { mutableStateOf(false) }
                 val activeCarcassAlert = state.proximityRoadkillAlert ?: state.roadkills.firstOrNull {
                     it.clearanceStatus != ClearanceStatus.CLEARED && it.attractantThreatScore >= 0.70
                 }
-                if (activeCarcassAlert != null && state.activeLayers.contains(MapLayerType.ROADKILL)) {
+                if (!isWarningBannerDismissed && activeCarcassAlert != null && state.activeLayers.contains(MapLayerType.ROADKILL)) {
                     RoadkillProximityWarningBanner(
                         roadkill = activeCarcassAlert,
                         onClick = {
@@ -284,7 +286,8 @@ fun GisHazardMapScreen(
                                     roadkillStatus = activeCarcassAlert.clearanceStatus
                                 )
                             )
-                        }
+                        },
+                        onDismiss = { isWarningBannerDismissed = true }
                     )
                 }
             }
@@ -531,7 +534,7 @@ fun GoogleMapsVectorCanvas(
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
@@ -541,6 +544,11 @@ fun GoogleMapsVectorCanvas(
                 }
             }
     ) {
+        val screenW = maxWidth.value
+        val screenH = maxHeight.value
+        val centerX = screenW / 2f + panOffsetX
+        val centerY = screenH / 2f + panOffsetY
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f + panOffsetX, size.height / 2f + panOffsetY)
 
@@ -578,14 +586,14 @@ fun GoogleMapsVectorCanvas(
             // Map lat/lon delta to screen coordinates relative to region center
             val dLat = (pin.lat - region.centerLat).toFloat()
             val dLon = (pin.lon - region.centerLon).toFloat()
-            val screenX = (160f + (dLon * 12000f * zoomLevel) + panOffsetX).dp
-            val screenY = (240f - (dLat * 12000f * zoomLevel) + panOffsetY).dp
+            val pinX = (centerX + (dLon * 8000f * zoomLevel) - 50f).coerceIn(10f, screenW - 130f).dp
+            val pinY = (centerY - (dLat * 8000f * zoomLevel) - 25f).coerceIn(110f, screenH - 120f).dp
 
             Box(
                 modifier = Modifier
-                    .offset(x = screenX, y = screenY)
+                    .offset(x = pinX, y = pinY)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF0F172A).copy(alpha = 0.92f))
+                    .background(Color(0xFF0F172A).copy(alpha = 0.94f))
                     .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
                     .clickable { onSelectPin(pin) }
                     .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -868,7 +876,8 @@ private fun DrawScope.drawUserLocationWithRadar(pos: Offset, pulseProgress: Floa
 @Composable
 fun RoadkillProximityWarningBanner(
     roadkill: RoadkillRecord,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDismiss: () -> Unit = {}
 ) {
     val infiniteTransition = rememberInfiniteTransition()
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -883,38 +892,46 @@ fun RoadkillProximityWarningBanner(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(2.dp, TierDanger.copy(alpha = pulseAlpha), RoundedCornerShape(12.dp))
+            .border(1.5.dp, TierDanger.copy(alpha = pulseAlpha), RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = TierDanger.copy(alpha = 0.95f))
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("⚠️", fontSize = 20.sp)
-            Spacer(modifier = Modifier.width(10.dp))
+            Text("⚠️", fontSize = 16.sp)
+            Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "ROADKILL PROXIMITY ALERT (< 800m)",
+                    text = "ROADKILL ALERT (< 800m) • ${roadkill.species.name.replace("_", " ")} (${roadkill.decayState.name})",
                     color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
                 )
                 Text(
-                    text = "${roadkill.species.name.replace("_", " ")} (${roadkill.decayState.name} Carcass) • Threat Score: ${roadkill.attractantThreatScore}. High apex predator attractant lure. Avoid stopping.",
+                    text = "Threat Index: ${roadkill.attractantThreatScore} • High apex predator lure. Do not stop.",
                     color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp
+                    fontSize = 10.sp
                 )
             }
             Spacer(modifier = Modifier.width(6.dp))
             Box(
                 modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .background(Color.White, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
             ) {
-                Text("INSPECT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TierDanger)
+                Text("INSPECT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TierDanger)
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onDismiss() }
+                    .padding(4.dp)
+            ) {
+                Text("✕", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
             }
         }
     }

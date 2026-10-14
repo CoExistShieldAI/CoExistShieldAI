@@ -78,4 +78,45 @@ class AuthServiceTest {
         assertTrue(res.isFailure)
         assertTrue(res.exceptionOrNull()?.message!!.contains("未設定"))
     }
+
+    @Test
+    fun refreshReturnsUserWithEmailAndRoleFromToken() = runTest {
+        val token = jwt("""{"role":"ADMIN","email":"x@y.zz"}""")
+        val res = service("""{"id_token":"$token","refresh_token":"r2","user_id":"u9"}""").refresh("r1")
+        val user = res.getOrThrow()
+        assertEquals("u9", user.uid)
+        assertEquals("x@y.zz", user.email)
+        assertEquals(UserRole.ADMIN, user.role)
+        assertEquals("r2", user.refreshToken)
+    }
+
+    @Test
+    fun refreshFailureIsReported() = runTest {
+        val res = service("""{"error":{"message":"TOKEN_EXPIRED"}}""", HttpStatusCode.BadRequest).refresh("r1")
+        assertTrue(res.isFailure)
+    }
+
+    @Test
+    fun passwordResetSucceedsAndHidesUnknownEmail() = runTest {
+        assertTrue(service("""{"email":"a@b.co"}""").sendPasswordReset("a@b.co").isSuccess)
+        assertTrue(
+            service("""{"error":{"message":"EMAIL_NOT_FOUND"}}""", HttpStatusCode.BadRequest)
+                .sendPasswordReset("nobody@b.co").isSuccess
+        )
+        assertTrue(
+            service("""{"error":{"message":"INVALID_EMAIL"}}""", HttpStatusCode.BadRequest)
+                .sendPasswordReset("bad").isFailure
+        )
+        assertTrue(service("{}", key = "").sendPasswordReset("a@b.co").isFailure)
+    }
+
+    @Test
+    fun inMemorySessionStoreRoundTrips() {
+        val store = InMemorySessionStore()
+        assertNull(store.load())
+        store.save("tok")
+        assertEquals("tok", store.load())
+        store.clear()
+        assertNull(store.load())
+    }
 }

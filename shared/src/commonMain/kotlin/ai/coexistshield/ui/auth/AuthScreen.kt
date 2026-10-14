@@ -42,15 +42,33 @@ fun AuthScreen(
     var submitted by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var serverError by remember { mutableStateOf<String?>(null) }
+    var infoMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val emailError = if (submitted) AuthValidator.validateEmail(email) else null
     val passwordError = if (submitted) AuthValidator.validatePassword(password) else null
     val confirmError = if (submitted && isRegister) AuthValidator.validateConfirm(password, confirm) else null
 
+    fun resetPassword() {
+        submitted = true
+        serverError = null
+        infoMessage = null
+        if (AuthValidator.validateEmail(email) != null) return
+        isLoading = true
+        scope.launch {
+            val result = authService.sendPasswordReset(email)
+            isLoading = false
+            result.fold(
+                onSuccess = { infoMessage = "パスワード再設定用のメールを送信しました (登録済みの場合)" },
+                onFailure = { serverError = it.message }
+            )
+        }
+    }
+
     fun submit() {
         submitted = true
         serverError = null
+        infoMessage = null
         if (AuthValidator.validateEmail(email) != null ||
             AuthValidator.validatePassword(password) != null ||
             (isRegister && AuthValidator.validateConfirm(password, confirm) != null)
@@ -74,7 +92,7 @@ fun AuthScreen(
         ) {
             Text("🛡️ CoExist Shield AI", fontSize = 22.sp, fontWeight = FontWeight.Black)
             Text(
-                if (isRegister) "新規ユーザー登録" else "ログイン",
+                if (isRegister) "Create New Account" else "Sign In",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -82,7 +100,7 @@ fun AuthScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("メールアドレス") },
+                label = { Text("Email Address") },
                 singleLine = true,
                 isError = emailError != null,
                 supportingText = { emailError?.let { Text(it) } },
@@ -91,7 +109,7 @@ fun AuthScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("パスワード (8文字以上)") },
+                label = { Text("Password (8+ chars)") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 isError = passwordError != null,
@@ -102,7 +120,7 @@ fun AuthScreen(
                 OutlinedTextField(
                     value = confirm,
                     onValueChange = { confirm = it },
-                    label = { Text("パスワード (確認)") },
+                    label = { Text("Confirm Password") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     isError = confirmError != null,
@@ -115,6 +133,10 @@ fun AuthScreen(
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
 
+            infoMessage?.let {
+                Text(it, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+            }
+
             Button(
                 onClick = { submit() },
                 enabled = !isLoading,
@@ -122,24 +144,30 @@ fun AuthScreen(
             ) {
                 Text(
                     when {
-                        isLoading -> "処理中..."
-                        isRegister -> "登録する"
-                        else -> "ログイン"
+                        isLoading -> "Processing..."
+                        isRegister -> "Register Account"
+                        else -> "Sign In"
                     }
                 )
+            }
+            if (!isRegister) {
+                TextButton(onClick = { resetPassword() }, enabled = !isLoading) {
+                    Text("パスワードを忘れた方")
+                }
             }
             TextButton(
                 onClick = {
                     isRegister = !isRegister
+                    infoMessage = null
                     submitted = false
                     serverError = null
                 },
                 enabled = !isLoading
             ) {
-                Text(if (isRegister) "アカウントをお持ちの方はログイン" else "新規ユーザー登録はこちら")
+                Text(if (isRegister) "Already have an account? Sign In" else "New to CoExist? Register")
             }
             TextButton(onClick = onContinueAsGuest, enabled = !isLoading) {
-                Text("ゲストとして続ける (デモモード)")
+                Text("Continue as Guest (Demo Mode)")
             }
         }
     }

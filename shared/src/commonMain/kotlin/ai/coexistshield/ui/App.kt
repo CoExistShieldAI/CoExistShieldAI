@@ -2,6 +2,8 @@ package ai.coexistshield.ui
 
 import ai.coexistshield.auth.AuthService
 import ai.coexistshield.auth.AuthUser
+import ai.coexistshield.auth.InMemorySessionStore
+import ai.coexistshield.auth.SessionStore
 import ai.coexistshield.model.AlertTier
 import ai.coexistshield.model.ClearanceStatus
 import ai.coexistshield.model.DecayState
@@ -49,6 +51,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class AppNavDestination(val label: String) {
@@ -70,13 +74,42 @@ enum class AppNavDestination(val label: String) {
 }
 
 @Composable
-fun App() {
+fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
     CoExistShieldTheme {
         var currentDestination by remember { mutableStateOf(AppNavDestination.HUD) }
         var currentRole by remember { mutableStateOf(UserRole.CITIZEN) }
         var authUser by remember { mutableStateOf<AuthUser?>(null) }
-        var isGuest by remember { mutableStateOf(false) }
+        var isGuest by remember { mutableStateOf(true) }
         val authService = remember { AuthService() }
+        var isRestoringSession by remember { mutableStateOf(sessionStore.load() != null) }
+
+        fun establishSession(user: AuthUser) {
+            authUser = user
+            currentRole = user.role
+            ai.coexistshield.network.ApiClient.setAuthToken(user.idToken)
+            sessionStore.save(user.refreshToken)
+        }
+
+        // Restore a persisted session on startup.
+        LaunchedEffect(Unit) {
+            val saved = sessionStore.load()
+            if (saved != null) {
+                authService.refresh(saved).fold(
+                    onSuccess = { establishSession(it) },
+                    onFailure = { sessionStore.clear() }
+                )
+                isRestoringSession = false
+            }
+        }
+
+        // Renew the ID token (expires after 1h) while signed in.
+        LaunchedEffect(authUser?.uid) {
+            while (authUser != null) {
+                delay(50 * 60 * 1000L)
+                val current = authUser ?: break
+                authService.refresh(current.refreshToken).onSuccess { establishSession(it) }
+            }
+        }
         var currentTier by remember { mutableStateOf(AlertTier.TIER_2_WARNING) }
 
         // Simulation toggles for offline connectivity and siren
@@ -244,13 +277,18 @@ fun App() {
             )
         )
 
+        if (isRestoringSession) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("セッションを復元中...")
+            }
+            return@CoExistShieldTheme
+        }
+
         if (authUser == null && !isGuest) {
             AuthScreen(
                 authService = authService,
                 onAuthenticated = { user ->
-                    authUser = user
-                    currentRole = user.role
-                    ai.coexistshield.network.ApiClient.setAuthToken(user.idToken)
+                    establishSession(user)
                     scope.launch { snackbarHostState.showSnackbar("ようこそ、${user.email}") }
                 },
                 onContinueAsGuest = { isGuest = true }
@@ -273,6 +311,7 @@ fun App() {
                         currentRole = UserRole.CITIZEN
                         currentDestination = AppNavDestination.HUD
                         ai.coexistshield.network.ApiClient.setAuthToken(null)
+                        sessionStore.clear()
                     },
                     onRoleChange = { newRole ->
                         currentRole = newRole

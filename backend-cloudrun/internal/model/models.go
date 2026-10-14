@@ -24,6 +24,7 @@ type ForensicTriageResponse struct {
 	SuggestedTags          []string         `json:"suggestedTags"`
 	PreliminaryThreatIndex float64          `json:"preliminaryThreatIndex"`
 	Notes                  string           `json:"notes,omitempty"`
+	Source                 string           `json:"source,omitempty"` // "gemini" or "mock" / "mock_fallback"
 }
 
 type TargetCenter struct {
@@ -226,6 +227,7 @@ type ExtractedIncidentEntity struct {
 	ExtractedTimestamp  string   `json:"extractedTimestamp"`
 	CorroborationTags   []string `json:"corroborationTags"`
 	Notes               string   `json:"notes"`
+	InferenceProvider   string   `json:"inferenceProvider,omitempty"` // "gemini" or "mock" / "mock_fallback"
 }
 
 type UnstructuredNlpIngestRequest struct {

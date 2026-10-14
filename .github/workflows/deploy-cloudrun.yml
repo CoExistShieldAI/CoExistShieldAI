@@ -37,7 +37,7 @@ jobs:
             --region ${{ github.event.inputs.gcp_region }} \
             --project ${{ github.event.inputs.gcp_project_id }} \
             --allow-unauthenticated \
-            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }},AUTH_PROJECT_ID=${{ github.event.inputs.gcp_project_id }}" \
             --min-instances 0 \
             --max-instances 10 \
             --cpu 1 \

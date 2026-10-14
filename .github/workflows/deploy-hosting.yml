@@ -25,6 +25,31 @@ jobs:
       - name: Build Web Production Distribution
         run: ./gradlew :shared:jsBrowserDistribution --no-daemon
 
+      - name: Authenticate to Google Cloud (read Terraform state)
+        if: ${{ vars.TF_STATE_BUCKET != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Terraform
+        if: ${{ vars.TF_STATE_BUCKET != '' }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Inject Firebase Web API key into config.js
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          if [ -z "$TF_STATE_BUCKET" ]; then
+            echo "::warning::TF_STATE_BUCKET is not set; login will show 'auth not configured'."
+            exit 0
+          fi
+          (cd infra/terraform && terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" >/dev/null)
+          KEY="$(cd infra/terraform && terraform output -raw firebase_web_api_key)"
+          echo "::add-mask::$KEY"
+          COEXIST_FIREBASE_API_KEY="$KEY" scripts/render_web_config.sh
+
       - name: Verify Web Distribution Assets
         run: |
           ls -la shared/build/dist/js/productionExecutable

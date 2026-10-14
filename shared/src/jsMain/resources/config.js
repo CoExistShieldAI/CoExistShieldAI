@@ -1,4 +1,4 @@
-// Firebase Web API key (public identifier, not a secret). Set this per deployment
-// (Firebase Console > Project settings > General > Web API Key).
+// Local-dev default. In CI/CD this file is overwritten in the build output by
+// scripts/render_web_config.sh with the Terraform-managed key (infra/terraform).
 // Leave empty to show a "not configured" message on the login screen.
 window.COEXIST_FIREBASE_API_KEY = "";
