@@ -42,6 +42,7 @@ func setupTestServer() *Router {
 	tigerEngine := tiger.NewEngine()
 	complianceEngine := compliance.NewEngine()
 	corroborationEngine := corroboration.NewEngine(geminiClient)
+	corroborationEngine.LoadFixtureStreams()
 	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine, corroborationEngine)
 }
 

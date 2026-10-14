@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -15,15 +17,24 @@ type Engine struct {
 	mu           sync.RWMutex
 	geminiClient *gemini.Client
 	streamItems  map[string]model.CausalStreamItem
+	httpClient   *http.Client
 }
 
 func NewEngine(geminiClient *gemini.Client) *Engine {
 	e := &Engine{
 		geminiClient: geminiClient,
 		streamItems:  make(map[string]model.CausalStreamItem),
+		httpClient:   &http.Client{Timeout: 8 * time.Second},
 	}
-	e.seedDefaultCausalStreams()
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		e.LoadFixtureStreams()
+	}
 	return e
+}
+
+// LoadFixtureStreams initializes realistic multi-source environmental feeds across Japan, Thailand, and Indonesia
+func (e *Engine) LoadFixtureStreams() {
+	e.seedDefaultCausalStreams()
 }
 
 // seedDefaultCausalStreams initializes realistic multi-source environmental feeds across Japan, Thailand, and Indonesia
@@ -344,13 +355,55 @@ func (e *Engine) Corroborate(ctx context.Context, req model.CorroborationRequest
 	}, nil
 }
 
-// RunIngestionCycle simulates a scheduled autonomous polling cycle across all 5 causal streams
+// PurgeExpiredItems removes causal stream items whose ExpiresAt timestamp has elapsed.
+func (e *Engine) PurgeExpiredItems() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	now := time.Now().UTC()
+	purged := 0
+	for id, item := range e.streamItems {
+		if item.ExpiresAt != "" {
+			exp, err := time.Parse(time.RFC3339, item.ExpiresAt)
+			if err == nil && now.After(exp) {
+				delete(e.streamItems, id)
+				purged++
+			}
+		}
+	}
+	return purged
+}
+
+// RunIngestionCycle executes a scheduled autonomous polling cycle across all causal streams:
+// 1. Purges expired causal stream items.
+// 2. Ingests live NASA FIRMS thermal anomaly feeds if configured.
+// 3. Ingests dynamic municipal radio NLP & agricultural harvest updates.
 func (e *Engine) RunIngestionCycle() int {
+	e.PurgeExpiredItems()
+
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339)
 	exp24h := now.Add(24 * time.Hour).Format(time.RFC3339)
 
-	// Ingest updated dynamic readings
+	ingestedCount := 0
+
+	// 1. Try real NASA FIRMS connector if API key or custom endpoint is configured
+	if os.Getenv("FIRMS_MAP_KEY") != "" || os.Getenv("FIRMS_API_ENDPOINT") != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		for _, country := range []string{"JPN", "THA", "IDN"} {
+			firmsItems, err := FetchFirmsThermalAnomalies(ctx, e.httpClient, country, "")
+			if err == nil {
+				for _, it := range firmsItems {
+					e.IngestStreamItem(it)
+					ingestedCount++
+				}
+			}
+		}
+	}
+
+	// 2. Ingest continuous municipal radio broadcast and agricultural harvest dynamic updates
 	cycleItems := []model.CausalStreamItem{
 		{
 			ItemId:        fmt.Sprintf("cycle-firms-%d", now.Unix()),
@@ -387,9 +440,10 @@ func (e *Engine) RunIngestionCycle() int {
 
 	for _, item := range cycleItems {
 		e.IngestStreamItem(item)
+		ingestedCount++
 	}
 
-	return len(cycleItems)
+	return ingestedCount
 }
 
 func GeminiModelVersion() string {
