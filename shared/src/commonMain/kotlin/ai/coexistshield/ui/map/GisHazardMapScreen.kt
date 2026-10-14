@@ -590,10 +590,8 @@ fun GoogleMapsVectorCanvas(
                 drawCityBlocks(center, zoomLevel)
                 drawRiversAndWaterways(center, zoomLevel, region)
                 drawRoadwaysNetwork(center, zoomLevel, region)
+                drawTopographyAndForest(center, zoomLevel, region)
             }
-
-            // 4. Mountains, Forest & Protected Conservation Reserves
-            drawTopographyAndForest(center, zoomLevel, region)
 
             // 5. Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON Simulation)
             drawGeofencePolygons(center, zoomLevel, region)
