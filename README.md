@@ -350,3 +350,14 @@ The microservices and continuous retraining pipeline are deployed and actively r
   - `GET /api/v1/ml/status` — Live ML continuous retraining pipeline and active production model weights
   - `GET /api/v1/ngo/patrol-logs/templates` — Ranger field log standardized templates (CSV, GeoJSON, GPX)
 - **Continuous Retraining Cloud Run Job:** `coexistshield-retrain-job` (automated model retraining with statistical validation gate checks)
+
+### 9.5 Live Review Web Application (Firebase Hosting)
+For interactive evaluation by hackathon judges and rangers, the Compose Multiplatform Web app is live:
+
+- **Web Dashboard URL:** **`https://corald.web.app`** (Mirror: `https://corald.firebaseapp.com`)
+- **Key Features Available:**
+  - 3-Tier Dynamic Early-Warning Geofence HUD
+  - Multimodal Gemini 3.8 Flash Forensic Triage Card & Attribution
+  - GIS Hazard Map with H3 Hexagonal Incursion Probability Layers
+  - Decision-Support Console: Japan Municipal GCF, APAC Plantation RSPO Zero-Deforestation Auditing, and Cold-Start & NGO Bulk Patrol Ingestion
+
