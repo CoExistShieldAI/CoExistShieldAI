@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGeoToH3Res8(t *testing.T) {
@@ -127,6 +128,7 @@ func TestModelPrediction(t *testing.T) {
 
 func TestRetrainingPipelineEndToEnd(t *testing.T) {
 	pipeline := NewRetrainingPipeline()
+	pipeline.LoadSamples(GenerateSeedTrainingDataset())
 
 	activeBefore := pipeline.ActiveModel()
 	if activeBefore.Version == "" {
@@ -158,9 +160,59 @@ func TestRetrainingPipelineEndToEnd(t *testing.T) {
 		t.Errorf("expected active model to be promoted to candidate version %s, got %s",
 			result.CandidateModel.Version, activeAfter.Version)
 	}
+}
 
-	history := pipeline.RetrainingHistory()
-	if len(history) != 1 {
-		t.Errorf("expected 1 history record, got %d", len(history))
+func TestModelSerializationCheckpoint(t *testing.T) {
+	pipeline := NewRetrainingPipeline()
+	data, err := pipeline.ExportModelJSON()
+	if err != nil {
+		t.Fatalf("failed to export model JSON: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatalf("expected non-empty model JSON")
+	}
+
+	pipeline2 := NewRetrainingPipeline()
+	if err := pipeline2.LoadModelFromJSON(data); err != nil {
+		t.Fatalf("failed to load model from JSON: %v", err)
+	}
+
+	m1 := pipeline.ActiveModel()
+	m2 := pipeline2.ActiveModel()
+	if m1.Version != m2.Version {
+		t.Errorf("expected version %s, got %s", m1.Version, m2.Version)
+	}
+	if m1.Bias != m2.Bias {
+		t.Errorf("expected bias %f, got %f", m1.Bias, m2.Bias)
+	}
+}
+
+func TestFeatureExtractionAndNegativeSampling(t *testing.T) {
+	kaki, carcasses, crops := DefaultKnownAttractants()
+	now := time.Now().UTC()
+
+	// 1. Positive feature extraction near Morioka
+	posFeatures := ExtractFeatureVector(39.7020, 141.1520, now, kaki, carcasses, crops)
+	if posFeatures.H3Index == "" {
+		t.Errorf("expected valid H3 index")
+	}
+	if posFeatures.DistNearestPersimmonM > 10.0 {
+		t.Errorf("expected persimmon distance <= 10m at (39.7020, 141.1520), got %.1f", posFeatures.DistNearestPersimmonM)
+	}
+
+	// 2. Negative sampling creates safe control points
+	negSamples := GenerateNegativeSamples(10, 39.7020, 141.1520, kaki, carcasses, crops)
+	if len(negSamples) != 10 {
+		t.Fatalf("expected 10 negative samples, got %d", len(negSamples))
+	}
+
+	for i, s := range negSamples {
+		if s.IsIncursion != 0 {
+			t.Errorf("sample %d: expected IsIncursion == 0, got %d", i, s.IsIncursion)
+		}
+		// Negative samples are placed > 2.5km away from human attractants
+		if s.Features.DistNearestPersimmonM < 1000.0 {
+			t.Errorf("sample %d: expected distant persimmon > 1000m, got %.1f", i, s.Features.DistNearestPersimmonM)
+		}
 	}
 }

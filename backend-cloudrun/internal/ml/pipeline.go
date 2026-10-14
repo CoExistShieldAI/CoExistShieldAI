@@ -2,8 +2,10 @@ package ml
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -42,15 +44,50 @@ type RetrainingPipeline struct {
 	promotionListeners []func(IncursionModel)
 }
 
-// NewRetrainingPipeline initializes a pipeline with the baseline model and sample incident lake.
+// NewRetrainingPipeline initializes a pipeline with the baseline model.
+// Synthetic seed samples are only injected when ENABLE_SEED_DATA="true" or DEV_MODE="true".
 func NewRetrainingPipeline() *RetrainingPipeline {
+	var samples []TrainingSample
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
+		samples = GenerateSeedTrainingDataset()
+	} else {
+		samples = make([]TrainingSample, 0)
+	}
+
 	p := &RetrainingPipeline{
 		activeModel:        DefaultBaselineProductionModel(),
 		history:            make([]RetrainResult, 0),
-		sampleStore:        generateSeedTrainingDataset(),
+		sampleStore:        samples,
 		promotionListeners: make([]func(IncursionModel), 0),
 	}
 	return p
+}
+
+// LoadSamples bulk-loads training samples (e.g. from historical lake or bootstrap).
+func (p *RetrainingPipeline) LoadSamples(samples []TrainingSample) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.sampleStore = append(p.sampleStore, samples...)
+	return len(p.sampleStore)
+}
+
+// ExportModelJSON serializes the active production model to JSON for versioned checkpointing.
+func (p *RetrainingPipeline) ExportModelJSON() ([]byte, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return json.MarshalIndent(p.activeModel, "", "  ")
+}
+
+// LoadModelFromJSON deserializes and activates a model checkpoint.
+func (p *RetrainingPipeline) LoadModelFromJSON(data []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var model IncursionModel
+	if err := json.Unmarshal(data, &model); err != nil {
+		return fmt.Errorf("failed to parse model checkpoint: %w", err)
+	}
+	p.activeModel = &model
+	return nil
 }
 
 // ActiveModel returns a thread-safe copy of the active production model.
@@ -380,9 +417,9 @@ func evaluateHoldout(model IncursionModel, holdout []TrainingSample) ModelMetric
 	}
 }
 
-// generateSeedTrainingDataset produces 100 realistic field observation samples across Japan and APAC
+// GenerateSeedTrainingDataset produces 100 realistic field observation samples across Japan and APAC
 // to seed the ML data lake and test retraining pipeline immediately.
-func generateSeedTrainingDataset() []TrainingSample {
+func GenerateSeedTrainingDataset() []TrainingSample {
 	samples := make([]TrainingSample, 0, 100)
 
 	// High-risk incursions: nearby persimmon/carcass, direct wind scent alignment, new moon

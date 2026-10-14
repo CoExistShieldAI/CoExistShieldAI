@@ -37,6 +37,7 @@ func setupTestServer() *Router {
 	geofenceEngine := geofence.NewEngine()
 	memoryBank := memory.NewBank()
 	mlPipeline := ml.NewRetrainingPipeline()
+	mlPipeline.LoadSamples(ml.GenerateSeedTrainingDataset())
 	elephantEngine := elephant.NewEngine()
 	tigerEngine := tiger.NewEngine()
 	complianceEngine := compliance.NewEngine()

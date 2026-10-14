@@ -311,58 +311,9 @@ func (r *BigQueryGISReplicator) ReplicateIncidentEvent(event IncidentStreamingEv
 		event.Timestamp = time.Now().UTC()
 	}
 
-	// 1. Uber H3 Resolution 8 Spatial Indexing
-	h3Index := GeoToH3Res8(event.Latitude, event.Longitude)
-
-	// 2. Spatial Joins: Min Distance to Unmanaged Persimmons
-	minKakiDist := 9999.0
-	for _, k := range r.knownKakiTrees {
-		d := HaversineDistanceMeters(event.Latitude, event.Longitude, k.Latitude, k.Longitude)
-		if d < minKakiDist {
-			minKakiDist = d
-		}
-	}
-
-	// 3. Spatial Joins: Min Distance to Decomposing Carcasses
-	minCarcassDist := 9999.0
-	nearestCarcassLat, nearestCarcassLon := event.Latitude, event.Longitude
-	for _, c := range r.knownCarcasses {
-		d := HaversineDistanceMeters(event.Latitude, event.Longitude, c.Latitude, c.Longitude)
-		if d < minCarcassDist {
-			minCarcassDist = d
-			nearestCarcassLat = c.Latitude
-			nearestCarcassLon = c.Longitude
-		}
-	}
-
-	// 4. Spatial Joins: Min Distance to High-Sugar / Cane Plantations
-	minCropDist := 9999.0
-	for _, cr := range r.knownCrops {
-		d := HaversineDistanceMeters(event.Latitude, event.Longitude, cr.Latitude, cr.Longitude)
-		if d < minCropDist {
-			minCropDist = d
-		}
-	}
-
-	// 5. Environmental & Weather Feature Enrichment
-	bearingToAttractant := BearingDegrees(event.Latitude, event.Longitude, nearestCarcassLat, nearestCarcassLon)
-	prevailingWindFromDeg := 285.0 // Westerly wind
-	windScentAngle := WindScentAlignmentAngle(prevailingWindFromDeg, bearingToAttractant)
-
-	// Approximate lunar darkness based on day of month (new moon cycle)
-	dayOfMonth := float64(event.Timestamp.Day())
-	moonDarkness := math.Max(10.0, math.Min(95.0, 50.0+45.0*math.Sin(dayOfMonth*0.21)))
-
-	features := FeatureVector{
-		H3Index:                h3Index,
-		DistNearestPersimmonM:  math.Round(minKakiDist*10.0) / 10.0,
-		DistNearestCarcassM:    math.Round(minCarcassDist*10.0) / 10.0,
-		DistNearestCaneFruitM:  math.Round(minCropDist*10.0) / 10.0,
-		WindScentAlignmentDeg:  math.Round(windScentAngle*10.0) / 10.0,
-		MoonDarknessPct:        math.Round(moonDarkness*10.0) / 10.0,
-		PrecipitationMm24h:      2.5,
-		HistoricalIncidents30d: 3.0,
-	}
+	// Spatio-temporal GIS joins and environmental feature enrichment
+	features := ExtractFeatureVector(event.Latitude, event.Longitude, event.Timestamp,
+		r.knownKakiTrees, r.knownCarcasses, r.knownCrops)
 
 	sample := TrainingSample{
 		Features:    features,

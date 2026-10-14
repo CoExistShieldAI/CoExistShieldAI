@@ -221,6 +221,7 @@ func TestRetrainingPipelineEventAccumulatorTrigger(t *testing.T) {
 
 func TestDynamicModelPromotionListener(t *testing.T) {
 	pipeline := NewRetrainingPipeline()
+	pipeline.LoadSamples(GenerateSeedTrainingDataset())
 
 	promotedCalled := false
 	var promotedModel IncursionModel

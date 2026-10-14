@@ -156,27 +156,33 @@ func (e *Engine) BootstrapDayOne(region string) ColdStartStatus {
 	e.bootstrapped = true
 	e.lastBootstrap = now
 
-	// 1. Ingest GBIF occurrences and NASA FIRMS anomalies as pre-training samples into ML pipeline
+	// 1. Ingest GBIF occurrences and balanced negative controls into ML pipeline
 	if e.mlPipeline != nil {
+		kaki, carcasses, crops := ml.DefaultKnownAttractants()
+
 		for _, occ := range e.gbifRecords {
 			if region != "" && region != "ALL" && !matchCountryToRegion(occ.CountryCode, region) {
 				continue
 			}
 
+			eventDate, err := time.Parse("2006-01-02", occ.EventDate)
+			if err != nil || eventDate.IsZero() {
+				eventDate = now
+			}
+
+			// Dynamically extract spatio-temporal features based on actual coordinates and date
+			features := ml.ExtractFeatureVector(occ.Latitude, occ.Longitude, eventDate, kaki, carcasses, crops)
 			sample := ml.TrainingSample{
-				Features: ml.FeatureVector{
-					H3Index:                ml.GeoToH3Res8(occ.Latitude, occ.Longitude),
-					DistNearestPersimmonM:  450.0,
-					DistNearestCarcassM:    800.0,
-					DistNearestCaneFruitM:  1200.0,
-					WindScentAlignmentDeg:  30.0,
-					MoonDarknessPct:        75.0,
-					PrecipitationMm24h:      1.0,
-					HistoricalIncidents30d: 4.0,
-				},
-				IsIncursion: 1,
+				Features:    features,
+				IsIncursion: 1, // Positive GBIF occurrence
 			}
 			e.mlPipeline.IngestIncidentSample(sample)
+
+			// Generate balanced negative controls in safe non-incursion buffer zones
+			negatives := ml.GenerateNegativeSamples(2, occ.Latitude, occ.Longitude, kaki, carcasses, crops)
+			for _, neg := range negatives {
+				e.mlPipeline.IngestIncidentSample(neg)
+			}
 		}
 	}
 
