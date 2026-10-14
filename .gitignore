@@ -14,5 +14,6 @@ captures
 kotlin-js-store/
 .wireit/
 node_modules/
+.firebase/
 **/test-results/
 **/playwright-report/
