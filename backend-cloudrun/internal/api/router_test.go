@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"crypto"
 	"crypto/rand"
@@ -25,6 +26,7 @@ import (
 	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
+	"ai.coexistshield/backend/internal/repository"
 	"ai.coexistshield/backend/internal/tiger"
 )
 
@@ -1563,6 +1565,61 @@ func TestAdminOnlyEndpointsAndRoleAssignment(t *testing.T) {
 	}
 	if resp["success"] != true || resp["uid"] != "user-to-promote" || resp["role"] != "OFFICIAL" {
 		t.Errorf("unexpected set-role response: %+v", resp)
+	}
+}
+
+func TestRouterCustomRepositoryPersistence(t *testing.T) {
+	router := setupTestServer()
+	customRepo := repository.NewMemoryRepository()
+	router.SetRepositories(customRepo, customRepo)
+
+	// 1. Submit incident via HTTP POST
+	postPayload := `{
+		"id": "inc-custom-repo-test",
+		"species": "BEAR",
+		"category": "WILDLIFE_SIGHTING",
+		"location": {"latitude": 39.75, "longitude": 141.20},
+		"region": "JAPAN"
+	}`
+	req := httptest.NewRequest("POST", "/api/v1/incidents", strings.NewReader(postPayload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d", w.Code)
+	}
+
+	// 2. Verify stored directly in repository
+	inc, err := customRepo.GetIncidentByID(context.Background(), "inc-custom-repo-test")
+	if err != nil {
+		t.Fatalf("incident was not persisted to custom repository: %v", err)
+	}
+	if inc.Species != "BEAR" || inc.Location.Latitude != 39.75 {
+		t.Errorf("unexpected incident data in repository: %+v", inc)
+	}
+
+	// 3. Verify retrieved via HTTP GET
+	getReq := httptest.NewRequest("GET", "/api/v1/incidents", nil)
+	getW := httptest.NewRecorder()
+	router.ServeHTTP(getW, getReq)
+
+	if getW.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", getW.Code)
+	}
+	var incidents []model.IncidentDto
+	if err := json.Unmarshal(getW.Body.Bytes(), &incidents); err != nil {
+		t.Fatalf("failed to decode incidents: %v", err)
+	}
+	found := false
+	for _, item := range incidents {
+		if item.Id == "inc-custom-repo-test" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected to find inc-custom-repo-test in GET response, got %+v", incidents)
 	}
 }
 

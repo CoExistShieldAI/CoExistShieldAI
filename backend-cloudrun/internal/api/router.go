@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
+	"ai.coexistshield/backend/internal/repository"
 	"ai.coexistshield/backend/internal/tiger"
 )
 
@@ -36,6 +38,8 @@ type Router struct {
 	corroborationEngine *corroboration.Engine
 	coldstartEngine     *coldstart.Engine
 	verifier            *auth.Verifier
+	incidentRepo        repository.IncidentRepository
+	roadkillRepo        repository.RoadkillRepository
 	mu                  sync.RWMutex
 	incidents           []model.IncidentDto
 	roadkills           []model.RoadkillRecordDto
@@ -53,6 +57,7 @@ func NewRouter(
 	complianceEngine *compliance.Engine,
 	corroborationEngine *corroboration.Engine,
 ) *Router {
+	memRepo := repository.NewMemoryRepository()
 	r := &Router{
 		mux:                 http.NewServeMux(),
 		geminiClient:        geminiClient,
@@ -65,6 +70,8 @@ func NewRouter(
 		complianceEngine:    complianceEngine,
 		corroborationEngine: corroborationEngine,
 		coldstartEngine:     coldstart.NewEngine(mlPipeline, geofenceEngine, memoryBank),
+		incidentRepo:        memRepo,
+		roadkillRepo:        memRepo,
 		userRoles:           make(map[string]string),
 	}
 
@@ -75,9 +82,23 @@ func NewRouter(
 		})
 	}
 
-	r.initSeedData()
+	// Seed data is ONLY loaded in development / demo mode or test runs (never in bare production)
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" || os.Getenv("ENV") == "test" || os.Getenv("CI") != "" || os.Getenv("AUTH_PROJECT_ID") == "" {
+		r.initSeedData()
+	}
 	r.registerRoutes()
 	return r
+}
+
+func (r *Router) SetRepositories(incRepo repository.IncidentRepository, rkRepo repository.RoadkillRepository) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if incRepo != nil {
+		r.incidentRepo = incRepo
+	}
+	if rkRepo != nil {
+		r.roadkillRepo = rkRepo
+	}
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -993,6 +1014,23 @@ func (r *Router) handleGetIncidents(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	if r.incidentRepo != nil {
+		incidents, err := r.incidentRepo.GetIncidents(req.Context(), limit)
+		if err == nil && len(incidents) > 0 {
+			var result []model.IncidentDto
+			for _, inc := range incidents {
+				if category == "" || strings.EqualFold(inc.Category, category) {
+					result = append(result, inc)
+				}
+			}
+			if result == nil {
+				result = []model.IncidentDto{}
+			}
+			writeJSON(w, http.StatusOK, result)
+			return
+		}
+	}
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -1045,6 +1083,10 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 	}
 
 
+	if r.incidentRepo != nil {
+		_ = r.incidentRepo.SaveIncident(req.Context(), dto)
+	}
+
 	r.mu.Lock()
 	// If Roadkill, register roadkill carcass for predator lure mitigation
 	if strings.EqualFold(dto.Category, "ROADKILL") {
@@ -1062,6 +1104,9 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 			ClearanceStatus:       "REPORTED",
 			PhotoUrls:             dto.PhotoUrls,
 			ReportedAt:            dto.Timestamp,
+		}
+		if r.roadkillRepo != nil {
+			_ = r.roadkillRepo.SaveRoadkill(req.Context(), rkRecord)
 		}
 		r.roadkills = append([]model.RoadkillRecordDto{rkRecord}, r.roadkills...)
 	}
@@ -1107,6 +1152,14 @@ func (r *Router) handleGetRoadkills(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if r.roadkillRepo != nil {
+		roadkills, err := r.roadkillRepo.GetRoadkills(req.Context(), "")
+		if err == nil && len(roadkills) > 0 {
+			writeJSON(w, http.StatusOK, roadkills)
+			return
+		}
+	}
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -1136,6 +1189,17 @@ func (r *Router) handleRoadkillAction(w http.ResponseWriter, req *http.Request) 
 	if err := json.NewDecoder(req.Body).Decode(&statusReq); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
 		return
+	}
+
+	if r.roadkillRepo != nil {
+		updated, err := r.roadkillRepo.UpdateRoadkillStatus(req.Context(), roadkillID, statusReq.Status, "")
+		if err == nil && updated != nil {
+			if statusReq.AssignedOfficialId != "" {
+				updated.AssignedOfficialId = statusReq.AssignedOfficialId
+			}
+			writeJSON(w, http.StatusOK, updated)
+			return
+		}
 	}
 
 	r.mu.Lock()

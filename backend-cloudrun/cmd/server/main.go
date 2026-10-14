@@ -15,6 +15,7 @@ import (
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
 	"ai.coexistshield/backend/internal/ml"
+	"ai.coexistshield/backend/internal/repository"
 	"ai.coexistshield/backend/internal/tiger"
 )
 
@@ -49,8 +50,16 @@ func main() {
 	if projectID != "" {
 		router.SetAuthVerifier(auth.NewVerifier(projectID, ""))
 		log.Printf("Firebase ID token verification enabled for project %s", projectID)
+
+		firestoreRepo := repository.NewFirestoreRepository(projectID)
+		router.SetRepositories(firestoreRepo, firestoreRepo)
+		log.Printf("Firestore persistence enabled for project %s", projectID)
+	} else if emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST"); emulatorHost != "" {
+		firestoreRepo := repository.NewFirestoreRepository("demo-coexist")
+		router.SetRepositories(firestoreRepo, firestoreRepo)
+		log.Printf("Firestore persistence enabled via emulator at %s", emulatorHost)
 	} else {
-		log.Printf("AUTH_PROJECT_ID not set; running in open demo mode")
+		log.Printf("AUTH_PROJECT_ID not set; running in open demo mode with in-memory persistence")
 	}
 
 	server := &http.Server{
