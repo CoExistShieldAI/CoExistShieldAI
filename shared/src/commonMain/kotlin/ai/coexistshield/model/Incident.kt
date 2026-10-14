@@ -36,6 +36,8 @@ data class Incident(
     val species: WildlifeSpecies = WildlifeSpecies.UNKNOWN,
     val location: GeoLocation,
     val timestamp: String, // ISO-8601 string
+    val region: String = "JAPAN", // "JAPAN" | "APAC"
+    val description: String? = null,
     val photoUrls: List<String> = emptyList(),
     val geminiTriageResult: GeminiTriageResult? = null,
     val reporterId: String,

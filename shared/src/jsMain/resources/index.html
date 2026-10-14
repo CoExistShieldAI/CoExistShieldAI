@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CoExist Shield AI — Early Warning & Geofence HUD</title>
+    <title>CoExist Shield AI — Autonomous Early Warning & Geofence HUD</title>
+    <meta name="description" content="AI-driven predictive geofencing & ecological early warning system for human-wildlife coexistence and global One Health.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <style>
         html, body {
             width: 100%;
@@ -13,9 +15,11 @@
             overflow: hidden;
             background-color: #020617;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #f8fafc;
         }
 
         #root {
+            position: relative;
             width: 100%;
             height: 100%;
             display: flex;
@@ -26,11 +30,71 @@
         /* Container canvas for Compose Multiplatform */
         canvas {
             outline: none;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+        /* Pre-canvas initialization splash */
+        #splash {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 1;
+        }
+
+        .shield-icon {
+            font-size: 56px;
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        .title {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(56, 189, 248, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.08); opacity: 1; }
         }
     </style>
 </head>
 <body>
     <div id="root">
+        <div id="splash">
+            <div class="shield-icon">🛡️</div>
+            <div class="title">CoExist Shield AI</div>
+            <div class="status">Initializing Autonomous Defense System...</div>
+            <div class="spinner"></div>
+        </div>
         <canvas id="ComposeTarget"></canvas>
     </div>
     <script src="shared.js"></script>

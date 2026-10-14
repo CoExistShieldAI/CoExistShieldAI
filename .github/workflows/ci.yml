@@ -25,10 +25,11 @@ jobs:
           cd backend-cloudrun
           go test -v -race ./...
 
-      - name: Build Static Binary
+      - name: Build Static Binaries
         run: |
           cd backend-cloudrun
           CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server
+          CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o job ./cmd/job
 
   kmp-client-test:
     name: KMP Shared & Client Tests
@@ -49,8 +50,35 @@ jobs:
       - name: Run JVM Unit Tests
         run: ./gradlew :shared:jvmTest --no-daemon
 
-      - name: Build Webpack Bundle
-        run: ./gradlew :shared:jsBrowserProductionWebpack --no-daemon
+      - name: Build Web Production Distribution
+        run: ./gradlew :shared:jsBrowserDistribution --no-daemon
 
       - name: Assemble Android Debug APK
         run: ./gradlew :composeApp:assembleDebug --no-daemon
+
+  firestore-rules-test:
+    name: Firestore Security Rules Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Install Test Dependencies & Run Rules Tests
+        run: |
+          cd firebase-tests
+          npm ci || npm install
+          npm test
