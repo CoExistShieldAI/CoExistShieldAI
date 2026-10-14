@@ -164,6 +164,27 @@ data class MapPinItem(
     val roadkillStatus: ClearanceStatus? = null
 )
 
+sealed interface MapDisplayItem {
+    val screenX: Float
+    val screenY: Float
+}
+
+data class SinglePinDisplay(
+    val pin: MapPinItem,
+    override val screenX: Float,
+    override val screenY: Float
+) : MapDisplayItem
+
+data class ClusterDisplay(
+    val pins: List<MapPinItem>,
+    override val screenX: Float,
+    override val screenY: Float,
+    val highestTier: AlertTier,
+    val badgeColor: Color,
+    val centroidLat: Double,
+    val centroidLon: Double
+) : MapDisplayItem
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GisHazardMapScreen(
@@ -244,6 +265,19 @@ fun GisHazardMapScreen(
                             longitude = pin.lon
                         )
                     )
+                },
+                onClusterClick = { cluster ->
+                    // Center map on cluster centroid and zoom in to expand pins smoothly
+                    val newZoom = (zoomLevel + 2.5f).coerceAtMost(MapZoomHelper.MAX_ZOOM)
+                    val newMetrics = MapZoomHelper.calculateMetrics(newZoom)
+                    val centerTileX = TileCoordinateUtils.lonToTileX(selectedRegion.centerLon, newMetrics.discreteZoom)
+                    val centerTileY = TileCoordinateUtils.latToTileY(selectedRegion.centerLat, newMetrics.discreteZoom)
+                    val targetTileX = TileCoordinateUtils.lonToTileX(cluster.centroidLon, newMetrics.discreteZoom)
+                    val targetTileY = TileCoordinateUtils.latToTileY(cluster.centroidLat, newMetrics.discreteZoom)
+
+                    panOffsetX = -((targetTileX - centerTileX).toFloat() * newMetrics.tileSizePx)
+                    panOffsetY = -((targetTileY - centerTileY).toFloat() * newMetrics.tileSizePx)
+                    zoomLevel = newZoom
                 }
             )
 
@@ -454,7 +488,8 @@ fun GoogleMapsVectorCanvas(
     panOffsetY: Float,
     zoomLevel: Float,
     onPanChange: (Float, Float) -> Unit,
-    onSelectPin: (MapPinItem) -> Unit
+    onSelectPin: (MapPinItem) -> Unit,
+    onClusterClick: (ClusterDisplay) -> Unit = {}
 ) {
     val infiniteTransition = rememberInfiniteTransition()
     val radarPulse by infiniteTransition.animateFloat(
@@ -667,60 +702,165 @@ fun GoogleMapsVectorCanvas(
         val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
         val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)
 
-        pins.forEach { pin ->
+        val clusterThresholdPx = 54f // Pixel proximity threshold for clustering
+
+        // 1. Calculate screen coordinates for all active pins
+        val pinPositions = pins.map { pin ->
             val pinTileX = TileCoordinateUtils.lonToTileX(pin.lon, discreteZoom)
             val pinTileY = TileCoordinateUtils.latToTileY(pin.lat, discreteZoom)
-
-            // Pin position in absolute canvas pixel coordinates matching tiles and geofences exactly
             val pinPxX = screenCenterX + (pinTileX - centerTileX).toFloat() * tileSizePx + panOffsetX
             val pinPxY = screenCenterY + (pinTileY - centerTileY).toFloat() * tileSizePx + panOffsetY
+            Triple(pin, pinPxX, pinPxY)
+        }
 
-            // Only render pins that are near or within visible screen area to optimize performance
-            if (pinPxX >= -200f && pinPxX <= screenWPx + 200f && pinPxY >= -100f && pinPxY <= screenHPx + 100f) {
-                if (zoomLevel <= 9.0f) {
-                    // Compact circular hazard emoji badge for nationwide / regional overview
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    (pinPxX - 16f).roundToInt(),
-                                    (pinPxY - 16f).roundToInt()
-                                )
-                            }
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0F172A).copy(alpha = 0.94f))
-                            .border(2.dp, pin.pinColor, CircleShape)
-                            .clickable { onSelectPin(pin) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(pin.iconEmoji, fontSize = 16.sp)
+        // 2. Group close pins into clusters when zoomed out (zoomLevel <= 13.5f)
+        val displayItems = mutableListOf<MapDisplayItem>()
+        val visited = BooleanArray(pinPositions.size)
+
+        for (i in pinPositions.indices) {
+            if (visited[i]) continue
+            visited[i] = true
+            val (pinI, xI, yI) = pinPositions[i]
+            val clusterGroup = mutableListOf(pinI)
+            var sumX = xI
+            var sumY = yI
+            var sumLat = pinI.lat
+            var sumLon = pinI.lon
+
+            if (zoomLevel <= 13.5f) {
+                for (j in (i + 1) until pinPositions.size) {
+                    if (visited[j]) continue
+                    val (pinJ, xJ, yJ) = pinPositions[j]
+                    val dx = xI - xJ
+                    val dy = yI - yJ
+                    if (dx * dx + dy * dy <= clusterThresholdPx * clusterThresholdPx) {
+                        visited[j] = true
+                        clusterGroup.add(pinJ)
+                        sumX += xJ
+                        sumY += yJ
+                        sumLat += pinJ.lat
+                        sumLon += pinJ.lon
                     }
-                } else {
-                    // Rich descriptive badge for city / district / street view
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    (pinPxX - 55f).roundToInt(),
-                                    (pinPxY - 16f).roundToInt()
+                }
+            }
+
+            if (clusterGroup.size == 1) {
+                displayItems.add(SinglePinDisplay(pinI, xI, yI))
+            } else {
+                val count = clusterGroup.size
+                val highestTier = when {
+                    clusterGroup.any { it.threatTier == AlertTier.TIER_3_DANGER } -> AlertTier.TIER_3_DANGER
+                    clusterGroup.any { it.threatTier == AlertTier.TIER_2_WARNING } -> AlertTier.TIER_2_WARNING
+                    clusterGroup.any { it.threatTier == AlertTier.TIER_1_NOTICE } -> AlertTier.TIER_1_NOTICE
+                    else -> AlertTier.SAFE
+                }
+                val badgeColor = when (highestTier) {
+                    AlertTier.TIER_3_DANGER -> TierDanger
+                    AlertTier.TIER_2_WARNING -> TierWarning
+                    AlertTier.TIER_1_NOTICE -> TierNotice
+                    AlertTier.SAFE -> TierSafe
+                }
+                displayItems.add(
+                    ClusterDisplay(
+                        pins = clusterGroup,
+                        screenX = sumX / count,
+                        screenY = sumY / count,
+                        highestTier = highestTier,
+                        badgeColor = badgeColor,
+                        centroidLat = sumLat / count,
+                        centroidLon = sumLon / count
+                    )
+                )
+            }
+        }
+
+        // 3. Render clustered badges and individual pins
+        displayItems.forEach { item ->
+            // Only render items near or within visible screen area to optimize performance
+            if (item.screenX >= -200f && item.screenX <= screenWPx + 200f && item.screenY >= -100f && item.screenY <= screenHPx + 100f) {
+                when (item) {
+                    is ClusterDisplay -> {
+                        val clusterIcon = when (item.highestTier) {
+                            AlertTier.TIER_3_DANGER -> "🚨"
+                            AlertTier.TIER_2_WARNING -> "⚠️"
+                            else -> "📍"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        (item.screenX - 22f).roundToInt(),
+                                        (item.screenY - 22f).roundToInt()
+                                    )
+                                }
+                                .clip(CircleShape)
+                                .background(Color(0xFF0F172A).copy(alpha = 0.95f))
+                                .border(2.5.dp, item.badgeColor, CircleShape)
+                                .clickable { onClusterClick(item) }
+                                .padding(horizontal = 9.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(clusterIcon, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "${item.pins.size}",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black
                                 )
                             }
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.94f))
-                            .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
-                            .clickable { onSelectPin(pin) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(pin.iconEmoji, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        }
+                    }
+
+                    is SinglePinDisplay -> {
+                        val pin = item.pin
+                        if (zoomLevel <= 9.0f) {
+                            // Compact circular hazard emoji badge for nationwide / regional overview
+                            Box(
+                                modifier = Modifier
+                                    .offset {
+                                        IntOffset(
+                                            (item.screenX - 16f).roundToInt(),
+                                            (item.screenY - 16f).roundToInt()
+                                        )
+                                    }
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF0F172A).copy(alpha = 0.94f))
+                                    .border(2.dp, pin.pinColor, CircleShape)
+                                    .clickable { onSelectPin(pin) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(pin.iconEmoji, fontSize = 16.sp)
+                            }
+                        } else {
+                            // Rich descriptive badge for city / district / street view
+                            Box(
+                                modifier = Modifier
+                                    .offset {
+                                        IntOffset(
+                                            (item.screenX - 55f).roundToInt(),
+                                            (item.screenY - 16f).roundToInt()
+                                        )
+                                    }
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color(0xFF0F172A).copy(alpha = 0.94f))
+                                    .border(2.dp, pin.pinColor, RoundedCornerShape(20.dp))
+                                    .clickable { onSelectPin(pin) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(pin.iconEmoji, fontSize = 14.sp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = pin.title.take(18) + if (pin.title.length > 18) "…" else "",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
