@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
@@ -18,13 +19,14 @@ import (
 )
 
 type Router struct {
-	mux            *http.ServeMux
-	geminiClient   *gemini.Client
-	geofenceEngine *geofence.Engine
-	memoryBank     *memory.Bank
-	mlPipeline     *ml.RetrainingPipeline
-	elephantEngine *elephant.Engine
-	tigerEngine    *tiger.Engine
+	mux              *http.ServeMux
+	geminiClient     *gemini.Client
+	geofenceEngine   *geofence.Engine
+	memoryBank       *memory.Bank
+	mlPipeline       *ml.RetrainingPipeline
+	elephantEngine   *elephant.Engine
+	tigerEngine      *tiger.Engine
+	complianceEngine *compliance.Engine
 }
 
 func NewRouter(
@@ -34,15 +36,17 @@ func NewRouter(
 	mlPipeline *ml.RetrainingPipeline,
 	elephantEngine *elephant.Engine,
 	tigerEngine *tiger.Engine,
+	complianceEngine *compliance.Engine,
 ) *Router {
 	r := &Router{
-		mux:            http.NewServeMux(),
-		geminiClient:   geminiClient,
-		geofenceEngine: geofenceEngine,
-		memoryBank:     memoryBank,
-		mlPipeline:     mlPipeline,
-		elephantEngine: elephantEngine,
-		tigerEngine:    tigerEngine,
+		mux:              http.NewServeMux(),
+		geminiClient:     geminiClient,
+		geofenceEngine:   geofenceEngine,
+		memoryBank:       memoryBank,
+		mlPipeline:       mlPipeline,
+		elephantEngine:   elephantEngine,
+		tigerEngine:      tigerEngine,
+		complianceEngine: complianceEngine,
 	}
 	r.registerRoutes()
 	return r
@@ -68,7 +72,11 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/geofences/recalculate", r.handleGeofencesRecalculate)
 	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
 	r.mux.HandleFunc("/api/v1/analytics/japan-kaki/top-hazards", r.handleTopHazards)
+	r.mux.HandleFunc("/api/v1/compliance/rspo/package", r.handleRspoPackage)
 	r.mux.HandleFunc("/api/v1/compliance/rspo/export", r.handleRspoExport)
+	r.mux.HandleFunc("/api/v1/compliance/gcf/budget-impact", r.handleGcfBudgetImpact)
+	r.mux.HandleFunc("/api/v1/municipal/kaki/priority-layer", r.handlePriorityKakiLayer)
+	r.mux.HandleFunc("/api/v1/municipal/kaki/action", r.handleMunicipalKakiAction)
 	r.mux.HandleFunc("/api/v1/memory/search", r.handleMemorySearch)
 	r.mux.HandleFunc("/api/v1/alerts/explain", r.handleAlertExplanation)
 	r.mux.HandleFunc("/api/v1/ml/status", r.handleMlStatus)
@@ -167,6 +175,26 @@ func (r *Router) handleTopHazards(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (r *Router) handleRspoPackage(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	plantationId := req.URL.Query().Get("plantationId")
+	if plantationId == "" {
+		plantationId = "wilmar_sumatra_02"
+	}
+
+	pkg, err := r.complianceEngine.GetRspoAuditPackage(plantationId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, pkg)
+}
+
 func (r *Router) handleRspoExport(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -178,15 +206,81 @@ func (r *Router) handleRspoExport(w http.ResponseWriter, req *http.Request) {
 		plantationId = "wilmar_sumatra_02"
 	}
 
+	csvData, err := r.complianceEngine.GetRspoAuditCsv(plantationId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"rspo_audit_%s.csv\"", plantationId))
-
-	csvData := fmt.Sprintf(`audit_id,plantation_id,year,human_wildlife_fatalities,acoustic_deterrent_activations,verified_safe_passages
-AUD-2026-001,%s,2026,0,18,342
-`, plantationId)
-
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(csvData))
+}
+
+func (r *Router) handleGcfBudgetImpact(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	muniCode := req.URL.Query().Get("municipalityCode")
+	if muniCode == "" {
+		muniCode = "03201"
+	}
+
+	resp, err := r.complianceEngine.GetGcfBudgetImpact(muniCode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handlePriorityKakiLayer(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	muniCode := req.URL.Query().Get("municipalityCode")
+	if muniCode == "" {
+		muniCode = "03201"
+	}
+
+	resp, err := r.complianceEngine.GetPriorityKakiLayer(muniCode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleMunicipalKakiAction(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var actionReq compliance.MunicipalKakiActionRequest
+	if err := json.NewDecoder(req.Body).Decode(&actionReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.complianceEngine.LogMunicipalAction(actionReq)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "forbidden") {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (r *Router) handleMemorySearch(w http.ResponseWriter, req *http.Request) {

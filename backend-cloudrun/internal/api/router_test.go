@@ -12,6 +12,7 @@ import (
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
 	"ai.coexistshield/backend/internal/memory"
+	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/ml"
 	"ai.coexistshield/backend/internal/model"
 	"ai.coexistshield/backend/internal/tiger"
@@ -24,7 +25,8 @@ func setupTestServer() *Router {
 	mlPipeline := ml.NewRetrainingPipeline()
 	elephantEngine := elephant.NewEngine()
 	tigerEngine := tiger.NewEngine()
-	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine)
+	complianceEngine := compliance.NewEngine()
+	return NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine)
 }
 
 func TestHealthz(t *testing.T) {
@@ -682,6 +684,156 @@ func TestTigerPastureClearEndpoint(t *testing.T) {
 		t.Errorf("expected return probability 0.0 after clear, got %.2f", cleared.ReturnProbability)
 	}
 }
+
+func TestRspoPackageEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/compliance/rspo/package?plantationId=wilmar_sumatra_02", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var pkg compliance.RspoAuditPackage
+	if err := json.Unmarshal(w.Body.Bytes(), &pkg); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if pkg.PlantationID != "wilmar_sumatra_02" {
+		t.Errorf("expected wilmar_sumatra_02, got %s", pkg.PlantationID)
+	}
+	if pkg.ZeroHarmComplianceScore != 1.0 {
+		t.Errorf("expected 1.0 score, got %.2f", pkg.ZeroHarmComplianceScore)
+	}
+}
+
+func TestRspoExportCsvEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/compliance/rspo/export?plantationId=wilmar_sumatra_02", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/csv") {
+		t.Errorf("expected text/csv Content-Type, got %s", contentType)
+	}
+
+	csv := w.Body.String()
+	if !strings.Contains(csv, "wilmar_sumatra_02") {
+		t.Errorf("expected plantation id in csv output: %s", csv)
+	}
+}
+
+func TestGcfBudgetImpactEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/compliance/gcf/budget-impact?municipalityCode=03201", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp compliance.GcfBudgetImpactResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.MunicipalityCode != "03201" {
+		t.Errorf("expected 03201, got %s", resp.MunicipalityCode)
+	}
+	if resp.CurrentRaisedYen < 10000000 {
+		t.Errorf("expected >= 10M yen raised, got %d", resp.CurrentRaisedYen)
+	}
+	if resp.CostPerTreeYen != 35000 {
+		t.Errorf("expected 35000 yen cost per tree, got %d", resp.CostPerTreeYen)
+	}
+}
+
+func TestPriorityKakiLayerEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	req := httptest.NewRequest("GET", "/api/v1/municipal/kaki/priority-layer?municipalityCode=03201", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp compliance.PriorityKakiLayerResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.PriorityTrees) < 3 {
+		t.Errorf("expected at least 3 priority trees, got %d", len(resp.PriorityTrees))
+	}
+	if resp.PriorityTrees[0].TreeID != "kt_1120" {
+		t.Errorf("expected kt_1120 first, got %s", resp.PriorityTrees[0].TreeID)
+	}
+}
+
+func TestMunicipalKakiActionEndpoint(t *testing.T) {
+	router := setupTestServer()
+
+	// 1. Citizen role rejected with 403 Forbidden
+	citizenBody, _ := json.Marshal(compliance.MunicipalKakiActionRequest{
+		TreeID:       "kt_1120",
+		Action:       "FELLED",
+		OfficerID:    "citizen_user_1",
+		OfficerRole:  "CITIZEN",
+		PermitNumber: "UNAUTHORIZED",
+	})
+	req := httptest.NewRequest("POST", "/api/v1/municipal/kaki/action", bytes.NewReader(citizenBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for CITIZEN role, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	// 2. Official role approved with 200 OK and risk reduction
+	officialBody, _ := json.Marshal(compliance.MunicipalKakiActionRequest{
+		TreeID:            "kt_1120",
+		Action:            "FELLED",
+		OfficerID:         "OFFICER-IWATE-42",
+		OfficerRole:       "OFFICIAL",
+		PermitNumber:      "PERMIT-MRK-2026-1120",
+		BiomassDisposedKg: 480.0,
+		Notes:             "Felled and chipped near school route",
+	})
+	req2 := httptest.NewRequest("POST", "/api/v1/municipal/kaki/action", bytes.NewReader(officialBody))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for OFFICIAL role, got %d. Body: %s", w2.Code, w2.Body.String())
+	}
+
+	var resp compliance.MunicipalKakiActionResponse
+	if err := json.Unmarshal(w2.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.UpdatedTree.ManagementStatus != "FELLED" {
+		t.Errorf("expected FELLED status, got %s", resp.UpdatedTree.ManagementStatus)
+	}
+	if resp.TreeRiskDropPct != 100.0 {
+		t.Errorf("expected 100%% risk drop, got %.1f", resp.TreeRiskDropPct)
+	}
+}
+
 
 
 

@@ -577,6 +577,184 @@ class ApiClientTest {
         assertEquals(0.0, data.returnProbability)
         assertEquals(ai.coexistshield.model.AlertTier.TIER_2_WARNING, data.alertTier)
     }
+
+    @Test
+    fun testRspoAuditPackageApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "auditId": "AUD-RSPO-2026-WM02",
+                "plantationId": "wilmar_sumatra_02",
+                "plantationName": "PT Wilmar Bio-Corridor Concession (Riau)",
+                "province": "Riau",
+                "reportingYear": 2026,
+                "totalMonitoredHectares": 42500.0,
+                "hcvBufferForestHectares": 8200.0,
+                "humanFatalities": 0,
+                "wildlifeFatalities": 0,
+                "acousticDeterrentDeployments": 18,
+                "bioAcousticDeflections": 42,
+                "verifiedSafePassages": 342,
+                "carcassRemovals": 7,
+                "zeroHarmComplianceScore": 1.0,
+                "rspoCertificateStatus": "CERTIFIED_ZERO_HARM_HCV",
+                "sha256AuditSignature": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "generatedAt": "2026-10-14T08:00:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getRspoAuditPackage("wilmar_sumatra_02")
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("AUD-RSPO-2026-WM02", data.auditId)
+        assertEquals(0, data.humanFatalities)
+        assertEquals(1.0, data.zeroHarmComplianceScore)
+        assertEquals("CERTIFIED_ZERO_HARM_HCV", data.rspoCertificateStatus)
+    }
+
+    @Test
+    fun testGcfBudgetImpactApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "municipalityCode": "03201",
+                "municipalityName": "Morioka City (岩手県盛岡市)",
+                "campaignTitle": "ふるさと納税 GCF: 通学路・住宅街の放置柿緊急伐採＆ツキノワグマ遭遇ゼロプロジェクト",
+                "totalFundingGoalYen": 15000000,
+                "currentRaisedYen": 11850000,
+                "fundingProgressPct": 79.0,
+                "donorCount": 482,
+                "costPerTreeYen": 35000,
+                "targetTreesCount": 420,
+                "completedFelledTreesCount": 214,
+                "remainingTreesCount": 206,
+                "schoolChildrenProtectedCount": 3420,
+                "quantifiedBearEncounterRiskReduction": 64.8,
+                "furusatoTaxPortalUrl": "https://www.furusato-tax.jp/gcf/03201-bear-persimmon",
+                "recentFellingLogs": [
+                    {
+                        "logId": "log_fell_01",
+                        "treeId": "kt_0710",
+                        "permitId": "PERMIT-MRK-2026-0710",
+                        "officerId": "OFFICER-IWATE-42",
+                        "action": "FELLED",
+                        "schoolDistanceM": 85,
+                        "riskDropPct": 18.5,
+                        "biomassKg": 450.0,
+                        "timestamp": "2026-10-12T04:00:00Z"
+                    }
+                ],
+                "updatedAt": "2026-10-14T08:00:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getGcfBudgetImpact("03201")
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("03201", data.municipalityCode)
+        assertEquals(15000000L, data.totalFundingGoalYen)
+        assertEquals(214, data.completedFelledTreesCount)
+        assertEquals(64.8, data.quantifiedBearEncounterRiskReduction)
+        assertEquals(1, data.recentFellingLogs.size)
+    }
+
+    @Test
+    fun testPriorityKakiLayerApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "municipalityCode": "03201",
+                "municipalityName": "Morioka City (岩手県盛岡市)",
+                "totalCatalogedTrees": 840,
+                "top5PercentCutoff": 0.89,
+                "priorityTrees": [
+                    {
+                        "treeId": "kt_1120",
+                        "address": "盛岡市高松3丁目12-4",
+                        "latitude": 39.7125,
+                        "longitude": 141.1620,
+                        "hazardScore": 0.95,
+                        "isTop5Percent": true,
+                        "distanceToSchoolRouteMeters": 120,
+                        "estimatedBearAttractantRadiusM": 800,
+                        "ownerConsentStatus": "GRANTED",
+                        "permitId": "PERMIT-MRK-2026-1120",
+                        "managementStatus": "UNMANAGED",
+                        "recommendedClearanceOrder": 1,
+                        "assignedSquad": "Morioka Chōjū Higai Squad 3",
+                        "fruitLoad": "ABUNDANT_FALLING"
+                    }
+                ],
+                "activeBaselineThreat": 0.91,
+                "updatedAt": "2026-10-14T08:00:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.getPriorityKakiLayer("03201")
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals(840, data.totalCatalogedTrees)
+        assertEquals(1, data.priorityTrees.size)
+        assertEquals("kt_1120", data.priorityTrees[0].treeId)
+        assertEquals("GRANTED", data.priorityTrees[0].ownerConsentStatus)
+    }
+
+    @Test
+    fun testLogMunicipalKakiActionApi() = runTest {
+        val mockJsonResponse = """
+            {
+                "auditLogId": "log_fell_999",
+                "updatedTree": {
+                    "treeId": "kt_1120",
+                    "address": "盛岡市高松3丁目12-4",
+                    "latitude": 39.7125,
+                    "longitude": 141.1620,
+                    "hazardScore": 0.0,
+                    "isTop5Percent": true,
+                    "distanceToSchoolRouteMeters": 120,
+                    "estimatedBearAttractantRadiusM": 800,
+                    "ownerConsentStatus": "GRANTED",
+                    "permitId": "PERMIT-MRK-2026-1120",
+                    "managementStatus": "FELLED",
+                    "recommendedClearanceOrder": 1,
+                    "assignedSquad": "Morioka Chōjū Higai Squad 3",
+                    "fruitLoad": "ABUNDANT_FALLING"
+                },
+                "treeRiskDropPct": 100.0,
+                "newMunicipalityRiskScore": 0.60,
+                "gcfCompletedFelledTrees": 215,
+                "gcfRiskReductionPct": 65.2,
+                "message": "Municipal Action Logged: Tree kt_1120 FELLED successfully",
+                "processedAt": "2026-10-14T08:20:00Z"
+            }
+        """.trimIndent()
+
+        val httpClient = createMockHttpClient(mockJsonResponse)
+        val repository = GeofenceRepository(httpClient)
+
+        val result = repository.logMunicipalKakiAction(
+            MunicipalKakiActionRequestDto(
+                treeId = "kt_1120",
+                action = "FELLED",
+                officerId = "OFFICER-IWATE-42",
+                officerRole = "OFFICIAL",
+                permitNumber = "PERMIT-MRK-2026-1120",
+                biomassDisposedKg = 480.0
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        val data = result.getOrNull()!!
+        assertEquals("FELLED", data.updatedTree.managementStatus)
+        assertEquals(100.0, data.treeRiskDropPct)
+        assertEquals(215, data.gcfCompletedFelledTrees)
+    }
 }
 
 

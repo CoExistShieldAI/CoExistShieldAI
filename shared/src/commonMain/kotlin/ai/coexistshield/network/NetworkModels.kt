@@ -338,6 +338,114 @@ data class TigerDepredationResponseDto(
     val alert: TigerDepredationAlertDto
 )
 
+@Serializable
+data class RspoAuditPackageDto(
+    val auditId: String,
+    val plantationId: String,
+    val plantationName: String,
+    val province: String,
+    val reportingYear: Int,
+    val totalMonitoredHectares: Double,
+    val hcvBufferForestHectares: Double,
+    val humanFatalities: Int,
+    val wildlifeFatalities: Int,
+    val acousticDeterrentDeployments: Int,
+    val bioAcousticDeflections: Int,
+    val verifiedSafePassages: Int,
+    val carcassRemovals: Int,
+    val zeroHarmComplianceScore: Double,
+    val rspoCertificateStatus: String,
+    val sha256AuditSignature: String,
+    val generatedAt: String
+)
+
+@Serializable
+data class FellingAuditLogDto(
+    val logId: String,
+    val treeId: String,
+    val permitId: String,
+    val officerId: String,
+    val action: String,
+    val schoolDistanceM: Int,
+    val riskDropPct: Double,
+    val biomassKg: Double,
+    val timestamp: String
+)
+
+@Serializable
+data class GcfBudgetImpactResponseDto(
+    val municipalityCode: String,
+    val municipalityName: String,
+    val campaignTitle: String,
+    val totalFundingGoalYen: Long,
+    val currentRaisedYen: Long,
+    val fundingProgressPct: Double,
+    val donorCount: Int,
+    val costPerTreeYen: Int,
+    val targetTreesCount: Int,
+    val completedFelledTreesCount: Int,
+    val remainingTreesCount: Int,
+    val schoolChildrenProtectedCount: Int,
+    val quantifiedBearEncounterRiskReduction: Double,
+    val furusatoTaxPortalUrl: String,
+    val recentFellingLogs: List<FellingAuditLogDto> = emptyList(),
+    val updatedAt: String
+)
+
+@Serializable
+data class MunicipalPriorityKakiTreeDto(
+    val treeId: String,
+    val address: String,
+    val latitude: Double,
+    val longitude: Double,
+    val hazardScore: Double,
+    val isTop5Percent: Boolean,
+    val distanceToSchoolRouteMeters: Int,
+    val estimatedBearAttractantRadiusM: Int,
+    val ownerConsentStatus: String,
+    val permitId: String,
+    val managementStatus: String,
+    val recommendedClearanceOrder: Int,
+    val assignedSquad: String,
+    val fruitLoad: String,
+    val felledAt: String? = null
+)
+
+@Serializable
+data class PriorityKakiLayerResponseDto(
+    val municipalityCode: String,
+    val municipalityName: String,
+    val totalCatalogedTrees: Int,
+    val top5PercentCutoff: Double,
+    val priorityTrees: List<MunicipalPriorityKakiTreeDto> = emptyList(),
+    val activeBaselineThreat: Double,
+    val updatedAt: String
+)
+
+@Serializable
+data class MunicipalKakiActionRequestDto(
+    val treeId: String,
+    val action: String,
+    val officerId: String,
+    val officerRole: String,
+    val permitNumber: String,
+    val biomassDisposedKg: Double = 0.0,
+    val notes: String? = null
+)
+
+@Serializable
+data class MunicipalKakiActionResponseDto(
+    val auditLogId: String,
+    val updatedTree: MunicipalPriorityKakiTreeDto,
+    val treeRiskDropPct: Double,
+    val newMunicipalityRiskScore: Double,
+    val gcfCompletedFelledTrees: Int,
+    val gcfRiskReductionPct: Double,
+    val message: String,
+    val processedAt: String
+)
+
+
 
 
 

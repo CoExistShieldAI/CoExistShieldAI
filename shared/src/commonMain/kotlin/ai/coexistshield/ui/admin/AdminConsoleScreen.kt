@@ -36,6 +36,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -68,6 +69,10 @@ data class PriorityKakiItem(
     val addressHint: String,
     val hazardScore: Double,
     val isNearSchool: Boolean,
+    val distanceToSchoolMeters: Int = 120,
+    val ownerConsentStatus: String = "GRANTED",
+    val permitId: String = "PERMIT-MRK-2026-1120",
+    val clearanceOrder: Int = 1,
     val fruitLoad: String,
     val status: TreeManagementStatus = TreeManagementStatus.UNMANAGED
 )
@@ -84,23 +89,32 @@ data class CarcassDispatchItem(
 data class AdminConsoleUiState(
     val activeTab: AdminTab = AdminTab.JAPAN_MUNICIPAL,
     val userRole: UserRole = UserRole.OFFICIAL,
-    // Japan Municipal Data
+    // Japan Municipal GCF Data
     val totalUnmanagedTrees: Int = 840,
     val top5PercentPriorityTrees: List<PriorityKakiItem> = listOf(
-        PriorityKakiItem("kt_1120", "Iwate Morioka #12 • Vacant House", 0.95, true, "ABUNDANT (Falling)"),
-        PriorityKakiItem("kt_1121", "Akita Kazuno #04 • Roadside Forest Border", 0.92, true, "ABUNDANT"),
-        PriorityKakiItem("kt_1122", "Hokkaido Sapporo #8 • Aging Orchard", 0.89, false, "MODERATE")
+        PriorityKakiItem("kt_1120", "盛岡市高松3丁目12-4 • 空き家", 0.95, true, 120, "GRANTED", "PERMIT-MRK-2026-1120", 1, "ABUNDANT (Falling)"),
+        PriorityKakiItem("kt_0842", "盛岡市上米内字中野 • 林縁放置果樹園", 0.91, true, 240, "ORDINANCE_CLEARANCE", "PERMIT-MRK-2026-0842", 2, "ABUNDANT"),
+        PriorityKakiItem("kt_0319", "盛岡市浅岸字二ツ森 • 住宅街裏山", 0.88, true, 310, "PENDING_CONSENT", "PERMIT-MRK-2026-0319", 3, "MODERATE")
     ),
-    val gcfTreesClearedCount: Int = 42,
-    val gcfAttractantReductionPct: Int = 38,
+    val gcfFundingGoalYen: Long = 15000000L,
+    val gcfCurrentRaisedYen: Long = 11850000L,
+    val gcfFundingProgressPct: Double = 79.0,
+    val gcfDonorCount: Int = 482,
+    val gcfTreesClearedCount: Int = 214,
+    val gcfTargetTreesCount: Int = 420,
+    val gcfSchoolChildrenProtected: Int = 3420,
+    val gcfAttractantReductionPct: Double = 64.8,
     // APAC Plantation Data
     val pendingCarcasses: List<CarcassDispatchItem> = listOf(
         CarcassDispatchItem("rk_4412", "Sumatra Riau • Highway 1 South", "Wild Boar", "Bloated", 0.88),
-        CarcassDispatchItem("ls_901", "Kui Buri Forest Border • Pasture B", "Cattle Kill-Site (Tiger 72h)", "Fresh Kill", 0.94)
+        CarcassDispatchItem("ls_sumatra_01", "Desa Bukit Kesuma • Pasture A", "Cattle Kill-Site (Tiger 72h)", "Active Return Risk", 0.95)
     ),
     val rspoZeroFatalityDays: Int = 184,
+    val rspoHcvMonitoredHectares: Double = 42500.0,
+    val rspoSafePassagesCount: Int = 342,
+    val rspoAuditSignature: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     // System AI Health Data
-    val lastRetrainTimestamp: String = "2026-10-13 18:30 UTC",
+    val lastRetrainTimestamp: String = "2026-10-14 02:30 UTC",
     val modelAucScore: Double = 0.86,
     val activeGeofenceCount: Int = 18,
     val isRetrainingInProgress: Boolean = false
@@ -207,34 +221,85 @@ fun JapanMunicipalTab(
     state: AdminConsoleUiState,
     onMarkTreePruned: (String) -> Unit
 ) {
-    // 1. GCF Progress & Budget Metrics Card
+    // 1. GCF Progress & Budget Metrics Card (Furusato Chosei Integration)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Government Crowdfunding (GCF) Progress",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "ふるさと納税 GCF 連携: 放置柿緊急伐採プロジェクト",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Box(
+                    modifier = Modifier
+                        .background(TierSafe.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text("盛岡市 (03201)", color = TierSafe, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Financial Goal & Raised Progress
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "調達資金額: ¥${state.gcfCurrentRaisedYen / 10000}万 / ¥${state.gcfFundingGoalYen / 10000}万円",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${state.gcfFundingProgressPct}% 達成 (${state.gcfDonorCount}名)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { (state.gcfFundingProgressPct / 100.0).toFloat().coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Key Quantified Impact Metrics
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Trees Cleared via GCF", fontSize = 11.sp, color = Color.Gray)
-                    Text("${state.gcfTreesClearedCount} Trees", fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text("伐採実績", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.gcfTreesClearedCount} / ${state.gcfTargetTreesCount}本", fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    Text("残 ${state.gcfTargetTreesCount - state.gcfTreesClearedCount}本", fontSize = 10.sp, color = Color.Gray)
                 }
                 Column {
-                    Text("Attractant Reduction", fontSize = 11.sp, color = Color.Gray)
-                    Text("-${state.gcfAttractantReductionPct}%", fontSize = 18.sp, fontWeight = FontWeight.Black, color = TierSafe)
+                    Text("遭遇リスク削減", fontSize = 11.sp, color = Color.Gray)
+                    Text("-${state.gcfAttractantReductionPct}%", fontSize = 16.sp, fontWeight = FontWeight.Black, color = TierSafe)
+                    Text("空間統計再計算済", fontSize = 10.sp, color = TierSafe)
                 }
                 Column {
-                    Text("Cataloged Trees", fontSize = 11.sp, color = Color.Gray)
-                    Text("${state.totalUnmanagedTrees}", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("保護児童数", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.gcfSchoolChildrenProtected}名", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("通学路沿線", fontSize = 10.sp, color = Color.Gray)
+                }
+                Column {
+                    Text("単位伐採コスト", fontSize = 11.sp, color = Color.Gray)
+                    Text("¥35,000", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("全額GCF充当", fontSize = 10.sp, color = Color.Gray)
                 }
             }
         }
@@ -247,15 +312,15 @@ fun JapanMunicipalTab(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text("Top 5% Lethal Hazard Persimmon Trees", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("Filtered by proximity to school routes & residential density", fontSize = 11.sp, color = Color.Gray)
+            Text("鳥獣被害対策実施隊 伐採優先度リスト (Top 5% Priority)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("通学路距離・クマ誘引半径・公的伐採許可書 (Permit ID) 連携", fontSize = 11.sp, color = Color.Gray)
         }
         Box(
             modifier = Modifier
                 .background(TierDanger.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            Text("High Priority", color = TierDanger, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("優先度順位付", color = TierDanger, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
     }
 
@@ -268,40 +333,93 @@ fun JapanMunicipalTab(
             border = CardDefaults.outlinedCardBorder()
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val isFelled = tree.status == TreeManagementStatus.FELLED || tree.status == TreeManagementStatus.PRUNED
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(tree.addressHint, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("#${tree.clearanceOrder}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(tree.addressHint, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
                     Box(
                         modifier = Modifier
-                            .background(TierDanger, RoundedCornerShape(4.dp))
+                            .background(if (isFelled) TierSafe else TierDanger, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text("Hazard ${(tree.hazardScore * 100).toInt()}%", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (isFelled) "伐採済 0%" else "Hazard ${(tree.hazardScore * 100).toInt()}%",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (tree.isNearSchool) {
-                        Text("⚠️ Near School Route", fontSize = 11.sp, color = TierWarning, fontWeight = FontWeight.SemiBold)
+                        Text("⚠️ 通学路から${tree.distanceToSchoolMeters}m", fontSize = 11.sp, color = TierWarning, fontWeight = FontWeight.SemiBold)
                     }
-                    Text("• Fruit: ${tree.fruitLoad}", fontSize = 11.sp, color = Color.Gray)
+                    Text("• 実り: ${tree.fruitLoad}", fontSize = 11.sp, color = Color.Gray)
+                }
+
+                // Permit Status Badge
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val (consentBadgeColor, consentText) = when (tree.ownerConsentStatus) {
+                        "GRANTED" -> TierSafe to "承諾済: ${tree.permitId}"
+                        "ORDINANCE_CLEARANCE" -> TierWarning to "条例代執行: ${tree.permitId}"
+                        else -> Color.Gray to "所有者承諾手続き中"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(consentBadgeColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(consentText, color = consentBadgeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                // Action Row with Role-Based Access Control (RBAC)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    Button(
-                        onClick = { onMarkTreePruned(tree.id) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = TierSafe)
-                    ) {
-                        Text("Mark Pruned / Felled", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    val isAuthorizedOfficer = state.userRole == UserRole.OFFICIAL || state.userRole == UserRole.ADMIN
+
+                    if (isFelled) {
+                        OutlinedButton(
+                            onClick = {},
+                            enabled = false,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("✅ 伐採執行済 (リスク0%)", fontSize = 12.sp, color = TierSafe)
+                        }
+                    } else if (isAuthorizedOfficer) {
+                        Button(
+                            onClick = { onMarkTreePruned(tree.id) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = TierSafe)
+                        ) {
+                            Text("公的伐採・剪定を執行 (官民連携)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {},
+                            enabled = false,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("公的伐採隊専用 (無断伐採防止)", fontSize = 11.sp, color = Color.Gray)
+                        }
                     }
                 }
             }
@@ -349,6 +467,30 @@ fun ApacPlantationTab(
                 text = "${state.rspoZeroFatalityDays} Consecutive Days — Zero Human Fatalities across Concession",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Black
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Monitored HCV Area", fontSize = 11.sp, color = Color.Gray)
+                    Text("${(state.rspoHcvMonitoredHectares).toInt()} ha", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("Safe Corridor Passages", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.rspoSafePassagesCount} Herds", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TierSafe)
+                }
+                Column {
+                    Text("Compliance Score", fontSize = 11.sp, color = Color.Gray)
+                    Text("100% Zero-Harm", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TierSafe)
+                }
+            }
+
+            Text(
+                text = "Audit Signature: ${state.rspoAuditSignature.take(28)}... (Tamper-Proof SHA-256)",
+                fontSize = 10.sp,
+                color = Color.Gray
             )
 
             Button(

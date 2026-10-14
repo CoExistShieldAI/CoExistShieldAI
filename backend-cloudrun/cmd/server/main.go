@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"ai.coexistshield/backend/internal/api"
+	"ai.coexistshield/backend/internal/compliance"
 	"ai.coexistshield/backend/internal/elephant"
 	"ai.coexistshield/backend/internal/gemini"
 	"ai.coexistshield/backend/internal/geofence"
@@ -27,8 +28,9 @@ func main() {
 	mlPipeline := ml.NewRetrainingPipeline()
 	elephantEngine := elephant.NewEngine()
 	tigerEngine := tiger.NewEngine()
+	complianceEngine := compliance.NewEngine()
 
-	router := api.NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine)
+	router := api.NewRouter(geminiClient, geofenceEngine, memoryBank, mlPipeline, elephantEngine, tigerEngine, complianceEngine)
 
 	server := &http.Server{
 		Addr:         ":" + port,

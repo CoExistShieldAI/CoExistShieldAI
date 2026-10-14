@@ -173,6 +173,41 @@ class GeofenceRepository(
             httpClient.post("/api/v1/analytics/sumatra-tiger/pastures/$enclosureId/clear").body()
         }
     }
+
+    suspend fun getRspoAuditPackage(
+        plantationId: String = "wilmar_sumatra_02"
+    ): Result<ai.coexistshield.network.RspoAuditPackageDto> {
+        return runCatching {
+            httpClient.get("/api/v1/compliance/rspo/package?plantationId=$plantationId").body()
+        }
+    }
+
+    suspend fun getGcfBudgetImpact(
+        municipalityCode: String = "03201"
+    ): Result<ai.coexistshield.network.GcfBudgetImpactResponseDto> {
+        return runCatching {
+            httpClient.get("/api/v1/compliance/gcf/budget-impact?municipalityCode=$municipalityCode").body()
+        }
+    }
+
+    suspend fun getPriorityKakiLayer(
+        municipalityCode: String = "03201"
+    ): Result<ai.coexistshield.network.PriorityKakiLayerResponseDto> {
+        return runCatching {
+            httpClient.get("/api/v1/municipal/kaki/priority-layer?municipalityCode=$municipalityCode").body()
+        }
+    }
+
+    suspend fun logMunicipalKakiAction(
+        request: ai.coexistshield.network.MunicipalKakiActionRequestDto
+    ): Result<ai.coexistshield.network.MunicipalKakiActionResponseDto> {
+        return runCatching {
+            httpClient.post("/api/v1/municipal/kaki/action") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
 }
 
 
