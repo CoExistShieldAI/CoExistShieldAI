@@ -35,22 +35,24 @@ func setupTestServer() *Router {
 
 func TestHealthz(t *testing.T) {
 	router := setupTestServer()
-	req := httptest.NewRequest("GET", "/healthz", nil)
-	w := httptest.NewRecorder()
+	for _, path := range []string{"/healthz", "/health", "/api/v1/health", "/"} {
+		req := httptest.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+		router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", w.Code)
-	}
+		if w.Code != http.StatusOK {
+			t.Fatalf("path %s: expected 200 OK, got %d", path, w.Code)
+		}
 
-	var body map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to parse json response: %v", err)
-	}
+		var body map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("path %s: failed to parse json response: %v", path, err)
+		}
 
-	if body["status"] != "healthy" {
-		t.Errorf("expected status healthy, got %s", body["status"])
+		if body["status"] != "healthy" {
+			t.Errorf("path %s: expected status healthy, got %s", path, body["status"])
+		}
 	}
 }
 

@@ -92,6 +92,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/healthz", r.handleHealth)
+	r.mux.HandleFunc("/health", r.handleHealth)
+	r.mux.HandleFunc("/api/v1/health", r.handleHealth)
+	r.mux.HandleFunc("/", r.handleRoot)
 	r.mux.HandleFunc("/api/v1/forensics/triage", r.handleForensicsTriage)
 	r.mux.HandleFunc("/api/v1/incidents", r.handleIncidents)
 	r.mux.HandleFunc("/api/v1/roadkills", r.handleGetRoadkills)
@@ -142,6 +145,14 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		"service": "coexistshield-backend-cloudrun",
 		"time":    time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func (r *Router) handleRoot(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path != "/" {
+		http.NotFound(w, req)
+		return
+	}
+	r.handleHealth(w, req)
 }
 
 func (r *Router) handleForensicsTriage(w http.ResponseWriter, req *http.Request) {
