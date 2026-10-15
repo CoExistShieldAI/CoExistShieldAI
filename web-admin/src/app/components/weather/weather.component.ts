@@ -93,7 +93,7 @@ interface RegionPreset {
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           </div>
           <div class="text-2xl font-bold text-white mt-1">{{ api.weather().length }} Nodes</div>
-          <div class="text-[11px] text-slate-500 mt-0.5">All 20 JAPAC conflict zones covered</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">All 40 JAPAC conflict zones & adjacent corridors covered</div>
         </div>
 
         <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
@@ -133,32 +133,52 @@ interface RegionPreset {
             <select
               [(ngModel)]="regionFilter"
               class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
-              <option value="">All Regions (JAPAC 20 Zones)</option>
-              <optgroup label="Thailand (Asian Elephant)">
+              <option value="">All Regions (JAPAC 40 Zones & Corridors)</option>
+              <optgroup label="Thailand (Asian Elephant & Gaur)">
                 <option value="Kaeng Krachan">Kaeng Krachan & Pa La-U</option>
                 <option value="Kui Buri">Kui Buri</option>
                 <option value="Khao Yai">Khao Yai National Park</option>
                 <option value="Chanthaburi">Chanthaburi Fruit Belt</option>
+                <option value="Thap Lan">Thap Lan (Hwy 304 Corridor)</option>
+                <option value="Tha Takiap">Khao Ang Rue Nai (Tha Takiap)</option>
+                <option value="Thap Sakae">Huai Yang (Thap Sakae Pass)</option>
+                <option value="Suan Phueng">Suan Phueng (Phachi River)</option>
               </optgroup>
               <optgroup label="Indonesia (Sumatran Tiger & Elephant)">
                 <option value="Siak">Riau / Siak-Minas</option>
                 <option value="Pelalawan">Riau / Pelalawan</option>
                 <option value="Bukit Tigapuluh">Jambi / Bukit Tigapuluh</option>
                 <option value="Aceh">Aceh / Leuser Ecosystem</option>
+                <option value="Tesso Nilo">Riau / Tesso Nilo Buffer</option>
+                <option value="Bengkalis">Riau / Giam Siak Peatland</option>
+                <option value="Langkat">North Sumatra / Langkat Foothill</option>
+                <option value="Peureulak">Aceh / Peureulak Corridor</option>
               </optgroup>
-              <optgroup label="India (Elephant & Bengal Tiger)">
+              <optgroup label="India (Elephant & Bengal Tiger & Leopard)">
                 <option value="Kaziranga">Assam / Kaziranga NH-715</option>
                 <option value="Valparai">Tamil Nadu / Valparai</option>
                 <option value="Bandipur">Karnataka / Bandipur NH-766</option>
                 <option value="Sundarbans">West Bengal / Sundarbans</option>
+                <option value="Karbi Anglong">Assam / Karbi Anglong Foothills</option>
+                <option value="Nagarhole">Karnataka / Nagarhole Kabini</option>
+                <option value="Wayanad">Kerala / Wayanad Sultan Bathery</option>
+                <option value="Dooars">West Bengal / Dooars Gorumara</option>
               </optgroup>
               <optgroup label="Japan (Asian Black Bear & Brown Bear)">
                 <option value="Nagano">Nagano / Chikuma River Basin</option>
+                <option value="Karuizawa">Nagano / Karuizawa Asama</option>
+                <option value="Minamiuonuma">Niigata / Minamiuonuma</option>
                 <option value="Morioka">Iwate / Morioka Matsuzono</option>
-                <option value="Akita">Akita / Kazuno Hachimantai</option>
+                <option value="Hanamaki">Iwate / Hanamaki Kitakami</option>
+                <option value="Sendai">Miyagi / Sendai Aobayama</option>
+                <option value="Kazuno">Akita / Kazuno Hachimantai</option>
+                <option value="Kitaakita">Akita / Kitaakita Moriyoshi</option>
                 <option value="Aizu">Fukushima / Aizu Basin</option>
-                <option value="Shiretoko">Hokkaido / Shiretoko Rausu</option>
+                <option value="Yonezawa">Yamagata / Yonezawa Foothill</option>
+                <option value="Rausu">Hokkaido / Shiretoko Rausu</option>
+                <option value="Shari">Hokkaido / Shari Utoro</option>
                 <option value="Sapporo">Hokkaido / Sapporo Minami</option>
+                <option value="Otaru">Hokkaido / Otaru Zenibako</option>
                 <option value="Eniwa">Hokkaido / Eniwa Agricultural</option>
                 <option value="Horokanai">Hokkaido / Shumarinai Lake</option>
               </optgroup>
@@ -920,6 +940,315 @@ export class WeatherComponent implements OnInit {
       moon: 0.50,
       condition: 'OVERCAST',
       notes: 'Wild lake peninsula; fatal angler predatory attack site & remote forestry frontier',
+      targetWildlife: 'Brown Bear'
+    },
+
+    // --- ADJACENT & SIMILAR EXPANSION (21 - 40) ---
+    // Thailand Corridors
+    {
+      name: 'Thap Lan Hwy 304 Ecoduct',
+      region: 'Thailand (Prachinburi / Thap Lan)',
+      lat: 14.215,
+      lng: 101.930,
+      temp: 28.5,
+      humidity: 79,
+      windSpeed: 10.5,
+      windDir: 120,
+      precip: 0,
+      moon: 0.12,
+      condition: 'CLEAR',
+      notes: 'Highway 304 wildlife ecoduct bridge corridor; frequent gaur & elephant crossing collisions',
+      targetWildlife: 'Asian Elephant & Gaur'
+    },
+    {
+      name: 'Khao Ang Rue Nai (Tha Takiap)',
+      region: 'Thailand (Chachoengsao / Tha Takiap)',
+      lat: 13.385,
+      lng: 101.950,
+      temp: 29.8,
+      humidity: 84,
+      windSpeed: 8.5,
+      windDir: 140,
+      precip: 2.0,
+      moon: 0.12,
+      condition: 'RAIN',
+      notes: 'Eastern Forest Complex core; severe elephant crop raiding across cassava & oil palm estates',
+      targetWildlife: 'Asian Elephant'
+    },
+    {
+      name: 'Huai Yang Mountain Pass',
+      region: 'Thailand (Prachuap / Thap Sakae)',
+      lat: 11.605,
+      lng: 99.660,
+      temp: 30.5,
+      humidity: 81,
+      windSpeed: 13.0,
+      windDir: 95,
+      precip: 0,
+      moon: 0.12,
+      condition: 'CLEAR',
+      notes: 'Narrow Isthmus corridor between Tenasserim ridge and coastal coconut groves',
+      targetWildlife: 'Asian Elephant'
+    },
+    {
+      name: 'Suan Phueng Phachi Frontier',
+      region: 'Thailand (Ratchaburi / Suan Phueng)',
+      lat: 13.545,
+      lng: 99.310,
+      temp: 27.2,
+      humidity: 83,
+      windSpeed: 9.0,
+      windDir: 100,
+      precip: 1.0,
+      moon: 0.12,
+      condition: 'OVERCAST',
+      notes: 'Myanmar border montane forest; bamboo shoot & pineapple raiding herds',
+      targetWildlife: 'Asian Elephant'
+    },
+
+    // Indonesia Sumatra Corridors
+    {
+      name: 'Tesso Nilo North Buffer',
+      region: 'Indonesia (Riau / Tesso Nilo)',
+      lat: 0.120,
+      lng: 101.620,
+      temp: 28.6,
+      humidity: 92,
+      windSpeed: 5.0,
+      windDir: 175,
+      precip: 3.0,
+      moon: 0.02,
+      condition: 'RAIN',
+      notes: 'Lowland rainforest & oil palm mosaic; frequent stressed elephant troop encounters',
+      targetWildlife: 'Sumatran Elephant'
+    },
+    {
+      name: 'Giam Siak Peatland Bio-Station',
+      region: 'Indonesia (Riau / Bengkalis)',
+      lat: 1.180,
+      lng: 101.880,
+      temp: 27.8,
+      humidity: 94,
+      windSpeed: 6.5,
+      windDir: 165,
+      precip: 1.5,
+      moon: 0.02,
+      condition: 'RAIN',
+      notes: 'Peat swamp forest boundary; tiger livestock depredation along canal banks',
+      targetWildlife: 'Sumatran Tiger'
+    },
+    {
+      name: 'Langkat Leuser Foothill',
+      region: 'Indonesia (North Sumatra / Langkat)',
+      lat: 3.580,
+      lng: 98.220,
+      temp: 26.2,
+      humidity: 88,
+      windSpeed: 7.0,
+      windDir: 260,
+      precip: 4.5,
+      moon: 0.02,
+      condition: 'RAIN',
+      notes: 'Gunung Leuser east flank palm border; trans-boundary elephant and orangutan movements',
+      targetWildlife: 'Sumatran Elephant & Orangutan'
+    },
+    {
+      name: 'Peureulak River Conflict Zone',
+      region: 'Indonesia (Aceh / Aceh Timur)',
+      lat: 4.850,
+      lng: 97.880,
+      temp: 26.8,
+      humidity: 87,
+      windSpeed: 8.0,
+      windDir: 280,
+      precip: 5.0,
+      moon: 0.02,
+      condition: 'RAIN',
+      notes: 'Highway & settlement boundary; persistent high-risk crop raiding and fence breaches',
+      targetWildlife: 'Sumatran Elephant'
+    },
+
+    // India Corridors
+    {
+      name: 'Karbi Anglong South Foothill',
+      region: 'India (Assam / Karbi Anglong)',
+      lat: 26.510,
+      lng: 93.220,
+      temp: 26.5,
+      humidity: 91,
+      windSpeed: 14.0,
+      windDir: 210,
+      precip: 26.0,
+      moon: 0.88,
+      condition: 'HEAVY_RAIN',
+      notes: 'Kaziranga escape corridor into Karbi Anglong highlands during monsoon inundation',
+      targetWildlife: 'Asian Elephant & Tiger'
+    },
+    {
+      name: 'Nagarhole Kabini Reservoir',
+      region: 'India (Karnataka / Nagarhole)',
+      lat: 11.950,
+      lng: 76.280,
+      temp: 25.0,
+      humidity: 78,
+      windSpeed: 11.0,
+      windDir: 255,
+      precip: 0,
+      moon: 0.88,
+      condition: 'CLEAR',
+      notes: 'Kabini backwaters agricultural fringe; high tiger and elephant density crop raiding',
+      targetWildlife: 'Asian Elephant & Tiger'
+    },
+    {
+      name: 'Wayanad Sultan Bathery Agro-Forest',
+      region: 'India (Kerala / Wayanad)',
+      lat: 11.660,
+      lng: 76.260,
+      temp: 23.5,
+      humidity: 86,
+      windSpeed: 9.5,
+      windDir: 240,
+      precip: 8.0,
+      moon: 0.88,
+      condition: 'RAIN',
+      notes: 'Coffee & pepper plantation landscape; night elephant incursions and cattle loss',
+      targetWildlife: 'Asian Elephant & Tiger'
+    },
+    {
+      name: 'Dooars Gorumara Tea Plains',
+      region: 'India (West Bengal / Dooars)',
+      lat: 26.750,
+      lng: 88.790,
+      temp: 25.8,
+      humidity: 89,
+      windSpeed: 12.0,
+      windDir: 150,
+      precip: 10.0,
+      moon: 0.88,
+      condition: 'RAIN',
+      notes: 'Railway corridor elephant collision hotspot and leopard day-bedding in tea bushes',
+      targetWildlife: 'Asian Elephant & Common Leopard'
+    },
+
+    // Japan Adjacent & Similar
+    {
+      name: 'Karuizawa Asama Foothill',
+      region: 'Japan (Nagano / Karuizawa)',
+      lat: 36.350,
+      lng: 138.600,
+      temp: 12.5,
+      humidity: 69,
+      windSpeed: 10.0,
+      windDir: 290,
+      precip: 0,
+      moon: 0.08,
+      condition: 'CLEAR',
+      notes: 'Mt Asama resort villas and urban perimeter; bear garbage and garden fruit attractants',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Minamiuonuma Valley Base',
+      region: 'Japan (Niigata / Minamiuonuma)',
+      lat: 37.060,
+      lng: 138.870,
+      temp: 13.8,
+      humidity: 73,
+      windSpeed: 8.0,
+      windDir: 310,
+      precip: 0,
+      moon: 0.08,
+      condition: 'OVERCAST',
+      notes: 'Heavy snowfall mountain basin; Kan-Etsu corridor and settlement fruit trees attraction',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Hanamaki Kitakami River Rim',
+      region: 'Japan (Iwate / Hanamaki)',
+      lat: 39.390,
+      lng: 141.120,
+      temp: 12.2,
+      humidity: 69,
+      windSpeed: 7.5,
+      windDir: 320,
+      precip: 0,
+      moon: 0.15,
+      condition: 'CLEAR',
+      notes: 'Kitakami river greenbelt providing direct bear travel corridor into suburban apple orchards',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Sendai Aobayama Urban Forest',
+      region: 'Japan (Miyagi / Sendai)',
+      lat: 38.260,
+      lng: 140.840,
+      temp: 14.5,
+      humidity: 65,
+      windSpeed: 9.0,
+      windDir: 290,
+      precip: 0,
+      moon: 0.15,
+      condition: 'CLEAR',
+      notes: 'Metropolitan hill margin; university campus and residential hilltops near Hirose River gorge',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Kitaakita Moriyoshi Mountain Gate',
+      region: 'Japan (Akita / Kitaakita)',
+      lat: 40.180,
+      lng: 140.370,
+      temp: 11.0,
+      humidity: 76,
+      windSpeed: 8.5,
+      windDir: 295,
+      precip: 0,
+      moon: 0.15,
+      condition: 'OVERCAST',
+      notes: 'Mt Moriyoshi beech zone; consecutive town centre intrusions and elderly pedestrian attacks',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Yonezawa Foothill Orchard Post',
+      region: 'Japan (Yamagata / Yonezawa)',
+      lat: 37.910,
+      lng: 140.110,
+      temp: 13.5,
+      humidity: 67,
+      windSpeed: 7.0,
+      windDir: 270,
+      precip: 0,
+      moon: 0.08,
+      condition: 'CLEAR',
+      notes: 'Ou mountain western foothills; La France pear & apple orchards vulnerable to autumn foraging',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Shari Utoro Coastal Stream',
+      region: 'Japan (Hokkaido / Shari Utoro)',
+      lat: 44.070,
+      lng: 144.990,
+      temp: 10.0,
+      humidity: 75,
+      windSpeed: 15.0,
+      windDir: 350,
+      precip: 0.5,
+      moon: 0.50,
+      condition: 'OVERCAST',
+      notes: 'West coast of Shiretoko peninsula; salmon fishery and Oshinkoshin tourist trail encounters',
+      targetWildlife: 'Brown Bear'
+    },
+    {
+      name: 'Otaru Zenibako Seaside Bluff',
+      region: 'Japan (Hokkaido / Otaru)',
+      lat: 43.140,
+      lng: 141.170,
+      temp: 11.5,
+      humidity: 68,
+      windSpeed: 11.0,
+      windDir: 320,
+      precip: 0,
+      moon: 0.50,
+      condition: 'CLEAR',
+      notes: 'Steep coastal bluff residences with fruit trees and garbage foraging near Sapporo border',
       targetWildlife: 'Brown Bear'
     }
   ];
