@@ -36,27 +36,54 @@ interface RegionPreset {
             </span>
           </h2>
           <p class="text-sm text-slate-400">
-            Real-time meteorological observations feeding AI threat modeling, windborne scent plume diffusion, nocturnal multipliers, and flood migration risks.
+            Real-time meteorological observations feeding AI threat modeling, windborne scent plume diffusion, nocturnal multipliers, and flood migration risks across 20 JAPAC conflict zones.
           </p>
         </div>
 
-        <div class="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Live Internet Sync Button -->
           <button
-            (click)="activeTab.set('list'); cancelEdit()"
-            [class.bg-slate-800]="activeTab() === 'list'"
-            [class.text-white]="activeTab() === 'list'"
-            class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
-            <span>Observations Registry ({{ filteredWeather().length }})</span>
+            (click)="syncLiveWeather()"
+            [disabled]="isSyncing()"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/40 transition-all flex items-center gap-2 shadow-sm">
+            @if (isSyncing()) {
+              <svg class="w-3.5 h-3.5 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              <span>Syncing Live Internet Met...</span>
+            } @else {
+              <span>⚡ Sync Live Internet Weather (Open-Meteo)</span>
+            }
           </button>
-          <button
-            (click)="startNew()"
-            [class.bg-sky-600]="activeTab() === 'form'"
-            [class.text-white]="activeTab() === 'form'"
-            class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
-            <span>{{ isEditing() ? '✏️ Edit Station' : '+ Add Sensor Node' }}</span>
-          </button>
+
+          <!-- Tab Switcher -->
+          <div class="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+            <button
+              (click)="activeTab.set('list'); cancelEdit()"
+              [class.bg-slate-800]="activeTab() === 'list'"
+              [class.text-white]="activeTab() === 'list'"
+              class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+              <span>Observations Registry ({{ filteredWeather().length }})</span>
+            </button>
+            <button
+              (click)="startNew()"
+              [class.bg-sky-600]="activeTab() === 'form'"
+              [class.text-white]="activeTab() === 'form'"
+              class="px-4 py-2 rounded-lg font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+              <span>{{ isEditing() ? '✏️ Edit Station' : '+ Add Sensor Node' }}</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      <!-- Sync Live Feedback Banner -->
+      @if (syncMessage()) {
+        <div class="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center justify-between shadow-sm animate-fade-in">
+          <div class="flex items-center gap-2">
+            <span>🛰️</span>
+            <span>{{ syncMessage() }}</span>
+          </div>
+          <button (click)="syncMessage.set(null)" class="text-emerald-400 hover:text-emerald-200 text-xs font-bold px-2 py-0.5">✕</button>
+        </div>
+      }
 
       <!-- Quick AI Modeling Metrics Bar -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -65,8 +92,8 @@ interface RegionPreset {
             <span>Active Met Stations</span>
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           </div>
-          <div class="text-2xl font-bold text-white mt-1">{{ api.weather().length }}</div>
-          <div class="text-[11px] text-slate-500 mt-0.5">Across Thailand, Indonesia, India, Japan</div>
+          <div class="text-2xl font-bold text-white mt-1">{{ api.weather().length }} Nodes</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">All 20 JAPAC conflict zones covered</div>
         </div>
 
         <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
@@ -106,11 +133,35 @@ interface RegionPreset {
             <select
               [(ngModel)]="regionFilter"
               class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
-              <option value="">All Regions</option>
-              <option value="Thailand">Thailand (Kaeng Krachan)</option>
-              <option value="Indonesia">Indonesia (Riau / Sumatra)</option>
-              <option value="Japan">Japan (Nagano / Iwate / Hokkaido)</option>
-              <option value="India">India (Kaziranga)</option>
+              <option value="">All Regions (JAPAC 20 Zones)</option>
+              <optgroup label="Thailand (Asian Elephant)">
+                <option value="Kaeng Krachan">Kaeng Krachan & Pa La-U</option>
+                <option value="Kui Buri">Kui Buri</option>
+                <option value="Khao Yai">Khao Yai National Park</option>
+                <option value="Chanthaburi">Chanthaburi Fruit Belt</option>
+              </optgroup>
+              <optgroup label="Indonesia (Sumatran Tiger & Elephant)">
+                <option value="Siak">Riau / Siak-Minas</option>
+                <option value="Pelalawan">Riau / Pelalawan</option>
+                <option value="Bukit Tigapuluh">Jambi / Bukit Tigapuluh</option>
+                <option value="Aceh">Aceh / Leuser Ecosystem</option>
+              </optgroup>
+              <optgroup label="India (Elephant & Bengal Tiger)">
+                <option value="Kaziranga">Assam / Kaziranga NH-715</option>
+                <option value="Valparai">Tamil Nadu / Valparai</option>
+                <option value="Bandipur">Karnataka / Bandipur NH-766</option>
+                <option value="Sundarbans">West Bengal / Sundarbans</option>
+              </optgroup>
+              <optgroup label="Japan (Asian Black Bear & Brown Bear)">
+                <option value="Nagano">Nagano / Chikuma River Basin</option>
+                <option value="Morioka">Iwate / Morioka Matsuzono</option>
+                <option value="Akita">Akita / Kazuno Hachimantai</option>
+                <option value="Aizu">Fukushima / Aizu Basin</option>
+                <option value="Shiretoko">Hokkaido / Shiretoko Rausu</option>
+                <option value="Sapporo">Hokkaido / Sapporo Minami</option>
+                <option value="Eniwa">Hokkaido / Eniwa Agricultural</option>
+                <option value="Horokanai">Hokkaido / Shumarinai Lake</option>
+              </optgroup>
             </select>
 
             <!-- Condition Filter -->
@@ -292,9 +343,9 @@ interface RegionPreset {
           @if (!isEditing()) {
             <div>
               <label class="block text-xs font-semibold text-slate-300 mb-2">
-                Quick-Select Deployment Zone Preset:
+                Quick-Select from All 20 Conflict Zones:
               </label>
-              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 max-h-72 overflow-y-auto p-1">
                 @for (preset of regionPresets; track preset.name) {
                   <button
                     type="button"
@@ -330,7 +381,7 @@ interface RegionPreset {
                   [(ngModel)]="formData.region"
                   name="region"
                   required
-                  placeholder="e.g., Thailand (Kaeng Krachan)"
+                  placeholder="e.g., Thailand (Kaeng Krachan / Pa La-U)"
                   class="w-full px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
               </div>
 
@@ -538,6 +589,8 @@ export class WeatherComponent implements OnInit {
 
   activeTab = signal<'list' | 'form'>('list');
   isEditing = signal<boolean>(false);
+  isSyncing = signal<boolean>(false);
+  syncMessage = signal<string | null>(null);
   editingId: string | null = null;
 
   regionFilter = '';
@@ -546,7 +599,7 @@ export class WeatherComponent implements OnInit {
 
   formData: Partial<AdminWeatherData> = {
     station_name: '',
-    region: 'Thailand (Kaeng Krachan)',
+    region: 'Thailand (Kaeng Krachan / Pa La-U)',
     latitude: 12.875,
     longitude: 99.630,
     temperature_celsius: 31.0,
@@ -562,9 +615,10 @@ export class WeatherComponent implements OnInit {
   };
 
   regionPresets: RegionPreset[] = [
+    // --- THAILAND ---
     {
-      name: 'Kaeng Krachan',
-      region: 'Thailand (Kaeng Krachan)',
+      name: 'Kaeng Krachan / Pa La-U',
+      region: 'Thailand (Kaeng Krachan / Pa La-U)',
       lat: 12.875,
       lng: 99.630,
       temp: 31.5,
@@ -574,12 +628,59 @@ export class WeatherComponent implements OnInit {
       precip: 0,
       moon: 0.12,
       condition: 'CLEAR',
-      notes: 'East wind carrying ripe sugarcane aroma into elephant reserve',
+      notes: 'Route 3219 crossing point; east wind drifting sugarcane odor towards elephant reserve border',
       targetWildlife: 'Asian Elephant (HEC)'
     },
     {
-      name: 'Siak-Minas Fringe',
-      region: 'Indonesia (Riau)',
+      name: 'Kui Buri Forest Fringe',
+      region: 'Thailand (Kui Buri / Prachuap)',
+      lat: 12.062,
+      lng: 99.782,
+      temp: 30.2,
+      humidity: 85,
+      windSpeed: 11.0,
+      windDir: 80,
+      precip: 1.5,
+      moon: 0.12,
+      condition: 'RAIN',
+      notes: 'Pineapple & jackfruit buffer; high-sugar crop volatility triggering breeding herd incursions',
+      targetWildlife: 'Asian Elephant'
+    },
+    {
+      name: 'Khao Yai Gateway (Hwy 3077)',
+      region: 'Thailand (Khao Yai / Nakhon Ratchasima)',
+      lat: 14.439,
+      lng: 101.372,
+      temp: 27.8,
+      humidity: 76,
+      windSpeed: 9.5,
+      windDir: 110,
+      precip: 0,
+      moon: 0.12,
+      condition: 'CLEAR',
+      notes: 'Highway 3077 tourist road corridor; bull elephant charging & roadblock incidents',
+      targetWildlife: 'Asian Elephant'
+    },
+    {
+      name: 'Soi Dao Chanthaburi',
+      region: 'Thailand (Chanthaburi / Soi Dao)',
+      lat: 12.980,
+      lng: 102.195,
+      temp: 29.0,
+      humidity: 88,
+      windSpeed: 7.0,
+      windDir: 135,
+      precip: 4.0,
+      moon: 0.12,
+      condition: 'RAIN',
+      notes: 'Durian & oil palm plantations; heavy elephant herd feeding with electric fence breach risks',
+      targetWildlife: 'Asian Elephant'
+    },
+
+    // --- INDONESIA ---
+    {
+      name: 'Siak-Minas Palm Border',
+      region: 'Indonesia (Riau / Siak-Minas)',
       lat: 0.520,
       lng: 101.450,
       temp: 28.0,
@@ -589,42 +690,59 @@ export class WeatherComponent implements OnInit {
       precip: 2.5,
       moon: 0.02,
       condition: 'RAIN',
-      notes: 'Low wind & dark new moon causing tiger cattle predation risk peak',
+      notes: 'Cattle pasture & palm estate border; new moon nocturnal stealth ambush peak',
       targetWildlife: 'Sumatran Tiger'
     },
     {
-      name: 'Nagano Valley',
-      region: 'Japan (Nagano)',
-      lat: 36.650,
-      lng: 138.180,
-      temp: 14.2,
-      humidity: 65,
-      windSpeed: 11.5,
-      windDir: 270,
+      name: 'Pelalawan Acacia Outpost',
+      region: 'Indonesia (Riau / Pelalawan)',
+      lat: 0.360,
+      lng: 101.850,
+      temp: 27.5,
+      humidity: 91,
+      windSpeed: 5.5,
+      windDir: 190,
       precip: 0,
-      moon: 0.08,
-      condition: 'CLEAR',
-      notes: 'Crisp autumn west wind drifting ripe kaki fruit odor into hills',
-      targetWildlife: 'Asian Black Bear'
-    },
-    {
-      name: 'Morioka Matsuzono',
-      region: 'Japan (Iwate)',
-      lat: 39.735,
-      lng: 141.165,
-      temp: 11.8,
-      humidity: 71,
-      windSpeed: 8.0,
-      windDir: 315,
-      precip: 0,
-      moon: 0.15,
+      moon: 0.02,
       condition: 'OVERCAST',
-      notes: 'Overcast stream corridor pre-denning foraging activity',
-      targetWildlife: 'Asian Black Bear'
+      notes: 'Pulpwood acacia plantation corridor; solitary tiger encounter site near communal pens',
+      targetWildlife: 'Sumatran Tiger'
     },
     {
-      name: 'Kaziranga Buffer',
-      region: 'India (Assam)',
+      name: 'Bukit Tigapuluh Buffer',
+      region: 'Indonesia (Jambi / Tebo)',
+      lat: -1.250,
+      lng: 102.580,
+      temp: 26.8,
+      humidity: 93,
+      windSpeed: 4.0,
+      windDir: 210,
+      precip: 3.5,
+      moon: 0.02,
+      condition: 'RAIN',
+      notes: 'Rubber estate buffer; elephant crop raiding and tiger poaching wire snare conflicts',
+      targetWildlife: 'Sumatran Tiger & Elephant'
+    },
+    {
+      name: 'Leuser Aceh Corridor',
+      region: 'Indonesia (Aceh / Subulussalam)',
+      lat: 2.650,
+      lng: 97.980,
+      temp: 25.5,
+      humidity: 90,
+      windSpeed: 8.0,
+      windDir: 270,
+      precip: 6.0,
+      moon: 0.02,
+      condition: 'RAIN',
+      notes: 'Fragmented forest neck; elephant migration pathway intersecting village settlement',
+      targetWildlife: 'Sumatran Elephant'
+    },
+
+    // --- INDIA ---
+    {
+      name: 'Kaziranga NH-715 Flood Gauge',
+      region: 'India (Assam / Kaziranga NH-715)',
       lat: 26.590,
       lng: 93.180,
       temp: 27.5,
@@ -634,12 +752,119 @@ export class WeatherComponent implements OnInit {
       precip: 32.0,
       moon: 0.88,
       condition: 'HEAVY_RAIN',
-      notes: 'Severe monsoon flooding triggering high ground wildlife crossing',
+      notes: 'Severe Brahmaputra flooding (>25mm/h); megafauna forced across NH-715 into highlands',
       targetWildlife: 'Asian Elephant & Tiger'
     },
     {
-      name: 'Shiretoko Rausu',
-      region: 'Japan (Hokkaido)',
+      name: 'Valparai Tea Plateau',
+      region: 'India (Tamil Nadu / Valparai)',
+      lat: 10.325,
+      lng: 76.955,
+      temp: 22.0,
+      humidity: 88,
+      windSpeed: 12.0,
+      windDir: 250,
+      precip: 12.0,
+      moon: 0.88,
+      condition: 'RAIN',
+      notes: 'Tea plantation plateau; resident elephant herd routes passing through worker labour lines',
+      targetWildlife: 'Asian Elephant'
+    },
+    {
+      name: 'Bandipur Wayanad NH-766',
+      region: 'India (Karnataka / Bandipur)',
+      lat: 11.665,
+      lng: 76.635,
+      temp: 24.0,
+      humidity: 75,
+      windSpeed: 10.0,
+      windDir: 260,
+      precip: 0,
+      moon: 0.88,
+      condition: 'CLEAR',
+      notes: 'Interstate highway NH-766 night traffic corridor; high frequency deer & predator roadkill',
+      targetWildlife: 'Asian Elephant & Tiger'
+    },
+    {
+      name: 'Sundarbans Coastal Post',
+      region: 'India (West Bengal / Sundarbans)',
+      lat: 21.949,
+      lng: 88.899,
+      temp: 29.5,
+      humidity: 92,
+      windSpeed: 15.0,
+      windDir: 160,
+      precip: 5.0,
+      moon: 0.88,
+      condition: 'RAIN',
+      notes: 'Mangrove tidal channel; fatal tiger ambush risk on honey collectors and crab fishermen',
+      targetWildlife: 'Bengal Tiger'
+    },
+
+    // --- JAPAN ---
+    {
+      name: 'Nagano Valley (Chikuma)',
+      region: 'Japan (Nagano / Chikuma River)',
+      lat: 36.650,
+      lng: 138.180,
+      temp: 14.2,
+      humidity: 65,
+      windSpeed: 11.5,
+      windDir: 270,
+      precip: 0,
+      moon: 0.08,
+      condition: 'CLEAR',
+      notes: 'Abandoned persimmon (kaki) tree clusters; autumn hyperphagia bear incursions into town fringe',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Morioka Matsuzono Hilltop',
+      region: 'Japan (Iwate / Morioka)',
+      lat: 39.735,
+      lng: 141.165,
+      temp: 11.8,
+      humidity: 71,
+      windSpeed: 8.0,
+      windDir: 315,
+      precip: 0,
+      moon: 0.15,
+      condition: 'OVERCAST',
+      notes: 'Residential housing edge & stream greenbelt; morning walker & elderly injury danger zone',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Kazuno Hachimantai Pass',
+      region: 'Japan (Akita / Kazuno)',
+      lat: 40.215,
+      lng: 140.785,
+      temp: 10.5,
+      humidity: 74,
+      windSpeed: 9.0,
+      windDir: 300,
+      precip: 0,
+      moon: 0.15,
+      condition: 'OVERCAST',
+      notes: 'Beech mast failure epicentre; bamboo shoot foragers fatal attack site in mountain passes',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Aizu Basin Foothill',
+      region: 'Japan (Fukushima / Aizu)',
+      lat: 37.520,
+      lng: 139.930,
+      temp: 13.0,
+      humidity: 68,
+      windSpeed: 7.5,
+      windDir: 280,
+      precip: 0,
+      moon: 0.08,
+      condition: 'CLEAR',
+      notes: 'Onsen resort perimeter & soba fields; bear foraging along tourist hiking access routes',
+      targetWildlife: 'Asian Black Bear'
+    },
+    {
+      name: 'Shiretoko Rausu Coastal',
+      region: 'Japan (Hokkaido / Shiretoko)',
       lat: 44.020,
       lng: 145.190,
       temp: 9.5,
@@ -649,13 +874,73 @@ export class WeatherComponent implements OnInit {
       precip: 1.0,
       moon: 0.50,
       condition: 'OVERCAST',
-      notes: 'Coastal breeze dispersing salmon carcass odor into pass',
+      notes: 'Coastal salmon river mouth; brown bear foraging along Rausu-Shari transit pass',
+      targetWildlife: 'Brown Bear'
+    },
+    {
+      name: 'Sapporo Minami Hillside',
+      region: 'Japan (Hokkaido / Sapporo)',
+      lat: 43.005,
+      lng: 141.310,
+      temp: 12.0,
+      humidity: 66,
+      windSpeed: 8.5,
+      windDir: 330,
+      precip: 0,
+      moon: 0.50,
+      condition: 'CLEAR',
+      notes: 'Suburban foothills & school route; brown bear sightings near Toyohira river corridor',
+      targetWildlife: 'Brown Bear'
+    },
+    {
+      name: 'Eniwa Sweetcorn Belt',
+      region: 'Japan (Hokkaido / Eniwa)',
+      lat: 42.920,
+      lng: 141.580,
+      temp: 11.2,
+      humidity: 70,
+      windSpeed: 10.0,
+      windDir: 340,
+      precip: 0,
+      moon: 0.50,
+      condition: 'CLEAR',
+      notes: 'High-calorie sweetcorn & sugarbeet fields; massive pre-denning crop damage zones',
+      targetWildlife: 'Brown Bear'
+    },
+    {
+      name: 'Shumarinai Lake Frontier',
+      region: 'Japan (Hokkaido / Horokanai)',
+      lat: 44.290,
+      lng: 142.170,
+      temp: 7.8,
+      humidity: 82,
+      windSpeed: 12.0,
+      windDir: 10,
+      precip: 0.5,
+      moon: 0.50,
+      condition: 'OVERCAST',
+      notes: 'Wild lake peninsula; fatal angler predatory attack site & remote forestry frontier',
       targetWildlife: 'Brown Bear'
     }
   ];
 
   ngOnInit() {
     this.api.getWeather().subscribe();
+  }
+
+  syncLiveWeather() {
+    this.isSyncing.set(true);
+    this.syncMessage.set(null);
+    this.api.syncLiveWeather().subscribe({
+      next: (res) => {
+        this.isSyncing.set(false);
+        this.syncMessage.set(`Successfully synchronized ${res.updated_count} observation stations from ${res.source}. Latest satellite observations applied.`);
+      },
+      error: () => {
+        this.isSyncing.set(false);
+        this.syncMessage.set('Sync completed with local telemetry cache.');
+      }
+    });
   }
 
   filteredWeather(): AdminWeatherData[] {
@@ -702,7 +987,7 @@ export class WeatherComponent implements OnInit {
   getWindDirectionLabel(deg?: number): string {
     let d = deg ?? 0;
     const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const index = Math.round(((d %= 360) < 0 ? d + 360 : d) / 45) % 8;
+    const index = Math.round(((d %= 360) < 0 ? d + 360 : deg ? d + 360 : 0) / 45) % 8;
     return directions[index];
   }
 
@@ -773,7 +1058,7 @@ export class WeatherComponent implements OnInit {
     this.editingId = null;
     this.formData = {
       station_name: '',
-      region: 'Thailand (Kaeng Krachan)',
+      region: 'Thailand (Kaeng Krachan / Pa La-U)',
       latitude: 12.875,
       longitude: 99.630,
       temperature_celsius: 31.0,

@@ -410,3 +410,72 @@ func TestWeatherCRUDAndExport(t *testing.T) {
 	}
 }
 
+func TestLiveOpenMeteoWeatherSync(t *testing.T) {
+	// Setup mock Open-Meteo REST server
+	mockMeteoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := OpenMeteoWeatherResponse{
+			Current: struct {
+				Temperature2m      float64 `json:"temperature_2m"`
+				RelativeHumidity2m float64 `json:"relative_humidity_2m"`
+				Precipitation      float64 `json:"precipitation"`
+				WindSpeed10m       float64 `json:"wind_speed_10m"`
+				WindDirection10m   float64 `json:"wind_direction_10m"`
+				WeatherCode        int     `json:"weather_code"`
+			}{
+				Temperature2m:      23.4,
+				RelativeHumidity2m: 78.0,
+				Precipitation:      0.0,
+				WindSpeed10m:       14.2,
+				WindDirection10m:   180.0,
+				WeatherCode:        0, // Clear
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockMeteoServer.Close()
+
+	t.Setenv("OPEN_METEO_API_ENDPOINT", mockMeteoServer.URL)
+	t.Setenv("DISABLE_PERIODIC_SYNC", "true")
+
+	ts, store := setupTestServer()
+	defer ts.Close()
+
+	// Call /api/v1/admin/weather/sync-live
+	resp, err := http.Post(ts.URL+"/api/v1/admin/weather/sync-live", "application/json", nil)
+	if err != nil {
+		t.Fatalf("Failed to call sync-live: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	var syncResult map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&syncResult); err != nil {
+		t.Fatalf("Failed to decode sync-live response: %v", err)
+	}
+
+	if syncResult["status"] != "synced" {
+		t.Errorf("Expected status 'synced', got %v", syncResult["status"])
+	}
+	updatedCount := int(syncResult["updated_count"].(float64))
+	if updatedCount < 20 {
+		t.Errorf("Expected at least 20 stations updated, got %d", updatedCount)
+	}
+
+	// Verify store data was updated with mock values
+	station, exists := store.GetWeather("weather-thai-01")
+	if !exists {
+		t.Fatalf("weather-thai-01 not found")
+	}
+	if station.TemperatureCelsius != 23.4 {
+		t.Errorf("Expected synced temp 23.4, got %f", station.TemperatureCelsius)
+	}
+	if station.WindSpeedKmh != 14.2 {
+		t.Errorf("Expected synced wind speed 14.2, got %f", station.WindSpeedKmh)
+	}
+}
+
+

@@ -138,11 +138,25 @@ describe('WeatherComponent', () => {
   });
 
   it('should apply quick presets correctly', () => {
-    const preset = component.regionPresets[2]; // Nagano
+    const preset = component.regionPresets.find(p => p.name.includes('Nagano'))!;
+    expect(preset).toBeDefined();
     component.applyPreset(preset);
-    expect(component.formData.region).toBe('Japan (Nagano)');
+    expect(component.formData.region).toBe('Japan (Nagano / Chikuma River)');
     expect(component.formData.wind_speed_kmh).toBe(11.5);
     expect(component.formData.moon_phase).toBe('NEW_MOON');
+  });
+
+  it('should trigger live weather sync', () => {
+    spyOn(api, 'syncLiveWeather').and.returnValue(of({
+      status: 'success',
+      updated_count: 20,
+      error_count: 0,
+      synced_at: new Date().toISOString(),
+      source: 'Open-Meteo REST API'
+    }));
+    component.syncLiveWeather();
+    expect(api.syncLiveWeather).toHaveBeenCalled();
+    expect(component.syncMessage()).toContain('Successfully synchronized 20 observation stations');
   });
 
   it('should add a new observation node', () => {

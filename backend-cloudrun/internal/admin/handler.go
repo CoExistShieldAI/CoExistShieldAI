@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -17,6 +19,10 @@ type Handler struct {
 func NewHandler(store *Store) *Handler {
 	if store == nil {
 		store = NewStore()
+	}
+	// Start automatic periodic internet weather collector (15 min interval) unless disabled in test
+	if os.Getenv("DISABLE_PERIODIC_SYNC") != "true" {
+		store.StartPeriodicWeatherSync(context.Background(), 15*time.Minute)
 	}
 	return &Handler{store: store}
 }
@@ -46,6 +52,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Weather / Meteorological Data for AI
 	mux.HandleFunc("/api/v1/admin/weather", h.handleWeather)
+	mux.HandleFunc("/api/v1/admin/weather/sync-live", h.handleWeatherSyncLive)
 	mux.HandleFunc("/api/v1/admin/weather/", h.handleWeatherDetail)
 
 	// Operations & Emergency
@@ -358,6 +365,30 @@ func (h *Handler) handleWeatherDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (h *Handler) handleWeatherSyncLive(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	successCount, errorCount, err := h.store.SyncAllWeatherFromOpenMeteo(ctx)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to sync live weather: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":        "synced",
+		"updated_count": successCount,
+		"error_count":   errorCount,
+		"synced_at":     time.Now().UTC().Format(time.RFC3339),
+		"source":        "Open-Meteo Global Meteorological REST API",
+	})
 }
 
 // --- Operations Handlers ---
