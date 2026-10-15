@@ -36,19 +36,21 @@ export class AdminApiService {
       tap(data => this.stats.set(data)),
       catchError(() => {
         const fallback: DashboardStats = {
-          total_geofences: 4,
-          ai_geofences: 3,
+          total_geofences: 6,
+          ai_geofences: 5,
           manual_geofences: 1,
-          tier3_geofences: 1,
-          total_wildlife_24h: 3,
-          total_wildlife_all: 3,
-          pending_roadkills: 2,
-          total_roadkills: 3,
+          tier3_geofences: 2,
+          total_wildlife_24h: 5,
+          total_wildlife_all: 10,
+          pending_roadkills: 4,
+          total_roadkills: 10,
           total_users: 1420,
           species_distribution: {
-            'Asian Elephant': 1,
-            'Sumatran Tiger': 1,
-            'Brown Bear': 1
+            'Asian Elephant': 3,
+            'Asian Black Bear': 2,
+            'Brown Bear': 2,
+            'Sumatran Tiger': 2,
+            'Bengal Tiger': 1
           }
         };
         this.stats.set(fallback);
@@ -84,7 +86,7 @@ export class AdminApiService {
           },
           {
             id: 'geo-ai-sumatra-02',
-            name: 'Siak Palm Border Tiger Alert',
+            name: 'Siak-Minas Palm Border Tiger Alert',
             source: 'ai',
             is_persistent: false,
             geometry_type: 'circle',
@@ -93,7 +95,7 @@ export class AdminApiService {
             threat_level: 'TIER_2_ALERT',
             target_species: 'Sumatran Tiger',
             created_at: new Date(Date.now() - 14400000).toISOString(),
-            reason: 'Recent cattle depredation report & roadkill carcass scent plume drifting towards village'
+            reason: 'Recent cattle depredation report & roadkill carcass scent plume drifting towards village border'
           },
           {
             id: 'geo-ai-japan-03',
@@ -113,6 +115,32 @@ export class AdminApiService {
             reason: 'Clustered abandoned persimmon (kaki) trees entering peak ripeness ahead of hibernation'
           },
           {
+            id: 'geo-ai-india-04',
+            name: 'Kaziranga Panbari-Haldibari Migration Shield',
+            source: 'ai',
+            is_persistent: false,
+            geometry_type: 'circle',
+            circle_center: { lat: 26.590, lng: 93.180 },
+            circle_radius_meters: 3800,
+            threat_level: 'TIER_3_CRITICAL',
+            target_species: 'Asian Elephant',
+            created_at: new Date(Date.now() - 36000000).toISOString(),
+            reason: 'Brahmaputra flood surge causing megafauna migration south across NH-715 towards Karbi Anglong Hills'
+          },
+          {
+            id: 'geo-ai-hokkaido-05',
+            name: 'Shiretoko Route 334 Coastal Brown Bear Buffer',
+            source: 'ai',
+            is_persistent: false,
+            geometry_type: 'circle',
+            circle_center: { lat: 44.050, lng: 145.020 },
+            circle_radius_meters: 3200,
+            threat_level: 'TIER_2_ALERT',
+            target_species: 'Brown Bear',
+            created_at: new Date(Date.now() - 64800000).toISOString(),
+            reason: 'Coastal salmon run and sika deer carcass presence drawing hyperphagic adult brown bears'
+          },
+          {
             id: 'geo-manual-debug-01',
             name: 'Ranger Station 4 Patrol Perimeter',
             source: 'manual',
@@ -123,7 +151,7 @@ export class AdminApiService {
             threat_level: 'TIER_2_ALERT',
             target_species: 'Asian Elephant',
             created_at: new Date(Date.now() - 3600000).toISOString(),
-            reason: 'Manual field team debug perimeter: Night thermal camera deployment'
+            reason: 'Manual field team patrol perimeter: Night thermal camera deployment'
           }
         ];
         this.geofences.set(fallback);
@@ -214,7 +242,8 @@ export class AdminApiService {
             threat_level: 'TIER_3_CRITICAL',
             status: 'VERIFIED',
             reporter: 'Ranger Somchai (Kaeng Krachan Unit)',
-            description: 'A matriarch herd of 7 elephants observed crossing highway towards sugarcane plantations.',
+            description: 'A matriarch herd of 7 elephants crossing highway towards perimeter sugarcane plantations.',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_elephant_herd.jpg'],
             reported_at: new Date(Date.now() - 5400000).toISOString()
           },
           {
@@ -229,7 +258,8 @@ export class AdminApiService {
             threat_level: 'TIER_3_CRITICAL',
             status: 'UNVERIFIED',
             reporter: 'Plantation Security Patrol',
-            description: 'Fresh pugmarks and vocalization identified near boundary ditch.',
+            description: 'Fresh pugmarks and vocalization identified near oil palm boundary drainage ditch.',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_tiger_track.jpg'],
             reported_at: new Date(Date.now() - 10800000).toISOString()
           },
           {
@@ -245,7 +275,120 @@ export class AdminApiService {
             status: 'VERIFIED',
             reporter: 'Municipal Wildlife Control Unit',
             description: 'Single subadult bear observed feeding on wild berry patch near forestry road.',
+            photo_urls: [],
             reported_at: new Date(Date.now() - 28800000).toISOString()
+          },
+          {
+            id: 'wildlife-004',
+            species: 'Asian Black Bear',
+            location: {
+              lat: 39.735,
+              lng: 141.165,
+              road_name: 'Matsuzono 3-chome Hillside',
+              region: 'Morioka, Iwate, Japan'
+            },
+            threat_level: 'TIER_3_CRITICAL',
+            status: 'VERIFIED',
+            reporter: 'Iwate Mobile Alert Network',
+            description: 'Adult black bear observed climbing abandoned persimmon tree inside residential boundary adjacent to primary school route.',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_bear_kaki.jpg'],
+            reported_at: new Date(Date.now() - 50400000).toISOString()
+          },
+          {
+            id: 'wildlife-005',
+            species: 'Asian Elephant',
+            location: {
+              lat: 26.582,
+              lng: 93.175,
+              road_name: 'NH-715 Haldibari Corridor',
+              region: 'Kaziranga, Assam, India'
+            },
+            threat_level: 'TIER_3_CRITICAL',
+            status: 'VERIFIED',
+            reporter: 'Assam Forest Dept Highway Patrol',
+            description: 'Breeding herd of 14 elephants crossing National Highway southwards to reach elevated Karbi Anglong refuge.',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_nh715_crossing.jpg'],
+            reported_at: new Date(Date.now() - 79200000).toISOString()
+          },
+          {
+            id: 'wildlife-006',
+            species: 'Asian Elephant',
+            location: {
+              lat: 12.540,
+              lng: 99.530,
+              road_name: 'Protection Unit KK.7 Access Road',
+              region: 'Huai Sat Yai, Pa La-U, Thailand'
+            },
+            threat_level: 'TIER_2_ALERT',
+            status: 'VERIFIED',
+            reporter: 'DNP Wild Elephant Surveillance Team',
+            description: "Bull elephant 'Plai Boonchuay' foraging along fruit plantation border fence line.",
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 172800000).toISOString()
+          },
+          {
+            id: 'wildlife-007',
+            species: 'Asian Black Bear',
+            location: {
+              lat: 36.662,
+              lng: 138.210,
+              road_name: 'Suzaka Orchard Ridge Trail',
+              region: 'Nagano, Japan'
+            },
+            threat_level: 'TIER_2_ALERT',
+            status: 'VERIFIED',
+            reporter: 'Nagano Agricultural Cooperative',
+            description: 'Female bear with two cubs feeding in unharvested chestnut grove bordering mountain slope.',
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 345600000).toISOString()
+          },
+          {
+            id: 'wildlife-008',
+            species: 'Brown Bear',
+            location: {
+              lat: 44.045,
+              lng: 145.030,
+              road_name: 'Route 334 Coastal Pass',
+              region: 'Rausu, Shiretoko, Hokkaido, Japan'
+            },
+            threat_level: 'TIER_2_ALERT',
+            status: 'VERIFIED',
+            reporter: 'Shiretoko Nature Foundation Ranger',
+            description: 'Large male brown bear tracking coastal salmon scent near river mouth, 80m from roadway.',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_brown_bear.jpg'],
+            reported_at: new Date(Date.now() - 518400000).toISOString()
+          },
+          {
+            id: 'wildlife-009',
+            species: 'Sumatran Tiger',
+            location: {
+              lat: 0.785,
+              lng: 102.045,
+              road_name: 'Sungai Apit Peatland Edge',
+              region: 'Siak, Riau, Indonesia'
+            },
+            threat_level: 'TIER_3_CRITICAL',
+            status: 'VERIFIED',
+            reporter: 'BBKSDA Riau Rapid Response Unit',
+            description: 'Tiger attempted night predation on communal livestock pen; clear track trail confirmed.',
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 1036800000).toISOString()
+          },
+          {
+            id: 'wildlife-010',
+            species: 'Bengal Tiger',
+            location: {
+              lat: 27.410,
+              lng: 84.120,
+              road_name: 'Valmiki-Chitwan Border Trail',
+              region: 'Terai Arc, Bihar/Nepal Border'
+            },
+            threat_level: 'TIER_2_ALERT',
+            status: 'VERIFIED',
+            reporter: 'WWF Camera Trap Survey Team',
+            description: 'Tigress recorded using agricultural irrigation canal as travel corridor between forest patches.',
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 1728000000).toISOString()
           }
         ];
         this.wildlife.set(fallback);
@@ -321,7 +464,8 @@ export class AdminApiService {
               road_name: 'Trans-Sumatran Highway KM 84',
               region: 'Riau, Indonesia'
             },
-            photo_url: '',
+            photo_url: 'https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_boar.jpg',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_boar.jpg'],
             reliability_score: 0.95,
             is_excluded: false,
             status: 'PENDING_REMOVAL',
@@ -339,6 +483,7 @@ export class AdminApiService {
               region: 'Phetchaburi, Thailand'
             },
             photo_url: '',
+            photo_urls: [],
             reliability_score: 0.88,
             is_excluded: false,
             status: 'PENDING_REMOVAL',
@@ -356,10 +501,137 @@ export class AdminApiService {
               region: 'Nagano, Japan'
             },
             photo_url: '',
+            photo_urls: [],
             reliability_score: 0.35,
             is_excluded: true,
             status: 'DISPOSED',
             reported_at: new Date(Date.now() - 86400000).toISOString()
+          },
+          {
+            id: 'rk-2026-004',
+            species: 'Hog Deer',
+            estimated_weight_kg: 42,
+            decay_stage: 'FRESH',
+            location: {
+              lat: 26.588,
+              lng: 93.185,
+              road_name: 'NH-715 Panbari Bottleneck',
+              region: 'Kaziranga, Assam, India'
+            },
+            photo_url: 'https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_hogdeer.jpg',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_hogdeer.jpg'],
+            reliability_score: 0.96,
+            is_excluded: false,
+            status: 'PENDING_REMOVAL',
+            reported_at: new Date(Date.now() - 10800000).toISOString()
+          },
+          {
+            id: 'rk-2026-005',
+            species: 'Ezo Sika Deer',
+            estimated_weight_kg: 115,
+            decay_stage: 'FRESH',
+            location: {
+              lat: 43.620,
+              lng: 144.980,
+              road_name: 'National Route 272',
+              region: 'Nemuro, Hokkaido, Japan'
+            },
+            photo_url: 'https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_sikadeer.jpg',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_sikadeer.jpg'],
+            reliability_score: 0.94,
+            is_excluded: false,
+            status: 'PENDING_REMOVAL',
+            reported_at: new Date(Date.now() - 18000000).toISOString()
+          },
+          {
+            id: 'rk-2026-006',
+            species: 'Japanese Serow (Kamoshika)',
+            estimated_weight_kg: 38,
+            decay_stage: 'MODERATE',
+            location: {
+              lat: 39.810,
+              lng: 141.420,
+              road_name: 'National Route 455',
+              region: 'Iwaizumi, Iwate, Japan'
+            },
+            photo_url: '',
+            photo_urls: [],
+            reliability_score: 0.89,
+            is_excluded: false,
+            status: 'DISPOSED',
+            reported_at: new Date(Date.now() - 129600000).toISOString()
+          },
+          {
+            id: 'rk-2026-007',
+            species: 'Wild Boar',
+            estimated_weight_kg: 68,
+            decay_stage: 'MODERATE',
+            location: {
+              lat: 12.528,
+              lng: 99.542,
+              road_name: 'Route 3201 Hua Hin Bypass',
+              region: 'Prachuap Khiri Khan, Thailand'
+            },
+            photo_url: '',
+            photo_urls: [],
+            reliability_score: 0.82,
+            is_excluded: false,
+            status: 'DISPOSED',
+            reported_at: new Date(Date.now() - 259200000).toISOString()
+          },
+          {
+            id: 'rk-2026-008',
+            species: 'Domestic Cattle (Calf)',
+            estimated_weight_kg: 85,
+            decay_stage: 'ADVANCED',
+            location: {
+              lat: 0.525,
+              lng: 101.480,
+              road_name: 'Minas Concession Road',
+              region: 'Siak, Riau, Indonesia'
+            },
+            photo_url: '',
+            photo_urls: [],
+            reliability_score: 0.90,
+            is_excluded: false,
+            status: 'DISPOSED',
+            reported_at: new Date(Date.now() - 432000000).toISOString()
+          },
+          {
+            id: 'rk-2026-009',
+            species: 'Red Fox',
+            estimated_weight_kg: 7,
+            decay_stage: 'ADVANCED',
+            location: {
+              lat: 44.060,
+              lng: 145.010,
+              road_name: 'Route 334 Pass',
+              region: 'Shiretoko, Hokkaido, Japan'
+            },
+            photo_url: '',
+            photo_urls: [],
+            reliability_score: 0.40,
+            is_excluded: true,
+            status: 'DISPOSED',
+            reported_at: new Date(Date.now() - 950400000).toISOString()
+          },
+          {
+            id: 'rk-2026-010',
+            species: 'Wild Boar',
+            estimated_weight_kg: 52,
+            decay_stage: 'ADVANCED',
+            location: {
+              lat: 26.540,
+              lng: 93.050,
+              road_name: 'Kaliabor Bypass NH-715',
+              region: 'Nagaon, Assam, India'
+            },
+            photo_url: '',
+            photo_urls: [],
+            reliability_score: 0.75,
+            is_excluded: false,
+            status: 'DISPOSED',
+            reported_at: new Date(Date.now() - 1555200000).toISOString()
           }
         ];
         this.roadkills.set(fallback);
@@ -440,6 +712,7 @@ export class AdminApiService {
             radius_meters: 3000,
             risk_weight: 0.85,
             active_season: 'October - January (Harvest Peak)',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_sugarcane_field.jpg'],
             last_updated: new Date(Date.now() - 43200000).toISOString()
           },
           {
@@ -452,6 +725,7 @@ export class AdminApiService {
             radius_meters: 1800,
             risk_weight: 0.90,
             active_season: 'September - November (Pre-hibernation Hyperphagia)',
+            photo_urls: [],
             last_updated: new Date(Date.now() - 3600000).toISOString()
           },
           {
@@ -464,7 +738,73 @@ export class AdminApiService {
             radius_meters: 2200,
             risk_weight: 0.78,
             active_season: 'Year-round',
+            photo_urls: [],
             last_updated: new Date(Date.now() - 7200000).toISOString()
+          },
+          {
+            id: 'env-kaki-04',
+            category: 'PERSIMMON_KAKI',
+            name: 'Morioka Matsuzono Abandoned Fruit Tree Cluster',
+            location_desc: 'Residential hillside fringe fruit groves near elementary school',
+            geometry_type: 'circle',
+            circle_center: { lat: 39.735, lng: 141.165 },
+            radius_meters: 1500,
+            risk_weight: 0.92,
+            active_season: 'October - December (Peak Fruiting & Pre-Denning)',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_kaki_trees.jpg'],
+            last_updated: new Date(Date.now() - 21600000).toISOString()
+          },
+          {
+            id: 'env-water-05',
+            category: 'WATER_SOURCE',
+            name: 'Huai Sat Yai Reservoir Channel Watering Point',
+            location_desc: 'Dry season sole watering access between forest and village',
+            geometry_type: 'circle',
+            circle_center: { lat: 12.535, lng: 99.525 },
+            radius_meters: 1200,
+            risk_weight: 0.75,
+            active_season: 'February - May (Dry Season Drought)',
+            photo_urls: [],
+            last_updated: new Date(Date.now() - 64800000).toISOString()
+          },
+          {
+            id: 'env-crop-06',
+            category: 'CROP_PHENOLOGY',
+            name: 'Kaziranga Bokakhat Tea & Lowland Buffer Belt',
+            location_desc: 'Wetland buffer corridor between NH-715 and tea plantation edge',
+            geometry_type: 'circle',
+            circle_center: { lat: 26.615, lng: 93.590 },
+            radius_meters: 3200,
+            risk_weight: 0.88,
+            active_season: 'June - September (Monsoon Inundation Dispersal)',
+            photo_urls: [],
+            last_updated: new Date(Date.now() - 86400000).toISOString()
+          },
+          {
+            id: 'env-crop-07',
+            category: 'CROP_PHENOLOGY',
+            name: 'Eniwa Agricultural Sweetcorn & Sugarbeet Belt',
+            location_desc: 'Forest edge crop plots attractive to brown bears prior to denning',
+            geometry_type: 'circle',
+            circle_center: { lat: 42.920, lng: 141.580 },
+            radius_meters: 2500,
+            risk_weight: 0.82,
+            active_season: 'August - October (Sweetcorn Ripening Peak)',
+            photo_urls: [],
+            last_updated: new Date(Date.now() - 172800000).toISOString()
+          },
+          {
+            id: 'env-pasture-08',
+            category: 'LIVESTOCK_PASTURE',
+            name: 'Pelalawan Concession Night Grazing Enclosure',
+            location_desc: 'Communal sheep and cattle pens bordering pulpwood concession',
+            geometry_type: 'circle',
+            circle_center: { lat: 0.360, lng: 101.850 },
+            radius_meters: 2000,
+            risk_weight: 0.80,
+            active_season: 'Year-round',
+            photo_urls: [],
+            last_updated: new Date(Date.now() - 259200000).toISOString()
           }
         ];
         this.environmental.set(fallback);

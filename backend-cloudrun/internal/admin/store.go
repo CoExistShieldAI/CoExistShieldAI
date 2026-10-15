@@ -34,11 +34,11 @@ func NewStore() *Store {
 func (s *Store) seedDefaultData() {
 	now := time.Now().UTC()
 
-	// 1. Initial Geofences across JAPAC
+	// 1. Initial Geofences across JAPAC (Thailand, Sumatra, India, Japan Honshu, Hokkaido)
 	// Tier 3 Polygon - Kaeng Krachan (Thailand)
 	geo1 := AdminGeofence{
 		ID:           "geo-ai-thai-01",
-		Name:         "Kaeng Krachan Eastern Buffer (HEC Risk)",
+		Name:         "Kaeng Krachan Eastern Buffer (HEC Corridor)",
 		Source:       "ai",
 		IsPersistent: false,
 		GeometryType: "polygon",
@@ -51,13 +51,13 @@ func (s *Store) seedDefaultData() {
 		ThreatLevel:   "TIER_3_CRITICAL",
 		TargetSpecies: "Asian Elephant",
 		CreatedAt:     now.Add(-2 * time.Hour),
-		Reason:        "High sugarcane sugar maturation detected; herd movement corridor intersects Route 3219",
+		Reason:        "High sugarcane maturation detected; breeding herd movement intersects Route 3219 and Pa La-U access",
 	}
 	// Tier 2 Circle - Riau / Sumatra (Indonesia)
 	centerSumatra := Coordinate{Lat: 0.520, Lng: 101.450}
 	geo2 := AdminGeofence{
 		ID:                 "geo-ai-sumatra-02",
-		Name:               "Siak Palm Border Tiger Alert",
+		Name:               "Siak-Minas Palm Border Tiger Alert",
 		Source:             "ai",
 		IsPersistent:       false,
 		GeometryType:       "circle",
@@ -66,7 +66,7 @@ func (s *Store) seedDefaultData() {
 		ThreatLevel:        "TIER_2_ALERT",
 		TargetSpecies:      "Sumatran Tiger",
 		CreatedAt:          now.Add(-4 * time.Hour),
-		Reason:             "Recent cattle depredation report & roadkill carcass scent plume drifting towards village",
+		Reason:             "Recent cattle depredation report & roadkill carcass scent plume drifting towards village border",
 	}
 	// Tier 1 Polygon - Nagano (Japan)
 	geo3 := AdminGeofence{
@@ -86,7 +86,37 @@ func (s *Store) seedDefaultData() {
 		CreatedAt:     now.Add(-6 * time.Hour),
 		Reason:        "Clustered abandoned persimmon (kaki) trees entering peak ripeness ahead of hibernation",
 	}
-	// Manual Geofence (Circle) - Debug / Ranger Station override
+	// Tier 3 Circle - Kaziranga NH-715 Corridor (India)
+	centerIndia := Coordinate{Lat: 26.590, Lng: 93.180}
+	geo4 := AdminGeofence{
+		ID:                 "geo-ai-india-04",
+		Name:               "Kaziranga Panbari-Haldibari Migration Shield",
+		Source:             "ai",
+		IsPersistent:       false,
+		GeometryType:       "circle",
+		CircleCenter:       &centerIndia,
+		CircleRadiusMeters: 3800,
+		ThreatLevel:        "TIER_3_CRITICAL",
+		TargetSpecies:      "Asian Elephant",
+		CreatedAt:          now.Add(-10 * time.Hour),
+		Reason:             "Brahmaputra flood surge causing megafauna migration south across NH-715 towards Karbi Anglong Hills",
+	}
+	// Tier 2 Circle - Shiretoko Coastal Pass (Hokkaido, Japan)
+	centerHokkaido := Coordinate{Lat: 44.050, Lng: 145.020}
+	geo5 := AdminGeofence{
+		ID:                 "geo-ai-hokkaido-05",
+		Name:               "Shiretoko Route 334 Coastal Brown Bear Buffer",
+		Source:             "ai",
+		IsPersistent:       false,
+		GeometryType:       "circle",
+		CircleCenter:       &centerHokkaido,
+		CircleRadiusMeters: 3200,
+		ThreatLevel:        "TIER_2_ALERT",
+		TargetSpecies:      "Brown Bear",
+		CreatedAt:          now.Add(-18 * time.Hour),
+		Reason:             "Coastal salmon run and sika deer carcass presence drawing hyperphagic adult brown bears",
+	}
+	// Manual Geofence (Circle) - Ranger Station 4 Patrol
 	centerManual := Coordinate{Lat: 12.820, Lng: 99.620}
 	geoManual := AdminGeofence{
 		ID:                 "geo-manual-debug-01",
@@ -99,160 +129,374 @@ func (s *Store) seedDefaultData() {
 		ThreatLevel:        "TIER_2_ALERT",
 		TargetSpecies:      "Asian Elephant",
 		CreatedAt:          now.Add(-1 * time.Hour),
-		Reason:             "Manual field team debug perimeter: Night thermal camera deployment",
+		Reason:             "Manual field team patrol perimeter: Night thermal camera deployment",
 	}
 
 	s.geofences[geo1.ID] = geo1
 	s.geofences[geo2.ID] = geo2
 	s.geofences[geo3.ID] = geo3
+	s.geofences[geo4.ID] = geo4
+	s.geofences[geo5.ID] = geo5
 	s.geofences[geoManual.ID] = geoManual
 
-	// 2. Initial Wildlife Sightings
-	w1 := AdminWildlifeIncident{
-		ID:      "wildlife-001",
-		Species: "Asian Elephant",
-		Location: IncidentLocation{
-			Lat:      12.865,
-			Lng:      99.655,
-			RoadName: "Route 3219 KM 12",
-			Region:   "Phetchaburi, Thailand",
+	// 2. Wildlife Sightings (Empirical Web Data across Thailand, Sumatra, India, Japan)
+	wList := []AdminWildlifeIncident{
+		{
+			ID:          "wildlife-001",
+			Species:     "Asian Elephant",
+			Location:    IncidentLocation{Lat: 12.865, Lng: 99.655, RoadName: "Route 3219 KM 12", Region: "Phetchaburi, Thailand"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "VERIFIED",
+			Reporter:    "Ranger Somchai (Kaeng Krachan Unit)",
+			Description: "A matriarch herd of 7 elephants crossing highway towards perimeter sugarcane plantations.",
+			PhotoURLs:   []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_elephant_herd.jpg"},
+			ReportedAt:  now.Add(-90 * time.Minute),
 		},
-		ThreatLevel: "TIER_3_CRITICAL",
-		Status:      "VERIFIED",
-		Reporter:    "Ranger Somchai (Kaeng Krachan Unit)",
-		Description: "A matriarch herd of 7 elephants observed crossing highway towards sugarcane plantations.",
-		ReportedAt:  now.Add(-90 * time.Minute),
-	}
-	w2 := AdminWildlifeIncident{
-		ID:      "wildlife-002",
-		Species: "Sumatran Tiger",
-		Location: IncidentLocation{
-			Lat:      0.535,
-			Lng:      101.465,
-			RoadName: "Estate Road 4B",
-			Region:   "Riau, Indonesia",
+		{
+			ID:          "wildlife-002",
+			Species:     "Sumatran Tiger",
+			Location:    IncidentLocation{Lat: 0.535, Lng: 101.465, RoadName: "Estate Road 4B", Region: "Riau, Indonesia"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "UNVERIFIED",
+			Reporter:    "Plantation Security Patrol",
+			Description: "Fresh pugmarks and vocalization identified near oil palm boundary drainage ditch.",
+			PhotoURLs:   []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_tiger_track.jpg"},
+			ReportedAt:  now.Add(-3 * time.Hour),
 		},
-		ThreatLevel: "TIER_3_CRITICAL",
-		Status:      "UNVERIFIED",
-		Reporter:    "Plantation Security Patrol",
-		Description: "Fresh pugmarks and vocalization identified near boundary ditch.",
-		ReportedAt:  now.Add(-3 * time.Hour),
-	}
-	w3 := AdminWildlifeIncident{
-		ID:      "wildlife-003",
-		Species: "Brown Bear",
-		Location: IncidentLocation{
-			Lat:      43.050,
-			Lng:      141.340,
-			RoadName: "Prefectural Road 82",
-			Region:   "Sapporo Suburbs, Hokkaido, Japan",
+		{
+			ID:          "wildlife-003",
+			Species:     "Brown Bear",
+			Location:    IncidentLocation{Lat: 43.050, Lng: 141.340, RoadName: "Prefectural Road 82", Region: "Sapporo Suburbs, Hokkaido, Japan"},
+			ThreatLevel: "TIER_1_CAUTION",
+			Status:      "VERIFIED",
+			Reporter:    "Municipal Wildlife Control Unit",
+			Description: "Single subadult bear observed feeding on wild berry patch near forestry road.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-8 * time.Hour),
 		},
-		ThreatLevel: "TIER_1_CAUTION",
-		Status:      "VERIFIED",
-		Reporter:    "Municipal Wildlife Control Unit",
-		Description: "Single subadult bear observed feeding on wild berry patch near forestry road.",
-		ReportedAt:  now.Add(-8 * time.Hour),
+		{
+			ID:          "wildlife-004",
+			Species:     "Asian Black Bear",
+			Location:    IncidentLocation{Lat: 39.735, Lng: 141.165, RoadName: "Matsuzono 3-chome Hillside", Region: "Morioka, Iwate, Japan"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "VERIFIED",
+			Reporter:    "Iwate Mobile Alert Network",
+			Description: "Adult black bear observed climbing abandoned persimmon tree inside residential boundary adjacent to primary school route.",
+			PhotoURLs:   []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_bear_kaki.jpg"},
+			ReportedAt:  now.Add(-14 * time.Hour),
+		},
+		{
+			ID:          "wildlife-005",
+			Species:     "Asian Elephant",
+			Location:    IncidentLocation{Lat: 26.582, Lng: 93.175, RoadName: "NH-715 Haldibari Corridor", Region: "Kaziranga, Assam, India"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "VERIFIED",
+			Reporter:    "Assam Forest Dept Highway Patrol",
+			Description: "Breeding herd of 14 elephants crossing National Highway southwards to reach elevated Karbi Anglong refuge.",
+			PhotoURLs:   []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_nh715_crossing.jpg"},
+			ReportedAt:  now.Add(-22 * time.Hour),
+		},
+		{
+			ID:          "wildlife-006",
+			Species:     "Asian Elephant",
+			Location:    IncidentLocation{Lat: 12.540, Lng: 99.530, RoadName: "Protection Unit KK.7 Access Road", Region: "Huai Sat Yai, Pa La-U, Thailand"},
+			ThreatLevel: "TIER_2_ALERT",
+			Status:      "VERIFIED",
+			Reporter:    "DNP Wild Elephant Surveillance Team",
+			Description: "Bull elephant 'Plai Boonchuay' foraging along fruit plantation border fence line.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-48 * time.Hour), // 2 days ago
+		},
+		{
+			ID:          "wildlife-007",
+			Species:     "Asian Black Bear",
+			Location:    IncidentLocation{Lat: 36.662, Lng: 138.210, RoadName: "Suzaka Orchard Ridge Trail", Region: "Nagano, Japan"},
+			ThreatLevel: "TIER_2_ALERT",
+			Status:      "VERIFIED",
+			Reporter:    "Nagano Agricultural Cooperative",
+			Description: "Female bear with two cubs feeding in unharvested chestnut grove bordering mountain slope.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-4 * 24 * time.Hour), // 4 days ago
+		},
+		{
+			ID:          "wildlife-008",
+			Species:     "Brown Bear",
+			Location:    IncidentLocation{Lat: 44.045, Lng: 145.030, RoadName: "Route 334 Coastal Pass", Region: "Rausu, Shiretoko, Hokkaido, Japan"},
+			ThreatLevel: "TIER_2_ALERT",
+			Status:      "VERIFIED",
+			Reporter:    "Shiretoko Nature Foundation Ranger",
+			Description: "Large male brown bear tracking coastal salmon scent near river mouth, 80m from roadway.",
+			PhotoURLs:   []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_brown_bear.jpg"},
+			ReportedAt:  now.Add(-6 * 24 * time.Hour), // 6 days ago
+		},
+		{
+			ID:          "wildlife-009",
+			Species:     "Sumatran Tiger",
+			Location:    IncidentLocation{Lat: 0.785, Lng: 102.045, RoadName: "Sungai Apit Peatland Edge", Region: "Siak, Riau, Indonesia"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "VERIFIED",
+			Reporter:    "BBKSDA Riau Rapid Response Unit",
+			Description: "Tiger attempted night predation on communal livestock pen; clear track trail confirmed.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-12 * 24 * time.Hour), // 12 days ago
+		},
+		{
+			ID:          "wildlife-010",
+			Species:     "Bengal Tiger",
+			Location:    IncidentLocation{Lat: 27.410, Lng: 84.120, RoadName: "Valmiki-Chitwan Border Trail", Region: "Terai Arc, Bihar/Nepal Border"},
+			ThreatLevel: "TIER_2_ALERT",
+			Status:      "VERIFIED",
+			Reporter:    "WWF Camera Trap Survey Team",
+			Description: "Tigress recorded using agricultural irrigation canal as travel corridor between forest patches.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-20 * 24 * time.Hour), // 20 days ago
+		},
 	}
-	s.wildlife[w1.ID] = w1
-	s.wildlife[w2.ID] = w2
-	s.wildlife[w3.ID] = w3
+	for _, w := range wList {
+		s.wildlife[w.ID] = w
+	}
 
-	// 3. Initial Roadkill Records
-	rk1 := AdminRoadkillRecord{
-		ID:                "rk-2026-001",
-		Species:           "Wild Boar",
-		EstimatedWeightKg: 55,
-		DecayStage:        "FRESH",
-		Location: IncidentLocation{
-			Lat:      0.512,
-			Lng:      101.438,
-			RoadName: "Trans-Sumatran Highway KM 84",
-			Region:   "Riau, Indonesia",
+	// 3. Roadkill Records (Empirical Carcasses, Decay Stages & Scent Plume Magnets)
+	rkList := []AdminRoadkillRecord{
+		{
+			ID:                "rk-2026-001",
+			Species:           "Wild Boar",
+			EstimatedWeightKg: 55,
+			DecayStage:        "FRESH",
+			Location:          IncidentLocation{Lat: 0.512, Lng: 101.438, RoadName: "Trans-Sumatran Highway KM 84", Region: "Riau, Indonesia"},
+			PhotoURL:          "https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_boar.jpg",
+			PhotoURLs:         []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_boar.jpg"},
+			ReliabilityScore:  0.95,
+			IsExcluded:        false,
+			Status:            "PENDING_REMOVAL",
+			ReportedAt:        now.Add(-45 * time.Minute),
 		},
-		PhotoURL:         "https://storage.googleapis.com/coexist-mock/rk-boar-01.jpg",
-		ReliabilityScore: 0.95,
-		IsExcluded:       false,
-		Status:           "PENDING_REMOVAL",
-		ReportedAt:       now.Add(-45 * time.Minute),
-	}
-	rk2 := AdminRoadkillRecord{
-		ID:                "rk-2026-002",
-		Species:           "Sambar Deer",
-		EstimatedWeightKg: 120,
-		DecayStage:        "MODERATE",
-		Location: IncidentLocation{
-			Lat:      12.842,
-			Lng:      99.680,
-			RoadName: "Highway 3219 KM 18",
-			Region:   "Phetchaburi, Thailand",
+		{
+			ID:                "rk-2026-002",
+			Species:           "Sambar Deer",
+			EstimatedWeightKg: 120,
+			DecayStage:        "MODERATE",
+			Location:          IncidentLocation{Lat: 12.842, Lng: 99.680, RoadName: "Highway 3219 KM 18", Region: "Phetchaburi, Thailand"},
+			PhotoURL:          "",
+			PhotoURLs:         []string{},
+			ReliabilityScore:  0.88,
+			IsExcluded:        false,
+			Status:            "PENDING_REMOVAL",
+			ReportedAt:        now.Add(-5 * time.Hour),
 		},
-		PhotoURL:         "https://storage.googleapis.com/coexist-mock/rk-deer-02.jpg",
-		ReliabilityScore: 0.88,
-		IsExcluded:       false,
-		Status:           "PENDING_REMOVAL",
-		ReportedAt:       now.Add(-5 * time.Hour),
-	}
-	rk3 := AdminRoadkillRecord{
-		ID:                "rk-2026-003",
-		Species:           "Unknown Small Mammal",
-		EstimatedWeightKg: 5,
-		DecayStage:        "ADVANCED",
-		Location: IncidentLocation{
-			Lat:      36.635,
-			Lng:      138.210,
-			RoadName: "Local Route 406",
-			Region:   "Nagano, Japan",
+		{
+			ID:                "rk-2026-003",
+			Species:           "Unknown Small Mammal",
+			EstimatedWeightKg: 5,
+			DecayStage:        "ADVANCED",
+			Location:          IncidentLocation{Lat: 36.635, Lng: 138.210, RoadName: "Local Route 406", Region: "Nagano, Japan"},
+			PhotoURL:          "",
+			ReliabilityScore:  0.35,
+			IsExcluded:        true,
+			Status:            "DISPOSED",
+			ReportedAt:        now.Add(-24 * time.Hour),
 		},
-		PhotoURL:         "",
-		ReliabilityScore: 0.35, // Low credibility
-		IsExcluded:       true, // Excluded from AI training
-		Status:           "DISPOSED",
-		ReportedAt:       now.Add(-24 * time.Hour),
+		{
+			ID:                "rk-2026-004",
+			Species:           "Hog Deer",
+			EstimatedWeightKg: 42,
+			DecayStage:        "FRESH",
+			Location:          IncidentLocation{Lat: 26.588, Lng: 93.185, RoadName: "NH-715 Panbari Bottleneck", Region: "Kaziranga, Assam, India"},
+			PhotoURL:          "https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_hogdeer.jpg",
+			PhotoURLs:         []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_hogdeer.jpg"},
+			ReliabilityScore:  0.96,
+			IsExcluded:        false,
+			Status:            "PENDING_REMOVAL",
+			ReportedAt:        now.Add(-3 * time.Hour),
+		},
+		{
+			ID:                "rk-2026-005",
+			Species:           "Ezo Sika Deer",
+			EstimatedWeightKg: 115,
+			DecayStage:        "FRESH",
+			Location:          IncidentLocation{Lat: 43.620, Lng: 144.980, RoadName: "National Route 272", Region: "Nemuro, Hokkaido, Japan"},
+			PhotoURL:          "https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_sikadeer.jpg",
+			PhotoURLs:         []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_rk_sikadeer.jpg"},
+			ReliabilityScore:  0.94,
+			IsExcluded:        false,
+			Status:            "PENDING_REMOVAL",
+			ReportedAt:        now.Add(-5 * time.Hour),
+		},
+		{
+			ID:                "rk-2026-006",
+			Species:           "Japanese Serow (Kamoshika)",
+			EstimatedWeightKg: 38,
+			DecayStage:        "MODERATE",
+			Location:          IncidentLocation{Lat: 39.810, Lng: 141.420, RoadName: "National Route 455", Region: "Iwaizumi, Iwate, Japan"},
+			PhotoURL:          "",
+			ReliabilityScore:  0.89,
+			IsExcluded:        false,
+			Status:            "DISPOSED",
+			ReportedAt:        now.Add(-36 * time.Hour),
+		},
+		{
+			ID:                "rk-2026-007",
+			Species:           "Wild Boar",
+			EstimatedWeightKg: 68,
+			DecayStage:        "MODERATE",
+			Location:          IncidentLocation{Lat: 12.528, Lng: 99.542, RoadName: "Route 3201 Hua Hin Bypass", Region: "Prachuap Khiri Khan, Thailand"},
+			PhotoURL:          "",
+			ReliabilityScore:  0.82,
+			IsExcluded:        false,
+			Status:            "DISPOSED",
+			ReportedAt:        now.Add(-3 * 24 * time.Hour),
+		},
+		{
+			ID:                "rk-2026-008",
+			Species:           "Domestic Cattle (Calf)",
+			EstimatedWeightKg: 85,
+			DecayStage:        "ADVANCED",
+			Location:          IncidentLocation{Lat: 0.525, Lng: 101.480, RoadName: "Minas Concession Road", Region: "Siak, Riau, Indonesia"},
+			PhotoURL:          "",
+			ReliabilityScore:  0.90,
+			IsExcluded:        false,
+			Status:            "DISPOSED",
+			ReportedAt:        now.Add(-5 * 24 * time.Hour),
+		},
+		{
+			ID:                "rk-2026-009",
+			Species:           "Red Fox",
+			EstimatedWeightKg: 7,
+			DecayStage:        "ADVANCED",
+			Location:          IncidentLocation{Lat: 44.060, Lng: 145.010, RoadName: "Route 334 Pass", Region: "Shiretoko, Hokkaido, Japan"},
+			PhotoURL:          "",
+			ReliabilityScore:  0.40,
+			IsExcluded:        true,
+			Status:            "DISPOSED",
+			ReportedAt:        now.Add(-11 * 24 * time.Hour),
+		},
+		{
+			ID:                "rk-2026-010",
+			Species:           "Wild Boar",
+			EstimatedWeightKg: 52,
+			DecayStage:        "ADVANCED",
+			Location:          IncidentLocation{Lat: 26.540, Lng: 93.050, RoadName: "Kaliabor Bypass NH-715", Region: "Nagaon, Assam, India"},
+			PhotoURL:          "",
+			ReliabilityScore:  0.75,
+			IsExcluded:        false,
+			Status:            "DISPOSED",
+			ReportedAt:        now.Add(-18 * 24 * time.Hour),
+		},
 	}
-	s.roadkills[rk1.ID] = rk1
-	s.roadkills[rk2.ID] = rk2
-	s.roadkills[rk3.ID] = rk3
+	for _, rk := range rkList {
+		s.roadkills[rk.ID] = rk
+	}
 
-	// 4. Initial Environmental Attractants
-	env1 := AdminEnvironmentalData{
-		ID:           "env-crop-01",
-		Category:     "CROP_PHENOLOGY",
-		Name:         "Kaeng Krachan Perimeter Sugarcane Sector A",
-		LocationDesc: "Eastern boundary agro-forest interface",
-		GeometryType: "circle",
-		CircleCenter: &Coordinate{Lat: 12.870, Lng: 99.660},
-		RadiusMeters: 3000,
-		RiskWeight:   0.85,
-		ActiveSeason: "October - January (Harvest Peak)",
-		LastUpdated:  now.Add(-12 * time.Hour),
+	// 4. Initial Environmental Attractants (Crops, Persimmons, Pastures, Water Holes)
+	envList := []AdminEnvironmentalData{
+		{
+			ID:           "env-crop-01",
+			Category:     "CROP_PHENOLOGY",
+			Name:         "Kaeng Krachan Perimeter Sugarcane Sector A",
+			LocationDesc: "Eastern boundary agro-forest interface",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 12.870, Lng: 99.660},
+			RadiusMeters: 3000,
+			RiskWeight:   0.85,
+			ActiveSeason: "October - January (Harvest Peak)",
+			PhotoURLs:    []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_sugarcane_field.jpg"},
+			LastUpdated:  now.Add(-12 * time.Hour),
+		},
+		{
+			ID:           "env-kaki-02",
+			Category:     "PERSIMMON_KAKI",
+			Name:         "Nagano Depopulated Valley Orchard Cluster",
+			LocationDesc: "Abandoned residential hillside trees",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 36.660, Lng: 138.190},
+			RadiusMeters: 1800,
+			RiskWeight:   0.90,
+			ActiveSeason: "September - November (Pre-hibernation Hyperphagia)",
+			PhotoURLs:    []string{},
+			LastUpdated:  now.Add(-1 * time.Hour),
+		},
+		{
+			ID:           "env-pasture-03",
+			Category:     "LIVESTOCK_PASTURE",
+			Name:         "Siak Fringe Communal Cattle Corral",
+			LocationDesc: "Open night grazing pasture bordering oil palm",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 0.510, Lng: 101.470},
+			RadiusMeters: 2200,
+			RiskWeight:   0.78,
+			ActiveSeason: "Year-round",
+			PhotoURLs:    []string{},
+			LastUpdated:  now.Add(-2 * time.Hour),
+		},
+		{
+			ID:           "env-kaki-04",
+			Category:     "PERSIMMON_KAKI",
+			Name:         "Morioka Matsuzono Abandoned Fruit Tree Cluster",
+			LocationDesc: "Residential hillside fringe fruit groves near elementary school",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 39.735, Lng: 141.165},
+			RadiusMeters: 1500,
+			RiskWeight:   0.92,
+			ActiveSeason: "October - December (Peak Fruiting & Pre-Denning)",
+			PhotoURLs:    []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_kaki_trees.jpg"},
+			LastUpdated:  now.Add(-6 * time.Hour),
+		},
+		{
+			ID:           "env-water-05",
+			Category:     "WATER_SOURCE",
+			Name:         "Huai Sat Yai Reservoir Channel Watering Point",
+			LocationDesc: "Dry season sole watering access between forest and village",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 12.535, Lng: 99.525},
+			RadiusMeters: 1200,
+			RiskWeight:   0.75,
+			ActiveSeason: "February - May (Dry Season Drought)",
+			PhotoURLs:    []string{},
+			LastUpdated:  now.Add(-18 * time.Hour),
+		},
+		{
+			ID:           "env-crop-06",
+			Category:     "CROP_PHENOLOGY",
+			Name:         "Kaziranga Bokakhat Tea & Lowland Buffer Belt",
+			LocationDesc: "Wetland buffer corridor between NH-715 and tea plantation edge",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 26.615, Lng: 93.590},
+			RadiusMeters: 3200,
+			RiskWeight:   0.88,
+			ActiveSeason: "June - September (Monsoon Inundation Dispersal)",
+			PhotoURLs:    []string{},
+			LastUpdated:  now.Add(-24 * time.Hour),
+		},
+		{
+			ID:           "env-crop-07",
+			Category:     "CROP_PHENOLOGY",
+			Name:         "Eniwa Agricultural Sweetcorn & Sugarbeet Belt",
+			LocationDesc: "Forest edge crop plots attractive to brown bears prior to denning",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 42.920, Lng: 141.580},
+			RadiusMeters: 2500,
+			RiskWeight:   0.82,
+			ActiveSeason: "August - October (Sweetcorn Ripening Peak)",
+			PhotoURLs:    []string{},
+			LastUpdated:  now.Add(-48 * time.Hour),
+		},
+		{
+			ID:           "env-pasture-08",
+			Category:     "LIVESTOCK_PASTURE",
+			Name:         "Pelalawan Concession Night Grazing Enclosure",
+			LocationDesc: "Communal sheep and cattle pens bordering pulpwood concession",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 0.360, Lng: 101.850},
+			RadiusMeters: 2000,
+			RiskWeight:   0.80,
+			ActiveSeason: "Year-round",
+			PhotoURLs:    []string{},
+			LastUpdated:  now.Add(-72 * time.Hour),
+		},
 	}
-	env2 := AdminEnvironmentalData{
-		ID:           "env-kaki-02",
-		Category:     "PERSIMMON_KAKI",
-		Name:         "Nagano Depopulated Valley Orchard Cluster",
-		LocationDesc: "Abandoned residential hillside trees",
-		GeometryType: "circle",
-		CircleCenter: &Coordinate{Lat: 36.660, Lng: 138.190},
-		RadiusMeters: 1800,
-		RiskWeight:   0.90,
-		ActiveSeason: "September - November (Pre-hibernation Hyperphagia)",
-		LastUpdated:  now.Add(-1 * time.Hour),
+	for _, env := range envList {
+		s.environmental[env.ID] = env
 	}
-	env3 := AdminEnvironmentalData{
-		ID:           "env-pasture-03",
-		Category:     "LIVESTOCK_PASTURE",
-		Name:         "Siak Fringe Communal Cattle Corral",
-		LocationDesc: "Open night grazing pasture bordering oil palm",
-		GeometryType: "circle",
-		CircleCenter: &Coordinate{Lat: 0.510, Lng: 101.470},
-		RadiusMeters: 2200,
-		RiskWeight:   0.78,
-		ActiveSeason: "Year-round",
-		LastUpdated:  now.Add(-2 * time.Hour),
-	}
-	s.environmental[env1.ID] = env1
-	s.environmental[env2.ID] = env2
-	s.environmental[env3.ID] = env3
 }
 
 // --- Geofences CRUD ---
