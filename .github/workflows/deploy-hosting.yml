@@ -50,12 +50,36 @@ jobs:
           echo "::add-mask::$KEY"
           COEXIST_FIREBASE_API_KEY="$KEY" scripts/render_web_config.sh
 
+      - name: Set up Node.js for Admin Web Build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: web-admin/package-lock.json
+
+      - name: Build Admin Web Distribution
+        run: |
+          cd web-admin
+          npm ci
+          npm run build
+
+      - name: Inject Google Maps API key into web-admin
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: scripts/render_admin_config.sh
+
       - name: Verify Web Distribution Assets
         run: |
           ls -la shared/build/dist/js/productionExecutable
           test -f shared/build/dist/js/productionExecutable/index.html
           test -f shared/build/dist/js/productionExecutable/shared.js
           test -f shared/build/dist/js/productionExecutable/skiko.wasm
+          ls -la web-admin/dist/web-admin/browser
+          test -f web-admin/dist/web-admin/browser/index.html
+          if grep -q "__GOOGLE_MAPS_API_KEY__" web-admin/dist/web-admin/browser/index.html; then
+            echo "::error::Google Maps API key placeholder was not properly replaced in web-admin distribution!"
+            exit 1
+          fi
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
@@ -70,4 +94,6 @@ jobs:
         run: |
           echo "Verifying live availability for AI Builder Cup 2026 Evaluation..."
           curl -sI --max-time 10 https://coexistshield-ai.web.app/ || true
-          echo "Live URL: https://coexistshield-ai.web.app"
+          curl -sI --max-time 10 https://corald-admin.web.app/ || true
+          echo "Live App URL: https://coexistshield-ai.web.app"
+          echo "Live Admin URL: https://corald-admin.web.app"

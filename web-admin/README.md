@@ -68,6 +68,26 @@ Built with **Angular 22 (Latest version)**, **Google Maps API**, and **Tailwind 
 - npm `10.9.0+`
 - Go `1.24+` (for backend)
 
+### Google Maps API Key Configuration
+
+The Google Maps API key is never committed to git in plain text.
+
+- **CI/CD Deployment (GitHub Actions):**
+  Set the repository secret **`GOOGLE_MAPS_API_KEY`** in:
+  `GitHub Repository -> Settings -> Secrets and variables -> Actions -> New repository secret`
+  The deployment workflow (`.github/workflows/deploy-hosting.yml`) automatically builds `web-admin` and injects the secret into the production distribution using `scripts/render_admin_config.sh`.
+
+- **Local Development:**
+  Create a `.env` file in `web-admin/` or the repository root (both ignored by git):
+  ```env
+  GOOGLE_MAPS_API_KEY=AIzaSy...
+  ```
+  Or pass it as an environment variable when building:
+  ```bash
+  GOOGLE_MAPS_API_KEY=AIzaSy... npm run build
+  ../scripts/render_admin_config.sh
+  ```
+
 ### Running the Admin Portal Locally
 
 ```bash
@@ -87,6 +107,9 @@ npm start
 ```bash
 # Build production bundle
 npm run build
+
+# Inject Maps API key into built bundle (reads GOOGLE_MAPS_API_KEY from env or .env)
+../scripts/render_admin_config.sh
 
 # Deploy to Firebase Hosting target 'admin'
 firebase deploy --only hosting:admin

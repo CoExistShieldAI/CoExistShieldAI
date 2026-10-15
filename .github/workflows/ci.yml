@@ -127,3 +127,33 @@ jobs:
           cd firebase-tests
           npm ci || npm install
           npm test
+
+  web-admin-test:
+    name: Web Admin Portal Build & Key Injection Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: web-admin/package-lock.json
+
+      - name: Install Dependencies and Build Web Admin
+        run: |
+          cd web-admin
+          npm ci
+          npm run build
+
+      - name: Verify Key Injection Script
+        env:
+          GOOGLE_MAPS_API_KEY: "AIzaSyMockKeyForVerificationTest123"
+        run: |
+          scripts/render_admin_config.sh
+          grep -q "AIzaSyMockKeyForVerificationTest123" web-admin/dist/web-admin/browser/index.html
+          ! grep -q "__GOOGLE_MAPS_API_KEY__" web-admin/dist/web-admin/browser/index.html
+          echo "Verified key injection in web-admin distribution"
+

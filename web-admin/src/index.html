@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Google Maps API with drawing and geometry libraries -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBEhSnPw0oqxK_KZ0K4s8pZSBvVO5COg8o&libraries=geometry,drawing,places&loading=async"></script>
+  <!-- Google Maps API with drawing and geometry libraries (injected at build/deploy time via scripts/render_admin_config.sh) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_API_KEY__&libraries=geometry,drawing,places&loading=async"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 antialiased selection:bg-emerald-500 selection:text-white">
   <app-root></app-root>
