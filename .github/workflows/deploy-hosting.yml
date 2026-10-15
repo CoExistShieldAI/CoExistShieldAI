@@ -85,9 +85,9 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_COEXISTSHIELD_AI }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CORALD || secrets.FIREBASE_SERVICE_ACCOUNT_COEXISTSHIELD_AI }}'
           channelId: live
-          projectId: coexistshield-ai
+          projectId: corald
         continue-on-error: true # Ensure workflow succeeds during judging even if service account secret is pending
 
       - name: Post-Deployment Live Health Check
