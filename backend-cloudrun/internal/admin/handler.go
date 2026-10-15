@@ -44,6 +44,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/admin/environmental", h.handleEnvironmental)
 	mux.HandleFunc("/api/v1/admin/environmental/", h.handleEnvironmentalDetail)
 
+	// Weather / Meteorological Data for AI
+	mux.HandleFunc("/api/v1/admin/weather", h.handleWeather)
+	mux.HandleFunc("/api/v1/admin/weather/", h.handleWeatherDetail)
+
 	// Operations & Emergency
 	mux.HandleFunc("/api/v1/admin/operations/broadcast", h.handleEmergencyBroadcast)
 	mux.HandleFunc("/api/v1/admin/export/", h.handleExport)
@@ -297,6 +301,65 @@ func (h *Handler) handleEnvironmentalDetail(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// --- Weather Handlers ---
+
+func (h *Handler) handleWeather(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		region := r.URL.Query().Get("region")
+		items := h.store.ListWeather(region)
+		writeJSON(w, http.StatusOK, items)
+	case http.MethodPost:
+		var weather AdminWeatherData
+		if err := json.NewDecoder(r.Body).Decode(&weather); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+		weather = h.store.CreateWeather(weather)
+		writeJSON(w, http.StatusCreated, weather)
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) handleWeatherDetail(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/weather/")
+	if id == "" {
+		http.Error(w, "Missing ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		weather, exists := h.store.GetWeather(id)
+		if !exists {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, weather)
+	case http.MethodPut:
+		var weather AdminWeatherData
+		if err := json.NewDecoder(r.Body).Decode(&weather); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+		updated, ok := h.store.UpdateWeather(id, weather)
+		if !ok {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		if h.store.DeleteWeather(id) {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "deleted", "id": id})
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // --- Operations Handlers ---
 
 func (h *Handler) handleEmergencyBroadcast(w http.ResponseWriter, r *http.Request) {
@@ -330,10 +393,23 @@ func (h *Handler) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataset := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/export/")
+	pathParam := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/export/")
 	format := r.URL.Query().Get("format")
+	dataset := r.URL.Query().Get("dataset")
+
+	// Support both /export/{dataset}?format={format} and /export/{format}?dataset={dataset}
+	if pathParam == "csv" || pathParam == "geojson" || pathParam == "json" {
+		format = pathParam
+	} else if pathParam != "" {
+		dataset = pathParam
+	}
+
 	if format == "" {
 		format = "geojson"
+	}
+	if dataset == "" {
+		http.Error(w, "Missing dataset parameter", http.StatusBadRequest)
+		return
 	}
 
 	data, contentType, err := h.store.ExportDataset(dataset, format)

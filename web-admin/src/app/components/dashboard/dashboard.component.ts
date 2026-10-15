@@ -26,7 +26,7 @@ import { AdminApiService } from '../../services/admin-api.service';
       </div>
 
       <!-- KPI Summary Metric Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <!-- Card 1: Active Geofences -->
         <div class="p-5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-all shadow-sm">
           <div class="flex items-center justify-between">
@@ -102,6 +102,26 @@ import { AdminApiService } from '../../services/admin-api.service';
           </div>
           <div class="mt-3 text-[11px] text-slate-500 border-t border-slate-800/80 pt-2.5">
             Villagers, plantation staff & rangers
+          </div>
+        </div>
+
+        <!-- Card 5: AI Met Stations -->
+        <div class="p-5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-all shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400">AI Met Sensor Nodes</span>
+            <span class="p-2 rounded-xl bg-sky-500/10 text-sky-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </span>
+          </div>
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-extrabold text-sky-400">{{ stats()?.total_weather_stations || api.weather().length || 6 }}</span>
+            <span class="text-xs text-sky-300 font-medium">Active JAPAC</span>
+          </div>
+          <div class="mt-3 flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-800/80 pt-2.5">
+            <span>Wind / Moon / Precip</span>
+            <a routerLink="/weather" class="text-sky-400 hover:underline">Manage</a>
           </div>
         </div>
       </div>
@@ -196,5 +216,6 @@ export class DashboardComponent implements OnInit {
   ngOnInit() {
     this.api.getStats().subscribe();
     this.api.getWildlife().subscribe();
+    this.api.getWeather().subscribe();
   }
 }

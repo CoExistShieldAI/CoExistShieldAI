@@ -91,8 +91,40 @@ export interface DashboardStats {
   total_wildlife_all: number;
   pending_roadkills: number;
   total_roadkills: number;
+  total_weather_stations?: number;
   total_users: number;
   species_distribution: Record<string, number>;
+}
+
+export type WeatherCondition = 'CLEAR' | 'OVERCAST' | 'RAIN' | 'HEAVY_RAIN' | 'STORM' | 'FOG';
+
+export type MoonPhase =
+  | 'NEW_MOON'
+  | 'WAXING_CRESCENT'
+  | 'FIRST_QUARTER'
+  | 'WAXING_GIBBOUS'
+  | 'FULL_MOON'
+  | 'WANING_GIBBOUS'
+  | 'LAST_QUARTER'
+  | 'WANING_CRESCENT';
+
+export interface AdminWeatherData {
+  id: string;
+  station_name: string;
+  region: string;
+  latitude: number;
+  longitude: number;
+  temperature_celsius: number;
+  humidity_pct: number;
+  wind_speed_kmh: number;
+  wind_direction_deg: number;
+  precipitation_mm_h: number;
+  moon_illumination: number;
+  moon_phase: MoonPhase | string;
+  is_flooded_river_risk: boolean;
+  weather_condition: WeatherCondition | string;
+  notes?: string;
+  last_updated: string;
 }
 
 export interface EmergencyBroadcastRequest {
@@ -111,3 +143,4 @@ export interface EmergencyBroadcastResponse {
   dispatched_at: string;
   status: string;
 }
+

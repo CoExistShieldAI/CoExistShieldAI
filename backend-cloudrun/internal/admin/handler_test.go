@@ -281,3 +281,132 @@ func TestUploadPhotos(t *testing.T) {
 		t.Errorf("Expected 400 Bad Request for >5 files, got %d", tooManyResp.StatusCode)
 	}
 }
+
+func TestWeatherCRUDAndExport(t *testing.T) {
+	ts, _ := setupTestServer()
+	defer ts.Close()
+
+	// 1. List seeded weather data
+	resp, err := http.Get(ts.URL + "/api/v1/admin/weather")
+	if err != nil {
+		t.Fatalf("Failed to GET weather: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", resp.StatusCode)
+	}
+	var weatherList []AdminWeatherData
+	if err := json.NewDecoder(resp.Body).Decode(&weatherList); err != nil {
+		t.Fatalf("Failed to decode: %v", err)
+	}
+	if len(weatherList) < 5 {
+		t.Errorf("Expected at least 5 seeded weather records, got %d", len(weatherList))
+	}
+
+	// 2. Filter by region
+	respFiltered, err := http.Get(ts.URL + "/api/v1/admin/weather?region=Thailand")
+	if err != nil {
+		t.Fatalf("Failed to GET filtered weather: %v", err)
+	}
+	defer respFiltered.Body.Close()
+	var thaiWeather []AdminWeatherData
+	_ = json.NewDecoder(respFiltered.Body).Decode(&thaiWeather)
+	if len(thaiWeather) == 0 || !strings.Contains(thaiWeather[0].Region, "Thailand") {
+		t.Errorf("Expected Thailand weather station, got %+v", thaiWeather)
+	}
+
+	// 3. Create new Weather record
+	newStation := AdminWeatherData{
+		StationName:        "Valparai High Forest Sensor",
+		Region:             "India (Anamalai)",
+		Latitude:           10.325,
+		Longitude:          76.955,
+		TemperatureCelsius: 22.0,
+		HumidityPct:        85.0,
+		WindSpeedKmh:       12.0,
+		WindDirectionDeg:   120.0,
+		PrecipitationMmH:   30.0, // Should trigger FloodedRiverRisk = true
+		MoonIllumination:   0.04,
+		MoonPhase:          "NEW_MOON",
+		WeatherCondition:   "HEAVY_RAIN",
+		Notes:              "High rainfall leading to river rise across elephant migration path",
+	}
+	createBody, _ := json.Marshal(newStation)
+	postResp, err := http.Post(ts.URL+"/api/v1/admin/weather", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("Failed to POST weather: %v", err)
+	}
+	defer postResp.Body.Close()
+	if postResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Expected 201 Created, got %d", postResp.StatusCode)
+	}
+	var created AdminWeatherData
+	_ = json.NewDecoder(postResp.Body).Decode(&created)
+	if created.ID == "" {
+		t.Errorf("Expected auto-generated ID, got empty")
+	}
+	if !created.IsFloodedRiverRisk {
+		t.Errorf("Expected IsFloodedRiverRisk to be true for 30mm/h precipitation")
+	}
+
+	// 4. Get Weather Detail
+	getResp, err := http.Get(ts.URL + "/api/v1/admin/weather/" + created.ID)
+	if err != nil {
+		t.Fatalf("Failed to GET single weather: %v", err)
+	}
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK, got %d", getResp.StatusCode)
+	}
+
+	// 5. Update Weather
+	created.TemperatureCelsius = 24.5
+	created.Notes = "Updated observation"
+	putBody, _ := json.Marshal(created)
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/admin/weather/"+created.ID, bytes.NewReader(putBody))
+	req.Header.Set("Content-Type", "application/json")
+	putResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Failed to PUT weather: %v", err)
+	}
+	defer putResp.Body.Close()
+	if putResp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK on PUT, got %d", putResp.StatusCode)
+	}
+	var updated AdminWeatherData
+	_ = json.NewDecoder(putResp.Body).Decode(&updated)
+	if updated.TemperatureCelsius != 24.5 {
+		t.Errorf("Expected updated temp 24.5, got %f", updated.TemperatureCelsius)
+	}
+
+	// 6. Export Weather CSV & GeoJSON
+	csvResp, err := http.Get(ts.URL + "/api/v1/admin/export/csv?dataset=weather")
+	if err != nil {
+		t.Fatalf("Failed to export weather CSV: %v", err)
+	}
+	defer csvResp.Body.Close()
+	if csvResp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK on CSV export, got %d", csvResp.StatusCode)
+	}
+
+	geoResp, err := http.Get(ts.URL + "/api/v1/admin/export/geojson?dataset=weather")
+	if err != nil {
+		t.Fatalf("Failed to export weather GeoJSON: %v", err)
+	}
+	defer geoResp.Body.Close()
+	if geoResp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK on GeoJSON export, got %d", geoResp.StatusCode)
+	}
+
+	// 7. Delete Weather
+	delReq, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/v1/admin/weather/"+created.ID, nil)
+	delResp, err := http.DefaultClient.Do(delReq)
+	if err != nil {
+		t.Fatalf("Failed to DELETE weather: %v", err)
+	}
+	defer delResp.Body.Close()
+	if delResp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK on DELETE, got %d", delResp.StatusCode)
+	}
+}
+

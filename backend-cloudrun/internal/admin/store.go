@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,6 +17,7 @@ type Store struct {
 	wildlife      map[string]AdminWildlifeIncident
 	roadkills     map[string]AdminRoadkillRecord
 	environmental map[string]AdminEnvironmentalData
+	weather       map[string]AdminWeatherData
 	userCount     int
 }
 
@@ -25,6 +27,7 @@ func NewStore() *Store {
 		wildlife:      make(map[string]AdminWildlifeIncident),
 		roadkills:     make(map[string]AdminRoadkillRecord),
 		environmental: make(map[string]AdminEnvironmentalData),
+		weather:       make(map[string]AdminWeatherData),
 		userCount:     1420,
 	}
 	s.seedDefaultData()
@@ -497,6 +500,121 @@ func (s *Store) seedDefaultData() {
 	for _, env := range envList {
 		s.environmental[env.ID] = env
 	}
+
+	// 5. Initial Weather & Meteorological Observation Stations for AI
+	weatherList := []AdminWeatherData{
+		{
+			ID:                 "weather-thai-01",
+			StationName:        "Kaeng Krachan Substation Alpha",
+			Region:             "Thailand (Kaeng Krachan)",
+			Latitude:           12.875,
+			Longitude:          99.630,
+			TemperatureCelsius: 31.5,
+			HumidityPct:        82.0,
+			WindSpeedKmh:       14.0,
+			WindDirectionDeg:   90.0, // East wind
+			PrecipitationMmH:   0.0,
+			MoonIllumination:   0.12,
+			MoonPhase:          "WANING_CRESCENT",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "CLEAR",
+			Notes:              "Dry evening east wind dispersing sugarcane volatile plume towards park border",
+			LastUpdated:        now.Add(-20 * time.Minute),
+		},
+		{
+			ID:                 "weather-sumatra-02",
+			StationName:        "Siak Forest Edge Met-Tower 4",
+			Region:             "Indonesia (Riau)",
+			Latitude:           0.520,
+			Longitude:          101.450,
+			TemperatureCelsius: 28.0,
+			HumidityPct:        89.0,
+			WindSpeedKmh:       6.0,
+			WindDirectionDeg:   180.0, // South wind
+			PrecipitationMmH:   2.5,
+			MoonIllumination:   0.02,
+			MoonPhase:          "NEW_MOON",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "RAIN",
+			Notes:              "New moon nocturnal cycle creates peak ambush probability near cattle corral fringes",
+			LastUpdated:        now.Add(-45 * time.Minute),
+		},
+		{
+			ID:                 "weather-japan-03",
+			StationName:        "Nagano Valley Agromet Station",
+			Region:             "Japan (Nagano)",
+			Latitude:           36.650,
+			Longitude:          138.180,
+			TemperatureCelsius: 14.2,
+			HumidityPct:        65.0,
+			WindSpeedKmh:       11.5,
+			WindDirectionDeg:   270.0, // West wind
+			PrecipitationMmH:   0.0,
+			MoonIllumination:   0.08,
+			MoonPhase:          "NEW_MOON",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "CLEAR",
+			Notes:              "Crisp autumn dusk wind carrying ripe kaki volatile esters into western foothills",
+			LastUpdated:        now.Add(-1 * time.Hour),
+		},
+		{
+			ID:                 "weather-japan-04",
+			StationName:        "Morioka Matsuzono Hilltop Sensor",
+			Region:             "Japan (Iwate)",
+			Latitude:           39.735,
+			Longitude:          141.165,
+			TemperatureCelsius: 11.8,
+			HumidityPct:        71.0,
+			WindSpeedKmh:       8.0,
+			WindDirectionDeg:   315.0, // NW wind
+			PrecipitationMmH:   0.0,
+			MoonIllumination:   0.15,
+			MoonPhase:          "WAXING_CRESCENT",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "OVERCAST",
+			Notes:              "Overcast night conditions encouraging crepuscular bear foraging along stream corridor",
+			LastUpdated:        now.Add(-2 * time.Hour),
+		},
+		{
+			ID:                 "weather-india-05",
+			StationName:        "Kaziranga Panbari Flood Gauge",
+			Region:             "India (Assam)",
+			Latitude:           26.590,
+			Longitude:          93.180,
+			TemperatureCelsius: 27.5,
+			HumidityPct:        94.0,
+			WindSpeedKmh:       18.0,
+			WindDirectionDeg:   220.0, // SW wind
+			PrecipitationMmH:   32.0,
+			MoonIllumination:   0.88,
+			MoonPhase:          "WAXING_GIBBOUS",
+			IsFloodedRiverRisk: true,
+			WeatherCondition:   "HEAVY_RAIN",
+			Notes:              "Severe precipitation (>25mm/h) triggers Brahmaputra river overflow hazard and animal highland migration",
+			LastUpdated:        now.Add(-10 * time.Minute),
+		},
+		{
+			ID:                 "weather-japan-06",
+			StationName:        "Shiretoko Rausu Coastal Tower",
+			Region:             "Japan (Hokkaido)",
+			Latitude:           44.020,
+			Longitude:          145.190,
+			TemperatureCelsius: 9.5,
+			HumidityPct:        78.0,
+			WindSpeedKmh:       16.0,
+			WindDirectionDeg:   45.0, // NE wind
+			PrecipitationMmH:   1.0,
+			MoonIllumination:   0.50,
+			MoonPhase:          "FIRST_QUARTER",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "OVERCAST",
+			Notes:              "Coastal onshore breeze dispersing salmon carcass odor upriver into mountain passes",
+			LastUpdated:        now.Add(-3 * time.Hour),
+		},
+	}
+	for _, w := range weatherList {
+		s.weather[w.ID] = w
+	}
 }
 
 // --- Geofences CRUD ---
@@ -736,6 +854,87 @@ func (s *Store) DeleteEnvironmental(id string) bool {
 	return true
 }
 
+// --- Weather CRUD ---
+
+func (s *Store) ListWeather(regionFilter string) []AdminWeatherData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	res := make([]AdminWeatherData, 0, len(s.weather))
+	for _, w := range s.weather {
+		if regionFilter != "" && !strings.Contains(strings.ToLower(w.Region), strings.ToLower(regionFilter)) {
+			continue
+		}
+		res = append(res, w)
+	}
+	return res
+}
+
+func (s *Store) GetWeather(id string) (AdminWeatherData, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	w, exists := s.weather[id]
+	return w, exists
+}
+
+func (s *Store) CreateWeather(w AdminWeatherData) AdminWeatherData {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if w.ID == "" {
+		w.ID = fmt.Sprintf("weather-%d", time.Now().UnixNano())
+	}
+	if w.LastUpdated.IsZero() {
+		w.LastUpdated = time.Now().UTC()
+	}
+	if w.PrecipitationMmH >= 25.0 {
+		w.IsFloodedRiverRisk = true
+	}
+	if w.MoonPhase == "" {
+		if w.MoonIllumination <= 0.05 {
+			w.MoonPhase = "NEW_MOON"
+		} else if w.MoonIllumination < 0.45 {
+			w.MoonPhase = "WAXING_CRESCENT"
+		} else if w.MoonIllumination <= 0.55 {
+			w.MoonPhase = "FIRST_QUARTER"
+		} else if w.MoonIllumination < 0.95 {
+			w.MoonPhase = "WAXING_GIBBOUS"
+		} else {
+			w.MoonPhase = "FULL_MOON"
+		}
+	}
+	s.weather[w.ID] = w
+	return w
+}
+
+func (s *Store) UpdateWeather(id string, w AdminWeatherData) (AdminWeatherData, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.weather[id]; !exists {
+		return AdminWeatherData{}, false
+	}
+	w.ID = id
+	w.LastUpdated = time.Now().UTC()
+	if w.PrecipitationMmH >= 25.0 {
+		w.IsFloodedRiverRisk = true
+	}
+	s.weather[id] = w
+	return w, true
+}
+
+func (s *Store) DeleteWeather(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.weather[id]; !exists {
+		return false
+	}
+	delete(s.weather, id)
+	return true
+}
+
 // --- Dashboard Stats ---
 
 func (s *Store) GetDashboardStats() DashboardStatsResponse {
@@ -746,11 +945,12 @@ func (s *Store) GetDashboardStats() DashboardStatsResponse {
 	cutoff24h := now.Add(-24 * time.Hour)
 
 	stats := DashboardStatsResponse{
-		TotalGeofences:      len(s.geofences),
-		TotalRoadkills:      len(s.roadkills),
-		TotalWildlifeAll:    len(s.wildlife),
-		TotalUsers:          s.userCount,
-		SpeciesDistribution: make(map[string]int),
+		TotalGeofences:       len(s.geofences),
+		TotalRoadkills:       len(s.roadkills),
+		TotalWildlifeAll:     len(s.wildlife),
+		TotalWeatherStations: len(s.weather),
+		TotalUsers:           s.userCount,
+		SpeciesDistribution:  make(map[string]int),
 	}
 
 	for _, g := range s.geofences {
@@ -870,6 +1070,32 @@ func (s *Store) exportGeoJSON(dataset string) ([]byte, string, error) {
 				},
 			})
 		}
+	case "weather":
+		for _, w := range s.weather {
+			features = append(features, map[string]interface{}{
+				"type": "Feature",
+				"geometry": map[string]interface{}{
+					"type":        "Point",
+					"coordinates": []float64{w.Longitude, w.Latitude},
+				},
+				"properties": map[string]interface{}{
+					"id":                    w.ID,
+					"station_name":          w.StationName,
+					"region":                w.Region,
+					"temperature_celsius":   w.TemperatureCelsius,
+					"humidity_pct":          w.HumidityPct,
+					"wind_speed_kmh":        w.WindSpeedKmh,
+					"wind_direction_deg":    w.WindDirectionDeg,
+					"precipitation_mm_h":    w.PrecipitationMmH,
+					"moon_illumination":     w.MoonIllumination,
+					"moon_phase":            w.MoonPhase,
+					"is_flooded_river_risk": w.IsFloodedRiverRisk,
+					"weather_condition":     w.WeatherCondition,
+					"notes":                 w.Notes,
+					"last_updated":          w.LastUpdated.Format(time.RFC3339),
+				},
+			})
+		}
 	default:
 		return nil, "", fmt.Errorf("unknown dataset: %s", dataset)
 	}
@@ -915,6 +1141,25 @@ func (s *Store) exportCSV(dataset string) ([]byte, string, error) {
 				strconv.FormatFloat(rk.Location.Lat, 'f', 6, 64),
 				strconv.FormatFloat(rk.Location.Lng, 'f', 6, 64),
 				rk.Location.RoadName, rk.ReportedAt.Format(time.RFC3339),
+			})
+		}
+	case "weather":
+		_ = writer.Write([]string{"ID", "StationName", "Region", "Latitude", "Longitude", "TemperatureCelsius", "HumidityPct", "WindSpeedKmh", "WindDirectionDeg", "PrecipitationMmH", "MoonIllumination", "MoonPhase", "FloodedRiverRisk", "Condition", "LastUpdated"})
+		for _, w := range s.weather {
+			_ = writer.Write([]string{
+				w.ID, w.StationName, w.Region,
+				strconv.FormatFloat(w.Latitude, 'f', 6, 64),
+				strconv.FormatFloat(w.Longitude, 'f', 6, 64),
+				strconv.FormatFloat(w.TemperatureCelsius, 'f', 1, 64),
+				strconv.FormatFloat(w.HumidityPct, 'f', 1, 64),
+				strconv.FormatFloat(w.WindSpeedKmh, 'f', 1, 64),
+				strconv.FormatFloat(w.WindDirectionDeg, 'f', 1, 64),
+				strconv.FormatFloat(w.PrecipitationMmH, 'f', 1, 64),
+				strconv.FormatFloat(w.MoonIllumination, 'f', 2, 64),
+				w.MoonPhase,
+				strconv.FormatBool(w.IsFloodedRiverRisk),
+				w.WeatherCondition,
+				w.LastUpdated.Format(time.RFC3339),
 			})
 		}
 	default:

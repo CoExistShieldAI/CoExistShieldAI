@@ -204,4 +204,86 @@ test.describe('Live Backend API Integration & Core User Workflows', () => {
     const healthCheck = await page.request.get(`${BACKEND_URL}/health`);
     expect(healthCheck.status()).toBe(200);
   });
+
+  // 11. Admin Weather & Meteorological Sensor Observation Data Lifecycle
+  test('Admin Weather API supports listing, adding, editing, and deleting meteorological observation nodes', async ({ request }) => {
+    // A. List seeded weather data
+    const listRes = await request.get(`${BACKEND_URL}/api/v1/admin/weather`);
+    expect(listRes.status()).toBe(200);
+    const weatherList = await listRes.json();
+    expect(Array.isArray(weatherList)).toBe(true);
+    expect(weatherList.length).toBeGreaterThanOrEqual(5);
+
+    // Verify key fields required by AI prediction engines
+    const firstStation = weatherList[0];
+    expect(firstStation).toHaveProperty('id');
+    expect(firstStation).toHaveProperty('station_name');
+    expect(firstStation).toHaveProperty('region');
+    expect(firstStation).toHaveProperty('wind_speed_kmh');
+    expect(firstStation).toHaveProperty('wind_direction_deg');
+    expect(firstStation).toHaveProperty('precipitation_mm_h');
+    expect(firstStation).toHaveProperty('moon_illumination');
+    expect(firstStation).toHaveProperty('moon_phase');
+
+    // B. Create a new weather observation station node
+    const newStationPayload = {
+      station_name: 'E2E Valparai Rainforest Tower',
+      region: 'India (Western Ghats)',
+      latitude: 10.325,
+      longitude: 76.955,
+      temperature_celsius: 23.5,
+      humidity_pct: 92.0,
+      wind_speed_kmh: 15.0,
+      wind_direction_deg: 240.0,
+      precipitation_mm_h: 28.5, // >= 25 mm/h triggers flooded river risk
+      moon_illumination: 0.05,
+      moon_phase: 'NEW_MOON',
+      weather_condition: 'HEAVY_RAIN',
+      notes: 'Monsoon surge in elephant migratory corridor'
+    };
+
+    const createRes = await request.post(`${BACKEND_URL}/api/v1/admin/weather`, {
+      data: newStationPayload
+    });
+    expect(createRes.status()).toBe(201);
+    const createdStation = await createRes.json();
+    expect(createdStation.id).toBeDefined();
+    expect(createdStation.station_name).toBe(newStationPayload.station_name);
+    expect(createdStation.is_flooded_river_risk).toBe(true);
+
+    const stationId = createdStation.id;
+
+    // C. Edit / Update weather observation node
+    const updatePayload = {
+      ...createdStation,
+      temperature_celsius: 21.0,
+      wind_speed_kmh: 18.5,
+      notes: 'Updated gust measurements'
+    };
+    const updateRes = await request.put(`${BACKEND_URL}/api/v1/admin/weather/${stationId}`, {
+      data: updatePayload
+    });
+    expect(updateRes.status()).toBe(200);
+    const updatedStation = await updateRes.json();
+    expect(updatedStation.temperature_celsius).toBe(21.0);
+    expect(updatedStation.wind_speed_kmh).toBe(18.5);
+
+    // D. Export Weather dataset via Admin export endpoint
+    const exportCsvRes = await request.get(`${BACKEND_URL}/api/v1/admin/export/csv?dataset=weather`);
+    expect(exportCsvRes.status()).toBe(200);
+    const csvContent = await exportCsvRes.text();
+    expect(csvContent).toContain('StationName');
+    expect(csvContent).toContain('E2E Valparai Rainforest Tower');
+
+    // E. Delete weather station node
+    const deleteRes = await request.delete(`${BACKEND_URL}/api/v1/admin/weather/${stationId}`);
+    expect(deleteRes.status()).toBe(200);
+    const deleteBody = await deleteRes.json();
+    expect(deleteBody.status).toBe('deleted');
+
+    // Verify deletion
+    const verifyRes = await request.get(`${BACKEND_URL}/api/v1/admin/weather/${stationId}`);
+    expect(verifyRes.status()).toBe(404);
+  });
 });
+

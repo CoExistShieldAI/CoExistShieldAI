@@ -91,8 +91,9 @@ type DashboardStatsResponse struct {
 	TotalWildlife24h   int            `json:"total_wildlife_24h"`
 	TotalWildlifeAll   int            `json:"total_wildlife_all"`
 	PendingRoadkills   int            `json:"pending_roadkills"`
-	TotalRoadkills     int            `json:"total_roadkills"`
-	TotalUsers         int            `json:"total_users"`
+	TotalRoadkills      int            `json:"total_roadkills"`
+	TotalWeatherStations int           `json:"total_weather_stations"`
+	TotalUsers          int            `json:"total_users"`
 	SpeciesDistribution map[string]int `json:"species_distribution"`
 }
 
@@ -114,3 +115,24 @@ type EmergencyBroadcastResponse struct {
 	DispatchedAt       time.Time `json:"dispatched_at"`
 	Status             string    `json:"status"`
 }
+
+// AdminWeatherData represents meteorological observations used by AI prediction engines
+type AdminWeatherData struct {
+	ID                 string    `json:"id"`
+	StationName        string    `json:"station_name"`
+	Region             string    `json:"region"`
+	Latitude           float64   `json:"latitude"`
+	Longitude          float64   `json:"longitude"`
+	TemperatureCelsius float64   `json:"temperature_celsius"`
+	HumidityPct        float64   `json:"humidity_pct"`
+	WindSpeedKmh       float64   `json:"wind_speed_kmh"`
+	WindDirectionDeg   float64   `json:"wind_direction_deg"` // 0=N, 90=E, 180=S, 270=W
+	PrecipitationMmH   float64   `json:"precipitation_mm_h"`
+	MoonIllumination   float64   `json:"moon_illumination"` // 0.0 - 1.0
+	MoonPhase          string    `json:"moon_phase"`        // NEW_MOON, WAXING_CRESCENT, FULL_MOON, etc.
+	IsFloodedRiverRisk bool      `json:"is_flooded_river_risk"`
+	WeatherCondition   string    `json:"weather_condition"` // CLEAR, OVERCAST, RAIN, HEAVY_RAIN, STORM, FOG
+	Notes              string    `json:"notes,omitempty"`
+	LastUpdated        time.Time `json:"last_updated"`
+}
+

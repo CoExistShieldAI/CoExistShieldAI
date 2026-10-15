@@ -117,6 +117,7 @@ import { EmergencyBroadcastRequest, EmergencyBroadcastResponse } from '../../mod
                   <option value="geofences">Dynamic Geofences (AI & Manual)</option>
                   <option value="wildlife">Wildlife Sighting & Encounter Reports</option>
                   <option value="roadkill">Roadkill Incidents & Removal Log</option>
+                  <option value="weather">Meteorological Observations (AI Input Features)</option>
                 </select>
               </div>
 

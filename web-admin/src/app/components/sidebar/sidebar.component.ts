@@ -65,6 +65,14 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           Environmental Layers
         </a>
 
+        <a routerLink="/weather" routerLinkActive="bg-sky-500/10 text-sky-400 font-semibold border-sky-500"
+          class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all border-l-2 border-transparent">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z" />
+          </svg>
+          AI Weather & Met Data
+        </a>
+
         <a routerLink="/operations" routerLinkActive="bg-emerald-500/10 text-emerald-400 font-semibold border-emerald-500"
           class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all border-l-2 border-transparent">
           <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

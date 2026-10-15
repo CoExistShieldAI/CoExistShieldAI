@@ -6,6 +6,7 @@ import {
   AdminWildlifeIncident,
   AdminRoadkillRecord,
   AdminEnvironmentalData,
+  AdminWeatherData,
   DashboardStats,
   EmergencyBroadcastRequest,
   EmergencyBroadcastResponse,
@@ -28,6 +29,7 @@ export class AdminApiService {
   readonly wildlife = signal<AdminWildlifeIncident[]>([]);
   readonly roadkills = signal<AdminRoadkillRecord[]>([]);
   readonly environmental = signal<AdminEnvironmentalData[]>([]);
+  readonly weather = signal<AdminWeatherData[]>([]);
   readonly isRecalculating = signal<boolean>(false);
 
   // --- Dashboard ---
@@ -844,6 +846,194 @@ export class AdminApiService {
       }),
       catchError(() => {
         this.environmental.update(list => list.filter(e => e.id !== id));
+        return of({ status: 'deleted', id });
+      })
+    );
+  }
+
+  // --- Weather & Meteorological Data ---
+  getWeather(region?: string): Observable<AdminWeatherData[]> {
+    const url = region ? `${this.baseUrl}/weather?region=${encodeURIComponent(region)}` : `${this.baseUrl}/weather`;
+    return this.http.get<AdminWeatherData[]>(url).pipe(
+      tap(data => this.weather.set(data)),
+      catchError(() => {
+        const fallback: AdminWeatherData[] = [
+          {
+            id: 'weather-thai-01',
+            station_name: 'Kaeng Krachan Substation Alpha',
+            region: 'Thailand (Kaeng Krachan)',
+            latitude: 12.875,
+            longitude: 99.630,
+            temperature_celsius: 31.5,
+            humidity_pct: 82.0,
+            wind_speed_kmh: 14.0,
+            wind_direction_deg: 90.0,
+            precipitation_mm_h: 0.0,
+            moon_illumination: 0.12,
+            moon_phase: 'WANING_CRESCENT',
+            is_flooded_river_risk: false,
+            weather_condition: 'CLEAR',
+            notes: 'Dry evening east wind dispersing sugarcane volatile plume towards park border',
+            last_updated: new Date(Date.now() - 20 * 60000).toISOString()
+          },
+          {
+            id: 'weather-sumatra-02',
+            station_name: 'Siak Forest Edge Met-Tower 4',
+            region: 'Indonesia (Riau)',
+            latitude: 0.520,
+            longitude: 101.450,
+            temperature_celsius: 28.0,
+            humidity_pct: 89.0,
+            wind_speed_kmh: 6.0,
+            wind_direction_deg: 180.0,
+            precipitation_mm_h: 2.5,
+            moon_illumination: 0.02,
+            moon_phase: 'NEW_MOON',
+            is_flooded_river_risk: false,
+            weather_condition: 'RAIN',
+            notes: 'New moon nocturnal cycle creates peak ambush probability near cattle corral fringes',
+            last_updated: new Date(Date.now() - 45 * 60000).toISOString()
+          },
+          {
+            id: 'weather-japan-03',
+            station_name: 'Nagano Valley Agromet Station',
+            region: 'Japan (Nagano)',
+            latitude: 36.650,
+            longitude: 138.180,
+            temperature_celsius: 14.2,
+            humidity_pct: 65.0,
+            wind_speed_kmh: 11.5,
+            wind_direction_deg: 270.0,
+            precipitation_mm_h: 0.0,
+            moon_illumination: 0.08,
+            moon_phase: 'NEW_MOON',
+            is_flooded_river_risk: false,
+            weather_condition: 'CLEAR',
+            notes: 'Crisp autumn dusk wind carrying ripe kaki volatile esters into western foothills',
+            last_updated: new Date(Date.now() - 60 * 60000).toISOString()
+          },
+          {
+            id: 'weather-japan-04',
+            station_name: 'Morioka Matsuzono Hilltop Sensor',
+            region: 'Japan (Iwate)',
+            latitude: 39.735,
+            longitude: 141.165,
+            temperature_celsius: 11.8,
+            humidity_pct: 71.0,
+            wind_speed_kmh: 8.0,
+            wind_direction_deg: 315.0,
+            precipitation_mm_h: 0.0,
+            moon_illumination: 0.15,
+            moon_phase: 'WAXING_CRESCENT',
+            is_flooded_river_risk: false,
+            weather_condition: 'OVERCAST',
+            notes: 'Overcast night conditions encouraging crepuscular bear foraging along stream corridor',
+            last_updated: new Date(Date.now() - 120 * 60000).toISOString()
+          },
+          {
+            id: 'weather-india-05',
+            station_name: 'Kaziranga Panbari Flood Gauge',
+            region: 'India (Assam)',
+            latitude: 26.590,
+            longitude: 93.180,
+            temperature_celsius: 27.5,
+            humidity_pct: 94.0,
+            wind_speed_kmh: 18.0,
+            wind_direction_deg: 220.0,
+            precipitation_mm_h: 32.0,
+            moon_illumination: 0.88,
+            moon_phase: 'WAXING_GIBBOUS',
+            is_flooded_river_risk: true,
+            weather_condition: 'HEAVY_RAIN',
+            notes: 'Severe precipitation (>25mm/h) triggers Brahmaputra river overflow hazard and animal highland migration',
+            last_updated: new Date(Date.now() - 10 * 60000).toISOString()
+          },
+          {
+            id: 'weather-japan-06',
+            station_name: 'Shiretoko Rausu Coastal Tower',
+            region: 'Japan (Hokkaido)',
+            latitude: 44.020,
+            longitude: 145.190,
+            temperature_celsius: 9.5,
+            humidity_pct: 78.0,
+            wind_speed_kmh: 16.0,
+            wind_direction_deg: 45.0,
+            precipitation_mm_h: 1.0,
+            moon_illumination: 0.50,
+            moon_phase: 'FIRST_QUARTER',
+            is_flooded_river_risk: false,
+            weather_condition: 'OVERCAST',
+            notes: 'Coastal onshore breeze dispersing salmon carcass odor upriver into mountain passes',
+            last_updated: new Date(Date.now() - 180 * 60000).toISOString()
+          }
+        ];
+        this.weather.set(fallback);
+        return of(fallback);
+      })
+    );
+  }
+
+  createWeather(item: Partial<AdminWeatherData>): Observable<AdminWeatherData> {
+    return this.http.post<AdminWeatherData>(`${this.baseUrl}/weather`, item).pipe(
+      tap(created => {
+        this.weather.update(list => [created, ...list]);
+      }),
+      catchError(() => {
+        const mock: AdminWeatherData = {
+          id: `weather-${Date.now()}`,
+          station_name: item.station_name || 'New Observation Station',
+          region: item.region || 'Regional Met-Grid',
+          latitude: item.latitude || 0,
+          longitude: item.longitude || 0,
+          temperature_celsius: item.temperature_celsius ?? 22.0,
+          humidity_pct: item.humidity_pct ?? 70.0,
+          wind_speed_kmh: item.wind_speed_kmh ?? 10.0,
+          wind_direction_deg: item.wind_direction_deg ?? 90.0,
+          precipitation_mm_h: item.precipitation_mm_h ?? 0.0,
+          moon_illumination: item.moon_illumination ?? 0.5,
+          moon_phase: item.moon_phase || 'FIRST_QUARTER',
+          is_flooded_river_risk: (item.precipitation_mm_h ?? 0) >= 25.0,
+          weather_condition: item.weather_condition || 'CLEAR',
+          notes: item.notes || '',
+          last_updated: new Date().toISOString()
+        };
+        this.weather.update(list => [mock, ...list]);
+        return of(mock);
+      })
+    );
+  }
+
+  updateWeather(id: string, item: Partial<AdminWeatherData>): Observable<AdminWeatherData> {
+    return this.http.put<AdminWeatherData>(`${this.baseUrl}/weather/${id}`, item).pipe(
+      tap(updated => {
+        this.weather.update(list => list.map(w => w.id === id ? updated : w));
+      }),
+      catchError(() => {
+        let updatedItem: AdminWeatherData | null = null;
+        this.weather.update(list => list.map(w => {
+          if (w.id === id) {
+            updatedItem = {
+              ...w,
+              ...item,
+              is_flooded_river_risk: (item.precipitation_mm_h ?? w.precipitation_mm_h) >= 25.0,
+              last_updated: new Date().toISOString()
+            };
+            return updatedItem;
+          }
+          return w;
+        }));
+        return of(updatedItem!);
+      })
+    );
+  }
+
+  deleteWeather(id: string): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/weather/${id}`).pipe(
+      tap(() => {
+        this.weather.update(list => list.filter(w => w.id !== id));
+      }),
+      catchError(() => {
+        this.weather.update(list => list.filter(w => w.id !== id));
         return of({ status: 'deleted', id });
       })
     );
