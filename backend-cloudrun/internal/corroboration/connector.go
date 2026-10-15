@@ -69,6 +69,91 @@ func FetchOpenMeteoWeather(ctx context.Context, client *http.Client, lat, lon fl
 	}, nil
 }
 
+// OpenMeteoHourlyResponse represents hourly forecasted weather from open-meteo.com API.
+type OpenMeteoHourlyResponse struct {
+	Hourly struct {
+		Time             []string  `json:"time"`
+		Temperature2m    []float64 `json:"temperature_2m"`
+		Precipitation    []float64 `json:"precipitation"`
+		WindSpeed10m     []float64 `json:"wind_speed_10m"`
+		WindDirection10m []float64 `json:"wind_direction_10m"`
+	} `json:"hourly"`
+}
+
+// FetchOpenMeteoHourlyForecast queries Open-Meteo for multi-hour forecast vectors for dynamic drift simulation.
+func FetchOpenMeteoHourlyForecast(ctx context.Context, client *http.Client, lat, lon float64, hoursAhead int) ([]model.HourlyForecastPoint, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+	if hoursAhead <= 0 {
+		hoursAhead = 24
+	}
+
+	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m&forecast_days=2",
+		lat, lon)
+
+	if customEndpoint := os.Getenv("OPEN_METEO_API_ENDPOINT"); customEndpoint != "" {
+		url = fmt.Sprintf("%s?latitude=%.4f&longitude=%.4f&mode=hourly", customEndpoint, lat, lon)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Open-Meteo hourly request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Open-Meteo hourly HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Open-Meteo hourly returned HTTP %d", resp.StatusCode)
+	}
+
+	var data OpenMeteoHourlyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("failed to parse Open-Meteo hourly response: %w", err)
+	}
+
+	total := len(data.Hourly.Time)
+	if total == 0 {
+		return nil, fmt.Errorf("empty hourly forecast returned")
+	}
+
+	limit := hoursAhead
+	if limit > total {
+		limit = total
+	}
+
+	results := make([]model.HourlyForecastPoint, limit)
+	for i := 0; i < limit; i++ {
+		tStr := data.Hourly.Time[i]
+		windSpeed := 0.0
+		windDir := 0.0
+		precip := 0.0
+		if i < len(data.Hourly.WindSpeed10m) {
+			windSpeed = data.Hourly.WindSpeed10m[i]
+		}
+		if i < len(data.Hourly.WindDirection10m) {
+			windDir = data.Hourly.WindDirection10m[i]
+		}
+		if i < len(data.Hourly.Precipitation) {
+			precip = data.Hourly.Precipitation[i]
+		}
+
+		results[i] = model.HourlyForecastPoint{
+			Timestamp:        tStr,
+			OffsetHours:      i + 1,
+			WindSpeedKmh:     windSpeed,
+			WindDirectionDeg: windDir,
+			PrecipitationMmH: precip,
+		}
+	}
+
+	return results, nil
+}
+
 // FetchFirmsThermalAnomalies fetches live satellite thermal fire anomalies from NASA FIRMS REST API.
 // Requires FIRMS_MAP_KEY environment variable.
 func FetchFirmsThermalAnomalies(ctx context.Context, client *http.Client, countryCode string, mapKey string) ([]model.CausalStreamItem, error) {

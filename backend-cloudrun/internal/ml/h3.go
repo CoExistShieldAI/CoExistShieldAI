@@ -164,3 +164,45 @@ func WindScentAlignmentAngle(windBearingFromDeg, cellToAttractantBearingDeg floa
 	}
 	return delta
 }
+
+// ApplyH3SpatialDiffusion computes spatial risk diffusion across H3 k-ring neighbors using a Gaussian spatial kernel.
+// Spreads incursion probability to immediate surrounding cells to model wildlife roaming corridor continuity.
+func ApplyH3SpatialDiffusion(lat, lon float64, baseProb float64, kRings int) map[string]float64 {
+	if kRings <= 0 {
+		kRings = 1
+	}
+
+	result := make(map[string]float64)
+	centerIndex := GeoToH3Res8(lat, lon)
+	result[centerIndex] = baseProb
+
+	// Hexagonal 6-direction unit vectors in axial space
+	hexDirections := [][2]int{
+		{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1},
+	}
+
+	// Calculate discrete cell step in degrees
+	dLatStep := H3BaseHexHeightRes8Deg
+	dLonStep := H3BaseHexWidthRes8Deg
+
+	for ring := 1; ring <= kRings; ring++ {
+		// Gaussian decay weight: w(k) = exp(-0.5 * (k / sigma)^2)
+		sigma := 1.2
+		weight := math.Exp(-0.5 * math.Pow(float64(ring)/sigma, 2.0))
+		decayedProb := math.Round(baseProb*weight*1000.0) / 1000.0
+
+		for _, dir := range hexDirections {
+			dLat := float64(dir[1]*ring) * dLatStep
+			dLon := float64(dir[0]*ring) * dLonStep
+			neighborLat := lat + dLat
+			neighborLon := lon + dLon
+
+			neighborIndex := GeoToH3Res8(neighborLat, neighborLon)
+			if existing, ok := result[neighborIndex]; !ok || decayedProb > existing {
+				result[neighborIndex] = decayedProb
+			}
+		}
+	}
+
+	return result
+}

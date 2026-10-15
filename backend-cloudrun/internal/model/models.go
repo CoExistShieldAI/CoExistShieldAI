@@ -153,15 +153,23 @@ type MoonPhaseInfo struct {
 	IsNocturnalPeakRisk     bool    `json:"isNocturnalPeakRisk"`     // True if illumination <= 0.20
 }
 
+type SolarPhaseInfo struct {
+	PhaseName                string  `json:"phaseName"`                // NIGHT, ASTRONOMICAL_TWILIGHT, NAUTICAL_TWILIGHT, CIVIL_TWILIGHT, GOLDEN_HOUR, DAYLIGHT
+	ElevationDegrees         float64 `json:"elevationDegrees"`         // Solar elevation angle above horizon in degrees
+	CrepuscularRiskMultiplier float64 `json:"crepuscularRiskMultiplier"` // 0.75x (midday shelter) to 1.75x (dawn/dusk peak hunting/foraging)
+	IsCrepuscularPeakRisk    bool    `json:"isCrepuscularPeakRisk"`    // True during civil twilight / golden hour (elevation between -6° and +6°)
+}
+
 type MeteorologicalConditions struct {
-	TemperatureCelsius float64       `json:"temperatureCelsius"`
-	HumidityPct        float64       `json:"humidityPct"`
-	WindSpeedKmh       float64       `json:"windSpeedKmh"`
-	WindDirectionDeg   float64       `json:"windDirectionDeg"`
-	PrecipitationMmH   float64       `json:"precipitationMmH"`
-	IsFloodedRiverRisk bool          `json:"isFloodedRiverRisk"` // True if PrecipitationMmH >= 25.0
-	MoonPhase          MoonPhaseInfo `json:"moonPhase"`
-	Timestamp          string        `json:"timestamp"`
+	TemperatureCelsius float64        `json:"temperatureCelsius"`
+	HumidityPct        float64        `json:"humidityPct"`
+	WindSpeedKmh       float64        `json:"windSpeedKmh"`
+	WindDirectionDeg   float64        `json:"windDirectionDeg"`
+	PrecipitationMmH   float64        `json:"precipitationMmH"`
+	IsFloodedRiverRisk bool           `json:"isFloodedRiverRisk"` // True if PrecipitationMmH >= 25.0
+	MoonPhase          MoonPhaseInfo  `json:"moonPhase"`
+	SolarPhase         SolarPhaseInfo `json:"solarPhase"`
+	Timestamp          string         `json:"timestamp"`
 }
 
 type AttractantHub struct {
@@ -184,6 +192,61 @@ type GeneratePlumeGeofencesResponse struct {
 	Zones     []GeofenceZoneDto `json:"zones"`
 	Count     int               `json:"count"`
 	CreatedAt string            `json:"createdAt"`
+}
+
+// Next-Gen Feature Models (Epic #64)
+
+type HourlyForecastPoint struct {
+	Timestamp        string  `json:"timestamp"`
+	OffsetHours      int     `json:"offsetHours"`
+	WindSpeedKmh     float64 `json:"windSpeedKmh"`
+	WindDirectionDeg float64 `json:"windDirectionDeg"`
+	PrecipitationMmH float64 `json:"precipitationMmH"`
+	SolarPhase       string  `json:"solarPhase"`
+}
+
+type ForecastZoneStep struct {
+	OffsetHours          int              `json:"offsetHours"`
+	ForecastTime         string           `json:"forecastTime"`
+	Zone                 GeofenceZoneDto  `json:"zone"`
+	WindBearingDeg       float64          `json:"windBearingDeg"`
+	WindSpeedKmh         float64          `json:"windSpeedKmh"`
+	CrepuscularRiskBoost float64          `json:"crepuscularRiskBoost"`
+	SolarPhase           SolarPhaseInfo   `json:"solarPhase"`
+}
+
+type ForecastPlumeGeofencesRequest struct {
+	Attractants []AttractantHub `json:"attractants"`
+	TargetHours []int           `json:"targetHours,omitempty"` // e.g. [1, 3, 6, 12] hours into future
+	Region      string          `json:"region,omitempty"`
+}
+
+type ForecastPlumeGeofencesResponse struct {
+	TimelineSteps []ForecastZoneStep `json:"timelineSteps"`
+	TotalSteps    int                `json:"totalSteps"`
+	GeneratedAt   string             `json:"generatedAt"`
+}
+
+// OsmSpatialContext models real-world barriers and natural corridors from OpenStreetMap
+type OsmSpatialContext struct {
+	NearbyHighwaysCount   int      `json:"nearbyHighwaysCount"`
+	HasDividedMotorway    bool     `json:"hasDividedMotorway"`
+	DividedHighwayNames   []string `json:"dividedHighwayNames,omitempty"`
+	NearbyRiversCount     int      `json:"nearbyRiversCount"`
+	RiparianCorridorName  string   `json:"riparianCorridorName,omitempty"`
+	ForestEdgeProximityM  float64  `json:"forestEdgeProximityM"`
+	CorridorDeflectionDeg float64  `json:"corridorDeflectionDeg"` // Angle of river flow guiding movement
+}
+
+type DeescalationResult struct {
+	ZoneId            string  `json:"zoneId"`
+	OriginalRadiusM   float64 `json:"originalRadiusM"`
+	CurrentRadiusM    float64 `json:"currentRadiusM"`
+	ContractionRatio  float64 `json:"contractionRatio"` // e.g. 0.75 (25% reduction)
+	OriginalTier      string  `json:"originalTier"`
+	CurrentTier       string  `json:"currentTier"`
+	HoursSinceTrigger float64 `json:"hoursSinceTrigger"`
+	Status            string  `json:"status"` // ACTIVE, CONTRACTED, DEMOTED, EXPIRED
 }
 
 type ActiveGeofencePoint struct {

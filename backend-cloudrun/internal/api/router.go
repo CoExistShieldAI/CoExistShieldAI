@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -157,6 +158,8 @@ func (r *Router) registerRoutes() {
 
 	r.mux.HandleFunc("/api/v1/geofences/recalculate", r.handleGeofencesRecalculate)
 	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
+	r.mux.HandleFunc("/api/v1/geofences/forecast-morph", r.handleGenerateForecastPlumeGeofences)
+	r.mux.HandleFunc("/api/v1/geofences/deescalate", r.handleDeescalateGeofences)
 	r.mux.HandleFunc("/api/v1/meteorology/current", r.handleGetCurrentMeteorology)
 	r.mux.HandleFunc("/api/v1/analytics/japan-kaki/top-hazards", r.handleTopHazards)
 	r.mux.HandleFunc("/api/v1/compliance/rspo/package", r.officialOnly(r.handleRspoPackage))
@@ -268,6 +271,48 @@ func (r *Router) handleGeneratePlumeGeofences(w http.ResponseWriter, req *http.R
 
 	resp := r.geofenceEngine.GenerateScentPlumeGeofences(plumeReq)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleGenerateForecastPlumeGeofences(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var forecastReq model.ForecastPlumeGeofencesRequest
+	if err := json.NewDecoder(req.Body).Decode(&forecastReq); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	var forecastPoints []model.HourlyForecastPoint
+	if len(forecastReq.Attractants) > 0 {
+		refLat := forecastReq.Attractants[0].Latitude
+		refLon := forecastReq.Attractants[0].Longitude
+		ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+		defer cancel()
+		pts, err := corroboration.FetchOpenMeteoHourlyForecast(ctx, nil, refLat, refLon, 24)
+		if err == nil && len(pts) > 0 {
+			forecastPoints = pts
+		}
+	}
+
+	resp := r.geofenceEngine.GenerateForecastPlumeGeofences(forecastReq, forecastPoints)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDeescalateGeofences(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	results := r.geofenceEngine.DeescalateActiveZones(time.Now().UTC())
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"results":   results,
+		"evaluated": len(results),
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func (r *Router) handleGetActiveGeofences(w http.ResponseWriter, req *http.Request) {

@@ -104,6 +104,8 @@ func (e *Engine) GetCurrentMeteorology(region string) model.MeteorologicalCondit
 	windSpeed := 12.0
 	windDir := 285.0 // Westerly
 	precip := 0.0
+	refLat := 39.7020
+	refLon := 141.1520
 
 	switch region {
 	case "THAILAND":
@@ -112,13 +114,19 @@ func (e *Engine) GetCurrentMeteorology(region string) model.MeteorologicalCondit
 		windSpeed = 8.5
 		windDir = 120.0
 		precip = 5.0
+		refLat = 13.5210
+		refLon = 101.4520
 	case "INDONESIA":
 		temp = 31.0
 		humid = 88.0
 		windSpeed = 6.0
 		windDir = 190.0
 		precip = 12.0
+		refLat = 0.8250
+		refLon = 101.5300
 	}
+
+	solar := CalculateSolarPhase(refLat, refLon, now)
 
 	return model.MeteorologicalConditions{
 		TemperatureCelsius: temp,
@@ -128,6 +136,7 @@ func (e *Engine) GetCurrentMeteorology(region string) model.MeteorologicalCondit
 		PrecipitationMmH:   precip,
 		IsFloodedRiverRisk: precip >= 25.0,
 		MoonPhase:          moon,
+		SolarPhase:         solar,
 		Timestamp:          now.Format(time.RFC3339),
 	}
 }
@@ -236,11 +245,16 @@ func (e *Engine) GenerateScentPlumeGeofences(req model.GeneratePlumeGeofencesReq
 
 	var zones []model.GeofenceZoneDto
 
+	now := time.Now().UTC()
 	for idx, hub := range req.Attractants {
 		baseRadius, tier, species, baseRisk := calculateHubProperties(hub)
 
-		// Scale risk by lunar factor
-		effectiveRisk := math.Min(1.0, baseRisk*lunarFactor)
+		// Astronomical solar elevation & crepuscular foraging peak (dawn/dusk)
+		solar := CalculateSolarPhase(hub.Latitude, hub.Longitude, now)
+		crepuscularFactor := 0.70 + 0.30*solar.CrepuscularRiskMultiplier
+
+		// Scale risk by lunar factor and crepuscular timing
+		effectiveRisk := math.Min(1.0, baseRisk*lunarFactor*crepuscularFactor)
 
 		// Scale risk by flooded river barrier compression (wildlife concentrated near bridges/culverts)
 		if isFloodedRiver {
@@ -264,10 +278,21 @@ func (e *Engine) GenerateScentPlumeGeofences(req model.GeneratePlumeGeofencesReq
 			isFloodedRiver,
 		)
 
+		// Apply OpenStreetMap infrastructure barriers & riparian corridor alignment
+		osmCtx := DefaultOsmContextForRegion(hub.Latitude, hub.Longitude)
+		polygon = ApplyOsmSpatialConstraints(polygon, osmCtx, hub.Latitude, hub.Longitude)
+
 		causalFactors := []string{
 			fmt.Sprintf("Attractant: %s", hub.Type),
 			fmt.Sprintf("Wind: %.1f km/h (bearing %.0f°)", weather.WindSpeedKmh, blowsTowardDeg),
 			fmt.Sprintf("Moon Illumination: %.2f (Risk Multiplier: %.2fx)", weather.MoonIllumination, lunarFactor),
+			fmt.Sprintf("Solar Phase: %s (Elevation: %.1f°, Crepuscular Multiplier: %.2fx)", solar.PhaseName, solar.ElevationDegrees, solar.CrepuscularRiskMultiplier),
+		}
+		if osmCtx.HasDividedMotorway {
+			causalFactors = append(causalFactors, fmt.Sprintf("OSM Barrier: Fenced highway limits cross-corridor spillover"))
+		}
+		if osmCtx.NearbyRiversCount > 0 {
+			causalFactors = append(causalFactors, fmt.Sprintf("OSM Riparian: Corridor aligned along %s (bearing %.0f°)", osmCtx.RiparianCorridorName, osmCtx.CorridorDeflectionDeg))
 		}
 		if hub.FruitLoad != "" {
 			causalFactors = append(causalFactors, fmt.Sprintf("Fruit Load: %s", hub.FruitLoad))

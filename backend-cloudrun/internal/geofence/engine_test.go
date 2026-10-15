@@ -45,6 +45,53 @@ func TestCalculateMoonPhaseAstronomical(t *testing.T) {
 	}
 }
 
+func TestCalculateSolarPhase(t *testing.T) {
+	lat := 39.7020
+	lon := 141.1520 // Morioka, Japan (~UTC+9)
+
+	// 1. Solar Noon on Spring Equinox (March 20, 2026, 11:45 JST = 02:45 UTC)
+	noonTime := time.Date(2026, 3, 20, 2, 45, 0, 0, time.UTC)
+	solarNoon := CalculateSolarPhase(lat, lon, noonTime)
+
+	if solarNoon.PhaseName != "DAYLIGHT" {
+		t.Errorf("expected DAYLIGHT at solar noon, got %s", solarNoon.PhaseName)
+	}
+	if solarNoon.ElevationDegrees < 40.0 {
+		t.Errorf("expected solar elevation > 40° at equinox noon in Morioka, got %f", solarNoon.ElevationDegrees)
+	}
+	if solarNoon.CrepuscularRiskMultiplier > 0.90 {
+		t.Errorf("expected low crepuscular multiplier (<0.90) at midday, got %f", solarNoon.CrepuscularRiskMultiplier)
+	}
+	if solarNoon.IsCrepuscularPeakRisk {
+		t.Errorf("expected IsCrepuscularPeakRisk false at midday")
+	}
+
+	// 2. Midnight (March 20, 2026, 00:00 JST = March 19, 15:00 UTC)
+	midnightTime := time.Date(2026, 3, 19, 15, 0, 0, 0, time.UTC)
+	solarMidnight := CalculateSolarPhase(lat, lon, midnightTime)
+
+	if solarMidnight.PhaseName != "NIGHT" {
+		t.Errorf("expected NIGHT at midnight, got %s", solarMidnight.PhaseName)
+	}
+	if solarMidnight.ElevationDegrees > -20.0 {
+		t.Errorf("expected negative elevation < -20° at midnight, got %f", solarMidnight.ElevationDegrees)
+	}
+	if solarMidnight.IsCrepuscularPeakRisk {
+		t.Errorf("expected IsCrepuscularPeakRisk false at midnight")
+	}
+
+	// 3. Dusk Twilight Window (~18:00 JST = 09:00 UTC)
+	duskTime := time.Date(2026, 3, 20, 9, 0, 0, 0, time.UTC)
+	solarDusk := CalculateSolarPhase(lat, lon, duskTime)
+
+	if !solarDusk.IsCrepuscularPeakRisk {
+		t.Errorf("expected IsCrepuscularPeakRisk true during dusk twilight (elevation: %f)", solarDusk.ElevationDegrees)
+	}
+	if solarDusk.CrepuscularRiskMultiplier < 1.40 {
+		t.Errorf("expected elevated crepuscular multiplier >= 1.40 at dusk, got %f", solarDusk.CrepuscularRiskMultiplier)
+	}
+}
+
 func TestMeteorologyAndFloodedRiverBarrierDeflection(t *testing.T) {
 	engine := NewEngine()
 
