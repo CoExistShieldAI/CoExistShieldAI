@@ -118,17 +118,55 @@ export class GeofenceBridgeWeb extends WebPlugin implements GeofenceBridgePlugin
           this.triggerDeviceFeedback(transitionEvent);
         }
       } else {
-        // Check if within 1.5km warning halo even if outside core boundary
-        if (effectiveBoundaryDist <= 1500 && tierRank['TIER_1_NOTICE'] > tierRank[highestTier]) {
-          highestTier = 'TIER_1_NOTICE';
+        // Proximity-based graduated tier evaluation for adjacent buffer areas:
+        // Exiting or approaching a Tier 3 Critical zone doesn't abruptly flip between Danger and Safe.
+        // Adjacent areas gracefully transition through Tier 2 Warning and Tier 1 Advisory halos.
+        if (zone.tier === 'TIER_3_DANGER') {
+          const t2Threshold = Math.max(1200, (zone.radiusMeters || 1500) * 0.75);
+          const t1Threshold = Math.max(2500, (zone.radiusMeters || 1500) * 1.60);
+          if (effectiveBoundaryDist <= t2Threshold) {
+            if (tierRank['TIER_2_WARNING'] > tierRank[highestTier]) {
+              highestTier = 'TIER_2_WARNING';
+            }
+          } else if (effectiveBoundaryDist <= t1Threshold) {
+            if (tierRank['TIER_1_NOTICE'] > tierRank[highestTier]) {
+              highestTier = 'TIER_1_NOTICE';
+            }
+          }
+        } else if (zone.tier === 'TIER_2_WARNING') {
+          const t1Threshold = Math.max(1500, (zone.radiusMeters || 1500) * 0.75);
+          if (effectiveBoundaryDist <= t1Threshold) {
+            if (tierRank['TIER_1_NOTICE'] > tierRank[highestTier]) {
+              highestTier = 'TIER_1_NOTICE';
+            }
+          }
         }
+
         if (this.currentlyInsideIds.has(zone.id)) {
           this.currentlyInsideIds.delete(zone.id);
+
+          // Graceful step-down tier on zone exit
+          let exitTier: AlertTier = 'SAFE';
+          if (zone.tier === 'TIER_3_DANGER') {
+            const t2Threshold = Math.max(1200, (zone.radiusMeters || 1500) * 0.75);
+            const t1Threshold = Math.max(2500, (zone.radiusMeters || 1500) * 1.60);
+            if (effectiveBoundaryDist <= t2Threshold) {
+              exitTier = 'TIER_2_WARNING';
+            } else if (effectiveBoundaryDist <= t1Threshold) {
+              exitTier = 'TIER_1_NOTICE';
+            }
+          } else if (zone.tier === 'TIER_2_WARNING') {
+            const t1Threshold = Math.max(1500, (zone.radiusMeters || 1500) * 0.75);
+            if (effectiveBoundaryDist <= t1Threshold) {
+              exitTier = 'TIER_1_NOTICE';
+            }
+          }
+
           const exitEvent: GeofenceTransitionEvent = {
             zoneId: zone.id,
             zoneName: zone.name,
             transitionType: 'EXIT',
-            tier: 'SAFE',
+            tier: exitTier,
             distanceMeters: Math.round(distanceMetric),
             timestamp: new Date().toISOString(),
             platform: Capacitor.isNativePlatform() ? 'native' : 'web-simulation'

@@ -136,6 +136,7 @@ export interface IncidentReport {
   description: string;
   reporterId: string;
   reporterRole: UserRole;
+  photoBase64?: string;
 }
 
 export interface PriorityKakiItem {

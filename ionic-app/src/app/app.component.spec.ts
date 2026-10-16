@@ -59,5 +59,32 @@ describe('AppComponent (CoExist Shield Ionic + Capacitor)', () => {
     reportPanel.goToStep(3);
     expect(reportPanel.currentStep()).toBe(3);
   });
+
+  it('should accurately step simulated GPS location using D-Pad steering', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const initialLoc = { latitude: 39.702, longitude: 141.152 };
+    await app.state.updateDeviceLocation(initialLoc, 'Initial');
+
+    app.state.setGpsStepSize(25);
+    expect(app.state.gpsStepSizeMeters()).toBe(25);
+
+    // Step North
+    await app.state.stepSimulatedLocation('NORTH', 100);
+    expect(app.state.userLocation().latitude).toBeGreaterThan(initialLoc.latitude);
+    expect(app.state.userLocation().longitude).toBeCloseTo(initialLoc.longitude, 5);
+
+    // Step South
+    await app.state.stepSimulatedLocation('SOUTH', 100);
+    expect(app.state.userLocation().latitude).toBeCloseTo(initialLoc.latitude, 5);
+
+    // Step East
+    await app.state.stepSimulatedLocation('EAST', 100);
+    expect(app.state.userLocation().longitude).toBeGreaterThan(initialLoc.longitude);
+
+    // Step West
+    await app.state.stepSimulatedLocation('WEST', 100);
+    expect(app.state.userLocation().longitude).toBeCloseTo(initialLoc.longitude, 5);
+  });
 });
 

@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { MAP_REGIONS, ShieldStateService } from '../../services/shield-state.service';
@@ -169,14 +169,14 @@ interface RenderedAttractantOverlay {
                     <map-polygon
                       [paths]="gf.paths"
                       [options]="gf.polygonOptions"
-                      (polygonClick)="selectGeofence(gf.zone)">
+                      (polygonClick)="onPolygonClick($event, gf.zone)">
                     </map-polygon>
                   }
                   <map-circle
                     [center]="gf.center"
                     [radius]="gf.zone.radiusMeters"
                     [options]="gf.circleOptions"
-                    (circleClick)="selectGeofence(gf.zone)">
+                    (circleClick)="onCircleClick($event, gf.zone)">
                   </map-circle>
                   <map-marker
                     [position]="gf.center"
@@ -222,7 +222,7 @@ interface RenderedAttractantOverlay {
                 </map-marker>
               }
 
-              <!-- 4. Current / Simulated User Device GPS Marker -->
+              <!-- 4. Current / Simulated User Device GPS Marker (Draggable for instant boundary tests) -->
               <map-circle
                 [center]="renderedUserGps()"
                 [radius]="250"
@@ -230,7 +230,8 @@ interface RenderedAttractantOverlay {
               </map-circle>
               <map-marker
                 [position]="renderedUserGps()"
-                [options]="userGpsMarkerOptions">
+                [options]="userGpsMarkerOptions()"
+                (mapDragend)="onUserGpsDragEnd($event)">
               </map-marker>
             </google-map>
           </div>
@@ -274,6 +275,104 @@ interface RenderedAttractantOverlay {
           GPS: {{ state.userLocation().latitude.toFixed(4) }}, {{ state.userLocation().longitude.toFixed(4) }}
         </div>
       </div>
+
+      <!-- Interactive GPS Simulation D-Pad / Steering Controller -->
+      @if (state.isGpsSimulateClickMode()) {
+        <div
+          class="absolute right-4 z-40 pointer-events-auto flex flex-col items-end gap-2 transition-all duration-200"
+          [ngClass]="state.selectedEntity() ? 'bottom-4 md:bottom-[280px]' : 'bottom-4'">
+          @if (state.isDpadVisible()) {
+            <div class="bg-slate-950/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3 shadow-2xl flex flex-col items-center gap-2 select-none w-44 transition-all">
+              <!-- Header -->
+              <div class="w-full flex items-center justify-between border-b border-slate-800/80 pb-1.5 text-[11px]">
+                <div class="flex items-center gap-1.5 font-bold text-sky-400">
+                  <span>🎮</span>
+                  <span>GPS Steering</span>
+                </div>
+                <button
+                  type="button"
+                  (click)="state.isDpadVisible.set(false)"
+                  class="text-slate-400 hover:text-white px-1.5 py-0.5 rounded text-xs font-bold leading-none">
+                  ✕
+                </button>
+              </div>
+
+              <!-- Step Size Selector -->
+              <div class="w-full flex items-center justify-between gap-1 bg-slate-900/90 p-1 rounded-lg text-[10px] font-bold">
+                @for (step of [10, 50, 200]; track step) {
+                  <button
+                    type="button"
+                    (click)="state.setGpsStepSize(step)"
+                    class="flex-1 py-0.5 rounded text-center transition-all"
+                    [ngClass]="state.gpsStepSizeMeters() === step ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'">
+                    {{ step }}m
+                  </button>
+                }
+              </div>
+
+              <!-- Directional Buttons -->
+              <div class="grid grid-cols-3 gap-1.5 my-1">
+                <div></div>
+                <button
+                  type="button"
+                  (click)="state.stepSimulatedLocation('NORTH')"
+                  class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-sky-600 active:scale-95 text-slate-100 font-black text-sm flex items-center justify-center border border-slate-700 hover:border-sky-500 shadow transition-all"
+                  title="Step North (ArrowUp / W)">
+                  ▲
+                </button>
+                <div></div>
+
+                <button
+                  type="button"
+                  (click)="state.stepSimulatedLocation('WEST')"
+                  class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-sky-600 active:scale-95 text-slate-100 font-black text-sm flex items-center justify-center border border-slate-700 hover:border-sky-500 shadow transition-all"
+                  title="Step West (ArrowLeft / A)">
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  (click)="recenterToUserGps()"
+                  class="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-sky-400 text-xs flex flex-col items-center justify-center border border-slate-800 shadow transition-all"
+                  title="Recenter Map View to GPS">
+                  🎯
+                </button>
+                <button
+                  type="button"
+                  (click)="state.stepSimulatedLocation('EAST')"
+                  class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-sky-600 active:scale-95 text-slate-100 font-black text-sm flex items-center justify-center border border-slate-700 hover:border-sky-500 shadow transition-all"
+                  title="Step East (ArrowRight / D)">
+                  ▶
+                </button>
+
+                <div></div>
+                <button
+                  type="button"
+                  (click)="state.stepSimulatedLocation('SOUTH')"
+                  class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-sky-600 active:scale-95 text-slate-100 font-black text-sm flex items-center justify-center border border-slate-700 hover:border-sky-500 shadow transition-all"
+                  title="Step South (ArrowDown / S)">
+                  ▼
+                </button>
+                <div></div>
+              </div>
+
+              <!-- Hotkey Hint -->
+              <div class="text-[9px] text-slate-400 font-mono tracking-tight text-center">
+                WASD / ↑↓←→ keys supported
+              </div>
+            </div>
+          } @else {
+            <!-- Minimized Trigger Pill -->
+            <button
+              type="button"
+              (click)="state.isDpadVisible.set(true)"
+              class="px-3 py-2 rounded-xl bg-slate-950/95 hover:bg-sky-950 border border-sky-500/70 text-white shadow-2xl flex items-center gap-1.5 text-xs font-bold transition-all hover:scale-105"
+              title="Open GPS Steering D-Pad">
+              <span>🎮</span>
+              <span class="text-sky-300">D-Pad</span>
+            </button>
+          }
+        </div>
+      }
 
       <!-- Selected Entity Details Bottom Card Overlay -->
       @if (state.selectedEntity(); as entity) {
@@ -440,10 +539,11 @@ export class GisMapPanelComponent implements OnInit {
     clickable: false
   };
 
-  readonly userGpsMarkerOptions: google.maps.MarkerOptions = {
-    title: 'Your Device GPS Location',
+  readonly userGpsMarkerOptions = computed<google.maps.MarkerOptions>(() => ({
+    title: 'Your Device GPS Location (Drag to move)',
+    draggable: this.state.isGpsSimulateClickMode(),
     icon: this.buildBadgeSvgIcon('📍', '#0284c7', '#38bdf8', 'YOU')
-  };
+  }));
 
   readonly renderedUserGps = computed<google.maps.LatLngLiteral>(() => {
     const loc = this.state.userLocation();
@@ -451,7 +551,19 @@ export class GisMapPanelComponent implements OnInit {
   });
 
   readonly renderedGeofences = computed<RenderedGeofenceOverlay[]>(() => {
-    return this.state.geofences().map((gf) => {
+    const tierOrder: Record<AlertTier, number> = {
+      SAFE: 0,
+      TIER_1_NOTICE: 1,
+      TIER_2_WARNING: 2,
+      TIER_3_DANGER: 3
+    };
+    // Sort so outermost buffer zones (Tier 1) render first (base layer),
+    // and core danger zones (Tier 3) render on top with higher zIndex and interactive priority.
+    const sorted = [...this.state.geofences()].sort(
+      (a, b) => (tierOrder[a.tier] || 0) - (tierOrder[b.tier] || 0)
+    );
+
+    return sorted.map((gf) => {
       const color = this.getTierColor(gf.tier);
       const hasPolygon = Array.isArray(gf.coordinates) && gf.coordinates.length >= 3;
       const emoji = gf.targetSpecies.includes('ELEPHANT')
@@ -467,6 +579,14 @@ export class GisMapPanelComponent implements OnInit {
         .replace('_WARNING', '')
         .replace('_NOTICE', '');
 
+      const zIndex = gf.tier === 'TIER_3_DANGER' ? 30 : gf.tier === 'TIER_2_WARNING' ? 20 : 10;
+      const fillOpacity =
+        gf.tier === 'TIER_3_DANGER'
+          ? (hasPolygon ? 0.28 : 0.26)
+          : gf.tier === 'TIER_2_WARNING'
+          ? (hasPolygon ? 0.18 : 0.16)
+          : (hasPolygon ? 0.10 : 0.08);
+
       return {
         zone: gf,
         hasPolygon,
@@ -475,21 +595,24 @@ export class GisMapPanelComponent implements OnInit {
           : [],
         polygonOptions: {
           fillColor: color,
-          fillOpacity: 0.25,
+          fillOpacity,
           strokeColor: color,
-          strokeOpacity: 0.95,
-          strokeWeight: 2.5
+          strokeOpacity: gf.tier === 'TIER_3_DANGER' ? 0.95 : 0.75,
+          strokeWeight: gf.tier === 'TIER_3_DANGER' ? 2.5 : 1.8,
+          zIndex
         },
         center: { lat: gf.centroid.latitude, lng: gf.centroid.longitude },
         circleOptions: {
           fillColor: color,
-          fillOpacity: hasPolygon ? 0.08 : 0.22,
+          fillOpacity,
           strokeColor: color,
-          strokeOpacity: 0.85,
-          strokeWeight: 2
+          strokeOpacity: gf.tier === 'TIER_3_DANGER' ? 0.90 : 0.70,
+          strokeWeight: gf.tier === 'TIER_3_DANGER' ? 2.5 : 1.5,
+          zIndex
         },
         markerOptions: {
           title: gf.name,
+          zIndex: zIndex + 5,
           icon: this.buildBadgeSvgIcon(emoji, '#0f172a', color, shortTier)
         }
       };
@@ -684,4 +807,84 @@ export class GisMapPanelComponent implements OnInit {
       longitude: att.lon
     });
   }
+
+  onPolygonClick(event: google.maps.PolyMouseEvent, zone: GeofenceZone) {
+    if (this.state.isGpsSimulateClickMode() && event.latLng) {
+      const lat = event.latLng.lat();
+      const lng = event.latLng.lng();
+      this.state.updateDeviceLocation({ latitude: lat, longitude: lng }, 'Geofence Border Click');
+    }
+    this.selectGeofence(zone);
+  }
+
+  onCircleClick(event: google.maps.MapMouseEvent, zone: GeofenceZone) {
+    if (this.state.isGpsSimulateClickMode() && event.latLng) {
+      const lat = event.latLng.lat();
+      const lng = event.latLng.lng();
+      this.state.updateDeviceLocation({ latitude: lat, longitude: lng }, 'Geofence Border Click');
+    }
+    this.selectGeofence(zone);
+  }
+
+  onUserGpsDragEnd(event: google.maps.MapMouseEvent) {
+    if (event.latLng) {
+      const lat = event.latLng.lat();
+      const lng = event.latLng.lng();
+      this.state.updateDeviceLocation({ latitude: lat, longitude: lng }, 'GPS Drag & Drop');
+    }
+  }
+
+  recenterToUserGps() {
+    const loc = this.state.userLocation();
+    this.state.mapCenter.set({ lat: loc.latitude, lng: loc.longitude });
+    this.state.showToast(`🎯 Centered view to GPS (${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)})`);
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent) {
+    // Ignore keystrokes if typing inside an interactive form control
+    const target = event.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+
+    if (!this.state.isGpsSimulateClickMode()) {
+      return;
+    }
+
+    let direction: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST' | null = null;
+    switch (event.code) {
+      case 'ArrowUp':
+      case 'KeyW':
+        direction = 'NORTH';
+        break;
+      case 'ArrowDown':
+      case 'KeyS':
+        direction = 'SOUTH';
+        break;
+      case 'ArrowLeft':
+      case 'KeyA':
+        direction = 'WEST';
+        break;
+      case 'ArrowRight':
+      case 'KeyD':
+        direction = 'EAST';
+        break;
+    }
+
+    if (direction) {
+      event.preventDefault();
+      const stepMeters = event.shiftKey
+        ? this.state.gpsStepSizeMeters() * 3
+        : this.state.gpsStepSizeMeters();
+      this.state.stepSimulatedLocation(direction, stepMeters);
+    }
+  }
 }
+

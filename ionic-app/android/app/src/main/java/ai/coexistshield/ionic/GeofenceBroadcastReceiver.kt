@@ -25,6 +25,16 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         val triggeringGeofences = geofencingEvent.triggeringGeofences ?: return
         for (fence in triggeringGeofences) {
             GeofenceBridgePlugin.instance?.emitGeofenceTransition(fence.requestId, transitionType)
+
+            // Direct OS-to-Watch alert: Trigger wrist vibration even if Ionic WebView is sleeping
+            if (transitionType == "ENTER" || transitionType == "DWELL") {
+                WearSyncPlugin.broadcastUrgentAlertToWatch(
+                    context = context,
+                    tier = "TIER_2_WARNING",
+                    distanceMeters = null,
+                    message = "Entered Wildlife Geofence Zone: ${fence.requestId}"
+                )
+            }
         }
     }
 }
