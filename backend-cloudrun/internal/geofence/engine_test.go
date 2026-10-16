@@ -291,3 +291,69 @@ func TestGeofenceRecalculationAndActiveQuery(t *testing.T) {
 		t.Errorf("expected to find recalibrated zone in active geofences query")
 	}
 }
+
+func TestGraduatedConcentricBufferZones(t *testing.T) {
+	engine := NewEngine()
+
+	core := model.ActiveGeofenceZone{
+		Id:                "test_core_zone",
+		CausalExplanation: "Morioka Test Critical Incursion Zone",
+		Tier:              "TIER_3_DANGER",
+		TargetSpecies:     []string{"Asian Black Bear"},
+		RadiusMeters:      1000.0,
+		Centroid:          model.ActiveGeofencePoint{Latitude: 39.7020, Longitude: 141.1520},
+	}
+
+	buffers := GenerateConcentricBufferZones(core)
+	if len(buffers) != 2 {
+		t.Fatalf("expected 2 buffer zones (Tier 2 and Tier 1), got %d", len(buffers))
+	}
+
+	tier2 := buffers[0]
+	if tier2.Tier != "TIER_2_WARNING" {
+		t.Errorf("expected tier 2 warning, got %s", tier2.Tier)
+	}
+	if math.Abs(tier2.RadiusMeters-1750.0) > 1.0 {
+		t.Errorf("expected tier 2 radius ~1750m (1.75x), got %f", tier2.RadiusMeters)
+	}
+
+	tier1 := buffers[1]
+	if tier1.Tier != "TIER_1_NOTICE" {
+		t.Errorf("expected tier 1 notice, got %s", tier1.Tier)
+	}
+	if math.Abs(tier1.RadiusMeters-2600.0) > 1.0 {
+		t.Errorf("expected tier 1 radius ~2600m (2.60x), got %f", tier1.RadiusMeters)
+	}
+
+	// Register core and buffers into engine
+	engine.registerZoneWithGraduatedBuffers(core)
+
+	// Test EvaluateLocationTier:
+	// 1. Inside core (lat: 39.7020, lon: 141.1520 -> 0m)
+	tier, dist, matchedID := engine.EvaluateLocationTier(39.7020, 141.1520)
+	if tier != "TIER_3_DANGER" || matchedID != "test_core_zone" {
+		t.Errorf("expected TIER_3_DANGER at centroid, got %s (id: %s)", tier, matchedID)
+	}
+
+	// 2. Just outside core but inside Tier 2 buffer (~1.3km north: ~0.0117 deg lat)
+	latT2 := 39.7020 + (1300.0 / 111320.0)
+	tier, dist, _ = engine.EvaluateLocationTier(latT2, 141.1520)
+	if tier != "TIER_2_WARNING" {
+		t.Errorf("expected TIER_2_WARNING at 1.3km, got %s (dist: %.1fm)", tier, dist)
+	}
+
+	// 3. Outside Tier 2 but inside Tier 1 buffer (~2.1km north: ~0.0188 deg lat)
+	latT1 := 39.7020 + (2100.0 / 111320.0)
+	tier, dist, _ = engine.EvaluateLocationTier(latT1, 141.1520)
+	if tier != "TIER_1_NOTICE" {
+		t.Errorf("expected TIER_1_NOTICE at 2.1km, got %s (dist: %.1fm)", tier, dist)
+	}
+
+	// 4. Far away (>3.5km north)
+	latSafe := 39.7020 + (3500.0 / 111320.0)
+	tier, dist, _ = engine.EvaluateLocationTier(latSafe, 141.1520)
+	if tier != "SAFE" {
+		t.Errorf("expected SAFE at 3.5km, got %s (dist: %.1fm)", tier, dist)
+	}
+}
+

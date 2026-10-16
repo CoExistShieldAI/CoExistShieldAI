@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"ai.coexistshield/backend/internal/model"
@@ -18,6 +20,80 @@ type FirestoreRepository struct {
 	projectID  string
 	baseURL    string
 	httpClient *http.Client
+}
+
+var (
+	cachedRepoToken   string
+	cachedRepoTokenAt time.Time
+	repoTokenLock     sync.Mutex
+)
+
+func getRepoGCPToken() (string, error) {
+	repoTokenLock.Lock()
+	defer repoTokenLock.Unlock()
+
+	if cachedRepoToken != "" && time.Since(cachedRepoTokenAt) < 45*time.Minute {
+		return cachedRepoToken, nil
+	}
+
+	if t := os.Getenv("GCP_ACCESS_TOKEN"); t != "" {
+		cachedRepoToken = strings.TrimSpace(t)
+		cachedRepoTokenAt = time.Now()
+		return cachedRepoToken, nil
+	}
+	if t := os.Getenv("GCS_ACCESS_TOKEN"); t != "" {
+		cachedRepoToken = strings.TrimSpace(t)
+		cachedRepoTokenAt = time.Now()
+		return cachedRepoToken, nil
+	}
+	if t := os.Getenv("FIREBASE_ACCESS_TOKEN"); t != "" {
+		cachedRepoToken = strings.TrimSpace(t)
+		cachedRepoTokenAt = time.Now()
+		return cachedRepoToken, nil
+	}
+
+	// Cloud Run metadata server
+	client := &http.Client{Timeout: 800 * time.Millisecond}
+	req, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", nil)
+	if err == nil {
+		req.Header.Set("Metadata-Flavor", "Google")
+		resp, err := client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				var tokenResp struct {
+					AccessToken string `json:"access_token"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err == nil && tokenResp.AccessToken != "" {
+					cachedRepoToken = tokenResp.AccessToken
+					cachedRepoTokenAt = time.Now()
+					return cachedRepoToken, nil
+				}
+			}
+		}
+	}
+
+	// Local gcloud auth fallback
+	if out, err := exec.Command("gcloud", "auth", "print-access-token").Output(); err == nil {
+		tok := strings.TrimSpace(string(out))
+		if tok != "" {
+			cachedRepoToken = tok
+			cachedRepoTokenAt = time.Now()
+			return cachedRepoToken, nil
+		}
+	}
+
+	return "", fmt.Errorf("no access token available")
+}
+
+func (f *FirestoreRepository) setAuth(req *http.Request) {
+	if os.Getenv("FIRESTORE_EMULATOR_HOST") != "" || strings.Contains(f.baseURL, "127.0.0.1") || strings.Contains(f.baseURL, "localhost") {
+		return
+	}
+	token, err := getRepoGCPToken()
+	if err == nil && token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 }
 
 func NewFirestoreRepository(projectID string) *FirestoreRepository {
@@ -110,6 +186,7 @@ func (f *FirestoreRepository) saveDoc(ctx context.Context, collection string, do
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	f.setAuth(req)
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
@@ -130,6 +207,7 @@ func (f *FirestoreRepository) listDocs(ctx context.Context, collection string) (
 	if err != nil {
 		return nil, err
 	}
+	f.setAuth(req)
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
@@ -158,6 +236,7 @@ func (f *FirestoreRepository) getDoc(ctx context.Context, collection string, doc
 	if err != nil {
 		return nil, err
 	}
+	f.setAuth(req)
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
@@ -178,6 +257,30 @@ func (f *FirestoreRepository) getDoc(ctx context.Context, collection string, doc
 		return nil, err
 	}
 	return &doc, nil
+}
+
+func (f *FirestoreRepository) deleteDoc(ctx context.Context, collection string, docID string) error {
+	url := fmt.Sprintf("%s/%s/%s", f.baseURL, collection, docID)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+	f.setAuth(req)
+
+	resp, err := f.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("firestore delete request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("firestore delete returned %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 // IncidentRepository methods

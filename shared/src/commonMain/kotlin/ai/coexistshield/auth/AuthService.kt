@@ -42,19 +42,19 @@ object AuthValidator {
     private val EMAIL_REGEX = Regex("^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$")
 
     fun validateEmail(email: String): String? = when {
-        email.isBlank() -> "メールアドレスを入力してください"
-        !EMAIL_REGEX.matches(email.trim()) -> "メールアドレスの形式が正しくありません"
+        email.isBlank() -> "Please enter your email address"
+        !EMAIL_REGEX.matches(email.trim()) -> "Invalid email address format"
         else -> null
     }
 
     fun validatePassword(password: String): String? = when {
-        password.isEmpty() -> "パスワードを入力してください"
-        password.length < MIN_PASSWORD_LENGTH -> "パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください"
+        password.isEmpty() -> "Please enter a password"
+        password.length < MIN_PASSWORD_LENGTH -> "Password must be at least ${MIN_PASSWORD_LENGTH} characters"
         else -> null
     }
 
     fun validateConfirm(password: String, confirm: String): String? =
-        if (password != confirm) "パスワードが一致しません" else null
+        if (password != confirm) "Passwords do not match" else null
 }
 
 @Serializable
@@ -143,7 +143,7 @@ class AuthService(
                     )
                 )
             } else {
-                Result.failure(AuthException("セッションの有効期限が切れました。再ログインしてください"))
+                Result.failure(AuthException("Session has expired. Please sign in again."))
             }
         } catch (e: Exception) {
             Result.failure(AuthException(NETWORK_ERROR))
@@ -183,8 +183,8 @@ class AuthService(
     companion object {
         private const val BASE_URL = "https://identitytoolkit.googleapis.com/v1"
         private const val SECURE_TOKEN_URL = "https://securetoken.googleapis.com/v1/token"
-        private const val NOT_CONFIGURED = "認証が未設定です (Firebase API キーを設定してください)"
-        private const val NETWORK_ERROR = "ネットワークエラーが発生しました。接続を確認してください"
+        private const val NOT_CONFIGURED = "Authentication is not configured (Firebase API key missing)"
+        private const val NETWORK_ERROR = "A network error occurred. Please check your connection."
 
         fun createClient(): HttpClient = HttpClient {
             install(ContentNegotiation) {
@@ -193,16 +193,17 @@ class AuthService(
         }
 
         fun translateError(code: String): String = when {
-            code.startsWith("EMAIL_EXISTS") -> "このメールアドレスは既に登録されています"
-            code.startsWith("WEAK_PASSWORD") -> "パスワードが弱すぎます (8文字以上にしてください)"
-            code.startsWith("INVALID_EMAIL") -> "メールアドレスの形式が正しくありません"
+            code.startsWith("EMAIL_EXISTS") -> "This email address is already registered"
+            code.startsWith("WEAK_PASSWORD") -> "Password is too weak (must be at least 8 characters)"
+            code.startsWith("INVALID_EMAIL") -> "Invalid email address format"
             code.startsWith("EMAIL_NOT_FOUND") ||
                 code.startsWith("INVALID_PASSWORD") ||
-                code.startsWith("INVALID_LOGIN_CREDENTIALS") -> "メールアドレスまたはパスワードが正しくありません"
-            code.startsWith("USER_DISABLED") -> "このアカウントは無効化されています"
-            code.startsWith("TOO_MANY_ATTEMPTS_TRY_LATER") -> "試行回数が多すぎます。しばらくしてから再試行してください"
-            code.startsWith("OPERATION_NOT_ALLOWED") -> "メール/パスワード認証が有効化されていません"
-            else -> "認証に失敗しました${if (code.isNotBlank()) " ($code)" else ""}"
+                code.startsWith("INVALID_LOGIN_CREDENTIALS") -> "Invalid email address or password"
+            code.startsWith("USER_DISABLED") -> "This account has been disabled"
+            code.startsWith("TOO_MANY_ATTEMPTS_TRY_LATER") -> "Too many attempts. Please try again later"
+            code.startsWith("OPERATION_NOT_ALLOWED") -> "Email/Password sign-in is not enabled"
+            code.startsWith("CONFIGURATION_NOT_FOUND") -> "Authentication provider configuration not found"
+            else -> "Authentication failed${if (code.isNotBlank()) " ($code)" else ""}"
         }
 
         @OptIn(ExperimentalEncodingApi::class)

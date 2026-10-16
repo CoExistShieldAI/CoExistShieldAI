@@ -93,9 +93,9 @@ data class AdminConsoleUiState(
     // Japan Municipal GCF Data
     val totalUnmanagedTrees: Int = 840,
     val top5PercentPriorityTrees: List<PriorityKakiItem> = listOf(
-        PriorityKakiItem("kt_1120", "盛岡市高松3丁目12-4 • 空き家", 0.95, true, 120, "GRANTED", "PERMIT-MRK-2026-1120", 1, "ABUNDANT (Falling)"),
-        PriorityKakiItem("kt_0842", "盛岡市上米内字中野 • 林縁放置果樹園", 0.91, true, 240, "ORDINANCE_CLEARANCE", "PERMIT-MRK-2026-0842", 2, "ABUNDANT"),
-        PriorityKakiItem("kt_0319", "盛岡市浅岸字二ツ森 • 住宅街裏山", 0.88, true, 310, "PENDING_CONSENT", "PERMIT-MRK-2026-0319", 3, "MODERATE")
+        PriorityKakiItem("kt_1120", "Morioka City Takamatsu 3-chome 12-4 • Vacant House", 0.95, true, 120, "GRANTED", "PERMIT-MRK-2026-1120", 1, "ABUNDANT (Falling)"),
+        PriorityKakiItem("kt_0842", "Morioka City Kamiyonai Nakano • Forest Border Abandoned Orchard", 0.91, true, 240, "ORDINANCE_CLEARANCE", "PERMIT-MRK-2026-0842", 2, "ABUNDANT"),
+        PriorityKakiItem("kt_0319", "Morioka City Asagishi Futatsumori • Residential Mountain Border", 0.88, true, 310, "PENDING_CONSENT", "PERMIT-MRK-2026-0319", 3, "MODERATE")
     ),
     val gcfFundingGoalYen: Long = 15000000L,
     val gcfCurrentRaisedYen: Long = 11850000L,
@@ -126,7 +126,7 @@ data class AdminConsoleUiState(
     val causalAiJustification: String = "TIER_2_WARNING: Corroborated unharvested persimmon orchard and morning waste schedule (combined confidence: 97.8%) indicating imminent bear intrusion risk.",
     val nlpExtractedSpecies: String = "Ursus thibetanus (Asian Black Bear)",
     val nlpExtractedUrgency: String = "HIGH",
-    val nlpExtractedLandmark: String = "盛岡市松ヶ枝町付近 (小学校通学路南300m)",
+    val nlpExtractedLandmark: String = "Near Matsugaeda-cho, Morioka (300m south of school route)",
     // BigQuery GIS Real-Time Streaming Data Lake (Issue #20)
     val bigQuerySyncStatus: String = "ACTIVE_STREAMING",
     val bigQueryReplicationLagSeconds: Double = 12.4,
@@ -266,7 +266,7 @@ fun JapanMunicipalTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "ふるさと納税 GCF 連携: 放置柿緊急伐採プロジェクト",
+                    text = "Hometown Tax GCF Partnership: Emergency Persimmon Tree Clearance",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -276,7 +276,7 @@ fun JapanMunicipalTab(
                         .background(TierSafe.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Text("盛岡市 (03201)", color = TierSafe, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Morioka City (03201)", color = TierSafe, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -287,12 +287,12 @@ fun JapanMunicipalTab(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "調達資金額: ¥${state.gcfCurrentRaisedYen / 10000}万 / ¥${state.gcfFundingGoalYen / 10000}万円",
+                        text = "Funds Raised: ¥${state.gcfCurrentRaisedYen / 10000}0K / ¥${state.gcfFundingGoalYen / 10000}0K",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${state.gcfFundingProgressPct}% 達成 (${state.gcfDonorCount}名)",
+                        text = "${state.gcfFundingProgressPct}% Funded (${state.gcfDonorCount} donors)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
@@ -314,24 +314,24 @@ fun JapanMunicipalTab(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("伐採実績", fontSize = 11.sp, color = Color.Gray)
-                    Text("${state.gcfTreesClearedCount} / ${state.gcfTargetTreesCount}本", fontSize = 16.sp, fontWeight = FontWeight.Black)
-                    Text("残 ${state.gcfTargetTreesCount - state.gcfTreesClearedCount}本", fontSize = 10.sp, color = Color.Gray)
+                    Text("Trees Cleared", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.gcfTreesClearedCount} / ${state.gcfTargetTreesCount} trees", fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    Text("Remaining ${state.gcfTargetTreesCount - state.gcfTreesClearedCount}", fontSize = 10.sp, color = Color.Gray)
                 }
                 Column {
-                    Text("遭遇リスク削減", fontSize = 11.sp, color = Color.Gray)
+                    Text("Encounter Risk Reduction", fontSize = 11.sp, color = Color.Gray)
                     Text("-${state.gcfAttractantReductionPct}%", fontSize = 16.sp, fontWeight = FontWeight.Black, color = TierSafe)
-                    Text("空間統計再計算済", fontSize = 10.sp, color = TierSafe)
+                    Text("Spatial Stats Recalculated", fontSize = 10.sp, color = TierSafe)
                 }
                 Column {
-                    Text("保護児童数", fontSize = 11.sp, color = Color.Gray)
-                    Text("${state.gcfSchoolChildrenProtected}名", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("通学路沿線", fontSize = 10.sp, color = Color.Gray)
+                    Text("Protected Children", fontSize = 11.sp, color = Color.Gray)
+                    Text("${state.gcfSchoolChildrenProtected}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Along School Route", fontSize = 10.sp, color = Color.Gray)
                 }
                 Column {
-                    Text("単位伐採コスト", fontSize = 11.sp, color = Color.Gray)
+                    Text("Unit Clearance Cost", fontSize = 11.sp, color = Color.Gray)
                     Text("¥35,000", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("全額GCF充当", fontSize = 10.sp, color = Color.Gray)
+                    Text("100% GCF Funded", fontSize = 10.sp, color = Color.Gray)
                 }
             }
         }
@@ -344,15 +344,15 @@ fun JapanMunicipalTab(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text("鳥獣被害対策実施隊 伐採優先度リスト (Top 5% Priority)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("通学路距離・クマ誘引半径・公的伐採許可書 (Permit ID) 連携", fontSize = 11.sp, color = Color.Gray)
+            Text("Wildlife Hazard Mitigation Task Force Clearance Priority (Top 5% Priority)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("School route proximity • Bear attractant radius • Official Permit ID integration", fontSize = 11.sp, color = Color.Gray)
         }
         Box(
             modifier = Modifier
                 .background(TierDanger.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            Text("優先度順位付", color = TierDanger, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Priority Ranked", color = TierDanger, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
     }
 
@@ -388,7 +388,7 @@ fun JapanMunicipalTab(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            if (isFelled) "伐採済 0%" else "Hazard ${(tree.hazardScore * 100).toInt()}%",
+                            if (isFelled) "Cleared 0%" else "Hazard ${(tree.hazardScore * 100).toInt()}%",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -398,17 +398,17 @@ fun JapanMunicipalTab(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (tree.isNearSchool) {
-                        Text("⚠️ 通学路から${tree.distanceToSchoolMeters}m", fontSize = 11.sp, color = TierWarning, fontWeight = FontWeight.SemiBold)
+                        Text("⚠️ ${tree.distanceToSchoolMeters}m from school route", fontSize = 11.sp, color = TierWarning, fontWeight = FontWeight.SemiBold)
                     }
-                    Text("• 実り: ${tree.fruitLoad}", fontSize = 11.sp, color = Color.Gray)
+                    Text("• Fruit load: ${tree.fruitLoad}", fontSize = 11.sp, color = Color.Gray)
                 }
 
                 // Permit Status Badge
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     val (consentBadgeColor, consentText) = when (tree.ownerConsentStatus) {
-                        "GRANTED" -> TierSafe to "承諾済: ${tree.permitId}"
-                        "ORDINANCE_CLEARANCE" -> TierWarning to "条例代執行: ${tree.permitId}"
-                        else -> Color.Gray to "所有者承諾手続き中"
+                        "GRANTED" -> TierSafe to "Permit Granted: ${tree.permitId}"
+                        "ORDINANCE_CLEARANCE" -> TierWarning to "Ordinance Clearance: ${tree.permitId}"
+                        else -> Color.Gray to "Owner consent pending"
                     }
                     Box(
                         modifier = Modifier
@@ -434,7 +434,7 @@ fun JapanMunicipalTab(
                             enabled = false,
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("✅ 伐採執行済 (リスク0%)", fontSize = 12.sp, color = TierSafe)
+                            Text("✅ Clearance Executed (Risk 0%)", fontSize = 12.sp, color = TierSafe)
                         }
                     } else if (isAuthorizedOfficer) {
                         Button(
@@ -442,7 +442,7 @@ fun JapanMunicipalTab(
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = TierSafe)
                         ) {
-                            Text("公的伐採・剪定を執行 (官民連携)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Execute Public Clearance / Pruning", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     } else {
                         OutlinedButton(
@@ -450,7 +450,7 @@ fun JapanMunicipalTab(
                             enabled = false,
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("公的伐採隊専用 (無断伐採防止)", fontSize = 11.sp, color = Color.Gray)
+                            Text("Authorized Task Force Only", fontSize = 11.sp, color = Color.Gray)
                         }
                     }
                 }

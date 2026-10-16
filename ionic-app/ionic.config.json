@@ -1,0 +1,7 @@
+{
+  "name": "CoExist Shield AI",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}

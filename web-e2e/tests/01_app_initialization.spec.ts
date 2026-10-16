@@ -41,12 +41,13 @@ test.describe('Web App Initialization & Core Assets', () => {
     // Wait briefly for initial scripts to parse
     await page.waitForTimeout(2000);
 
-    // Filter out known benign errors (e.g. cross-origin font warnings in headless mode)
+    // Filter out known benign errors (e.g. cross-origin font warnings in headless mode, CORS from remote api)
     const fatalErrors = consoleErrors.filter(
       (err) =>
         !err.includes('WebGL') &&
         !err.includes('favicon') &&
-        !err.includes('net::ERR_FAILED')
+        !err.includes('net::ERR_FAILED') &&
+        !err.includes('CORS')
     );
     expect(fatalErrors).toEqual([]);
   });

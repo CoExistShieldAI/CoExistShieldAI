@@ -1119,6 +1119,61 @@ func TestGetActiveGeofencesEndpoint(t *testing.T) {
 	}
 }
 
+func TestActiveGeofencesIncludesAdminCreatedGeofence(t *testing.T) {
+	router := setupTestServer()
+
+	// 1. Create a manual geofence via admin API
+	manualPayload := `{
+		"name": "Test Citizen Alert Area",
+		"source": "manual",
+		"geometry_type": "circle",
+		"circle_center": {"lat": 39.7100, "lng": 141.1600},
+		"circle_radius_meters": 1500,
+		"threat_level": "TIER_3_CRITICAL",
+		"target_species": "Asian Black Bear",
+		"reason": "Bear sighting reported near playground"
+	}`
+	adminReq := httptest.NewRequest("POST", "/api/v1/admin/geofences", strings.NewReader(manualPayload))
+	adminReq.Header.Set("Content-Type", "application/json")
+	wAdmin := httptest.NewRecorder()
+	router.ServeHTTP(wAdmin, adminReq)
+
+	if wAdmin.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created from admin geofences, got %d", wAdmin.Code)
+	}
+
+	// 2. Fetch active geofences as a citizen/mobile client
+	clientReq := httptest.NewRequest("GET", "/api/v1/geofences/active?lat=39.7100&long=141.1600&radiusKm=10.0", nil)
+	wClient := httptest.NewRecorder()
+	router.ServeHTTP(wClient, clientReq)
+
+	if wClient.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", wClient.Code)
+	}
+
+	var zones []model.ActiveGeofenceZone
+	if err := json.Unmarshal(wClient.Body.Bytes(), &zones); err != nil {
+		t.Fatalf("failed to decode zones: %v", err)
+	}
+
+	found := false
+	for _, z := range zones {
+		if strings.Contains(z.CausalExplanation, "Test Citizen Alert Area") {
+			found = true
+			if z.Tier != "TIER_3_DANGER" {
+				t.Errorf("expected tier TIER_3_DANGER, got %s", z.Tier)
+			}
+			if z.RadiusMeters != 1500 {
+				t.Errorf("expected radius 1500m, got %f", z.RadiusMeters)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected to find admin-created manual geofence in active geofences response")
+	}
+}
+
 func TestGetCurrentMeteorologyEndpoint(t *testing.T) {
 	router := setupTestServer()
 
@@ -1638,6 +1693,81 @@ func TestRouterCustomRepositoryPersistence(t *testing.T) {
 		t.Errorf("expected to find inc-custom-repo-test in GET response, got %+v", incidents)
 	}
 }
+
+func TestGetActiveGeofences_LimitAndSort(t *testing.T) {
+	router := setupTestServer()
+
+	// 1. Unconstrained query
+	reqAll := httptest.NewRequest("GET", "/api/v1/geofences/active?lat=39.7020&long=141.1520&radiusKm=5000", nil)
+	wAll := httptest.NewRecorder()
+	router.ServeHTTP(wAll, reqAll)
+	if wAll.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", wAll.Code)
+	}
+	var allZones []model.ActiveGeofenceZone
+	if err := json.Unmarshal(wAll.Body.Bytes(), &allZones); err != nil {
+		t.Fatalf("Failed to decode zones: %v", err)
+	}
+	if len(allZones) < 3 {
+		t.Fatalf("Expected at least 3 zones in fixture, got %d", len(allZones))
+	}
+
+	// 2. Limit constrained to 2 (simulating mobile OS geofence limit)
+	reqLimit := httptest.NewRequest("GET", "/api/v1/geofences/active?lat=39.7020&long=141.1520&radiusKm=5000&limit=2", nil)
+	wLimit := httptest.NewRecorder()
+	router.ServeHTTP(wLimit, reqLimit)
+	if wLimit.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", wLimit.Code)
+	}
+	var limitedZones []model.ActiveGeofenceZone
+	if err := json.Unmarshal(wLimit.Body.Bytes(), &limitedZones); err != nil {
+		t.Fatalf("Failed to decode limited zones: %v", err)
+	}
+	if len(limitedZones) != 2 {
+		t.Fatalf("Expected exactly 2 zones with limit=2, got %d", len(limitedZones))
+	}
+	// First element should have high tier or close proximity
+	if limitedZones[0].Tier != "TIER_3_DANGER" && limitedZones[0].Tier != "TIER_2_WARNING" {
+		t.Errorf("Expected top priority zone to be high tier, got %s", limitedZones[0].Tier)
+	}
+}
+
+func TestGeofenceEvents_SSE(t *testing.T) {
+	router := setupTestServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := httptest.NewRequest("GET", "/api/v1/geofences/events", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	go func() {
+		router.ServeHTTP(w, req)
+	}()
+
+	// Wait briefly for connection and initial event
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast an event via admin store or engine
+	router.geofenceEngine.GetEventHub().Broadcast(model.GeofenceEvent{
+		Type:       "CREATED",
+		Action:     "created",
+		GeofenceID: "test-zone-sse-1",
+		Tier:       "TIER_3_DANGER",
+		Message:    "Critical bear warning",
+	})
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	body := w.Body.String()
+	if !strings.Contains(body, "CONNECTED") {
+		t.Errorf("Expected SSE stream to contain CONNECTED event, got: %s", body)
+	}
+	if !strings.Contains(body, "test-zone-sse-1") {
+		t.Errorf("Expected SSE stream to contain test-zone-sse-1, got: %s", body)
+	}
+}
+
 
 
 

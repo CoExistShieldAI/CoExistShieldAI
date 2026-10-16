@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" class="ion-palette-dark dark">
+<head>
+  <meta charset="utf-8">
+  <title>CoExist Shield AI — Tactical HUD & GIS Hazard Map</title>
+  <base href="/">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script>
+    window.COEXIST_FIREBASE_API_KEY = window.COEXIST_FIREBASE_API_KEY || "__COEXIST_FIREBASE_API_KEY__";
+    window.GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || "__GOOGLE_MAPS_API_KEY__";
+  </script>
+  <!-- Google Maps JavaScript API (injected at build/deploy time via scripts/render_ionic_config.js) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_API_KEY__&libraries=geometry,drawing,places"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased selection:bg-sky-500 selection:text-white overflow-hidden">
+  <app-root></app-root>
+</body>
+</html>

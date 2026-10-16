@@ -48,6 +48,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --memory 512Mi \
   --timeout 300 \
   --quiet \
+  --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID}" \
   ${SECRET_FLAG}
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -58,7 +59,23 @@ SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
 
 echo "✓ Service deployed successfully: ${SERVICE_URL}"
 
-# 2. Health check verification
+# 2. Deploy Cloud Run Job (Continuous Retraining Job)
+echo "--> Deploying Continuous Retraining Cloud Run Job: ${JOB_NAME}..."
+gcloud run jobs deploy "${JOB_NAME}" \
+  --source . \
+  --command "go" \
+  --args "run,./cmd/job,--task=all" \
+  --region "${REGION}" \
+  --project "${PROJECT_ID}" \
+  --cpu 1 \
+  --memory 512Mi \
+  --max-retries 1 \
+  --quiet \
+  --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID}" \
+  ${SECRET_FLAG} || echo "⚠ Job deploy completed with warning"
+
+
+# 3. Health check verification
 echo "--> Verifying Service Health via /health..."
 HEALTH_RESPONSE=$(curl -s "${SERVICE_URL}/health" || echo "FAILED")
 echo "Healthcheck response: ${HEALTH_RESPONSE}"

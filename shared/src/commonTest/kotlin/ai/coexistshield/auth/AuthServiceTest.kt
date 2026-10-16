@@ -69,14 +69,14 @@ class AuthServiceTest {
         val res = service("""{"error":{"message":"EMAIL_EXISTS"}}""", HttpStatusCode.BadRequest)
             .signUp("a@b.co", "password1")
         assertTrue(res.isFailure)
-        assertEquals("このメールアドレスは既に登録されています", res.exceptionOrNull()?.message)
+        assertEquals("This email address is already registered", res.exceptionOrNull()?.message)
     }
 
     @Test
     fun blankApiKeyFailsWithoutNetworkCall() = runTest {
         val res = service("{}", key = "").signIn("a@b.co", "password1")
         assertTrue(res.isFailure)
-        assertTrue(res.exceptionOrNull()?.message!!.contains("未設定"))
+        assertTrue(res.exceptionOrNull()?.message!!.contains("not configured"))
     }
 
     @Test

@@ -59,7 +59,7 @@ fun AuthScreen(
             val result = authService.sendPasswordReset(email)
             isLoading = false
             result.fold(
-                onSuccess = { infoMessage = "パスワード再設定用のメールを送信しました (登録済みの場合)" },
+                onSuccess = { infoMessage = "Password reset email sent (if an account exists)" },
                 onFailure = { serverError = it.message }
             )
         }
@@ -152,7 +152,7 @@ fun AuthScreen(
             }
             if (!isRegister) {
                 TextButton(onClick = { resetPassword() }, enabled = !isLoading) {
-                    Text("パスワードを忘れた方")
+                    Text("Forgot Password?")
                 }
             }
             TextButton(

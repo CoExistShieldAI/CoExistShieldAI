@@ -157,3 +157,35 @@ jobs:
           ! grep -q "__GOOGLE_MAPS_API_KEY__" web-admin/dist/web-admin/browser/index.html
           echo "Verified key injection in web-admin distribution"
 
+  ionic-app-test:
+    name: Ionic App (Angular + Capacitor) Build & Key Injection Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: ionic-app/package-lock.json
+
+      - name: Install Dependencies and Build Ionic App
+        env:
+          GOOGLE_MAPS_API_KEY: "AIzaSyMockKeyForVerificationTest123"
+        run: |
+          cd ionic-app
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm run build
+
+      - name: Verify Key Injection Script
+        env:
+          GOOGLE_MAPS_API_KEY: "AIzaSyMockKeyForVerificationTest123"
+        run: |
+          scripts/render_ionic_config.sh
+          grep -q "AIzaSyMockKeyForVerificationTest123" ionic-app/dist/ionic-app/browser/index.html
+          ! grep -q "__GOOGLE_MAPS_API_KEY__" ionic-app/dist/ionic-app/browser/index.html
+          echo "Verified key injection in ionic-app distribution"
+
+

@@ -10,7 +10,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object ApiClient {
-    private const val DEFAULT_BASE_URL = "https://api-coexistshield-cloudrun.a.run.app"
+    private const val DEFAULT_BASE_URL = "https://coexistshield-backend-4cerxfo4wq-as.a.run.app"
     private var authToken: String? = null
 
     fun setAuthToken(token: String?) {

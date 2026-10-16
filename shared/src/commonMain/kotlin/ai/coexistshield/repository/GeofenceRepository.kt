@@ -1,24 +1,41 @@
 package ai.coexistshield.repository
 
 import ai.coexistshield.model.GeofenceZone
+import ai.coexistshield.network.GeofenceEventDto
 import ai.coexistshield.network.GeofenceRecalculateRequest
 import ai.coexistshield.network.GeofenceRecalculateResponse
 import ai.coexistshield.network.TopHazardsResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.utils.io.readUTF8Line
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
+import kotlinx.serialization.json.Json
 
 class GeofenceRepository(
     private val httpClient: HttpClient
 ) {
+    private val jsonParser = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
+
     suspend fun getActiveGeofences(
         latitude: Double,
         longitude: Double,
-        radiusKm: Double = 10.0
+        radiusKm: Double = 10.0,
+        limit: Int? = null
     ): Result<List<GeofenceZone>> {
         return runCatching {
             httpClient.get("/api/v1/geofences/active") {
@@ -26,8 +43,41 @@ class GeofenceRepository(
                     parameters.append("lat", latitude.toString())
                     parameters.append("long", longitude.toString())
                     parameters.append("radiusKm", radiusKm.toString())
+                    limit?.let { parameters.append("limit", it.toString()) }
                 }
-            }.body()
+            }.body<List<GeofenceZone>?>() ?: emptyList()
+        }
+    }
+
+    /**
+     * Observes real-time geofence events streamed from backend Server-Sent Events (SSE).
+     * Automatically reconnects with exponential/fixed backoff upon disconnection.
+     */
+    fun observeGeofenceEvents(): Flow<GeofenceEventDto> = flow {
+        while (currentCoroutineContext().isActive) {
+            try {
+                httpClient.prepareGet("/api/v1/geofences/events") {
+                    header("Accept", "text/event-stream")
+                }.execute { response ->
+                    val channel = response.bodyAsChannel()
+                    while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
+                        val line = channel.readUTF8Line() ?: break
+                        if (line.startsWith("data:")) {
+                            val jsonStr = line.substring(5).trim()
+                            if (jsonStr.isNotEmpty()) {
+                                runCatching {
+                                    jsonParser.decodeFromString<GeofenceEventDto>(jsonStr)
+                                }.onSuccess { event ->
+                                    emit(event)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                // Connection dropped or unreachable; wait before reconnecting
+                delay(3000)
+            }
         }
     }
 
