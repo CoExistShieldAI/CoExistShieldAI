@@ -336,25 +336,25 @@ func TestGraduatedConcentricBufferZones(t *testing.T) {
 		t.Errorf("expected TIER_3_DANGER at centroid, got %s (id: %s)", tier, matchedID)
 	}
 
-	// 2. Just outside core but inside Tier 2 buffer (~1.3km north: ~0.0117 deg lat)
-	latT2 := 39.7020 + (1300.0 / 111320.0)
+	// 2. Just outside core but inside Tier 2 buffer (~1.5km north from centroid: 500m from boundary <= 1200m)
+	latT2 := 39.7020 + (1500.0 / 111320.0)
 	tier, dist, _ = engine.EvaluateLocationTier(latT2, 141.1520)
 	if tier != "TIER_2_WARNING" {
-		t.Errorf("expected TIER_2_WARNING at 1.3km, got %s (dist: %.1fm)", tier, dist)
+		t.Errorf("expected TIER_2_WARNING at 1.5km, got %s (dist: %.1fm)", tier, dist)
 	}
 
-	// 3. Outside Tier 2 but inside Tier 1 buffer (~2.1km north: ~0.0188 deg lat)
-	latT1 := 39.7020 + (2100.0 / 111320.0)
+	// 3. Outside Tier 2 but inside Tier 1 buffer (~2.6km north from centroid: 1600m from boundary <= 2500m)
+	latT1 := 39.7020 + (2600.0 / 111320.0)
 	tier, dist, _ = engine.EvaluateLocationTier(latT1, 141.1520)
 	if tier != "TIER_1_NOTICE" {
-		t.Errorf("expected TIER_1_NOTICE at 2.1km, got %s (dist: %.1fm)", tier, dist)
+		t.Errorf("expected TIER_1_NOTICE at 2.6km, got %s (dist: %.1fm)", tier, dist)
 	}
 
-	// 4. Far away (>3.5km north)
-	latSafe := 39.7020 + (3500.0 / 111320.0)
+	// 4. Far away (>4.0km north from centroid: 3000m from boundary > 2500m)
+	latSafe := 39.7020 + (4200.0 / 111320.0)
 	tier, dist, _ = engine.EvaluateLocationTier(latSafe, 141.1520)
 	if tier != "SAFE" {
-		t.Errorf("expected SAFE at 3.5km, got %s (dist: %.1fm)", tier, dist)
+		t.Errorf("expected SAFE at 4.2km, got %s (dist: %.1fm)", tier, dist)
 	}
 }
 
