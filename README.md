@@ -115,7 +115,26 @@ To prove algorithmic portability across diverse ecosystems, CoExist Shield AI re
    - **High-Risk Top 5% Filtering:** Instead of relying on uncoordinated volunteer foraging, AI models pinpoint the top 5% most lethal abandoned persimmon trees near school routes and elderly homes.
    - **GCF Integration:** Integrates with **Government Crowdfunding (GCF)** systems to allocate public budgets and subsidized tree felling/pruning contracts with maximum return on public safety.
 
-### 4.2 CoExist Shield Web Admin Operations Portal (Angular 22 + Go)
+### 4.2 CoExist Shield Wear OS Companion Application & Tactile Alert System
+Built specifically for field rangers, plantation workers, and rural residents using Wear OS smartwatches (Wear OS 3.0+ / Android 14+):
+1. **Modern Tactical Circular HUD Meter:**
+   - Visual parity with `ionic-app` presentation: Ambient radial glow with heartbeat pulse, subtle 18% outer track, dynamic round proximity arc, inner dashed tactical radar ring (`dashPathEffect`), and centered high-contrast typography.
+   - Built with Compose for Wear OS and fitted directly to 1.2–1.4" round watch bezels with OLED black power-saving backgrounds.
+2. **Distinctive Tier-Based Wrist Haptics:**
+   - Tactile discernment of threat severity without visual attention:
+     - **Safe:** Single 50ms confirmation tick.
+     - **Tier 1 (Notice):** Gentle double-pulse tap-tap (`[0, 150, 150, 150]ms`).
+     - **Tier 2 (Warning):** Escalating 3-pulse ramp (`[0, 150, 100, 250, 100, 420]ms`).
+     - **Tier 3 (Danger):** Looping high-amplitude SOS emergency alert cycle (`[0, 400, 120, 400, 120, 400, 350]ms`) until silenced.
+3. **Low-Latency Wearable Data Layer Synchronization:**
+   - **DataClient (`/hud_state`):** Continuous synchronization of alert tiers, proximity distance, target species, and siren status with automatic offline caching.
+   - **MessageClient (`/alert/trigger`):** Instant wake-up and wrist haptic trigger when entering hazardous geofence perimeters.
+4. **Wrist Tactical Quick-Actions & Reverse Mute:**
+   - Tap watch face to toggle tactical action overlay: `SILENCE / ACK` mutes the smartphone siren via reverse message (`/alert/dismiss`); `EVACUATE SOS` broadcasts immediate distress dispatch.
+5. **Notification Hygiene & Duplicate Suppression:**
+   - Mobile notifications use `setLocalOnly(true)` to suppress duplicate system mirroring, delegating to the watch's dedicated heads-up notification.
+
+### 4.3 CoExist Shield Web Admin Operations Portal (Angular 22 + Go)
 Built for rangers, municipal wildlife control teams, plantation managers, and operations engineers:
 1. **JAPAC Dynamic Geofence Console:**
    - Full-theater Google Maps visualization covering Japan, Southeast Asia, and South Asia (`lat: 15.0, lng: 105.0, zoom: 4`).
@@ -291,7 +310,10 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 | :--- | :--- |
 | **Go 1.24 (Cloud Run)** | Sub-10ms cold start, minimal memory footprint (<15MB distroless image), executing ultra-fast inference and analytics REST APIs. |
 | **Kotlin Multiplatform (KMP)** | Single shared codebase (`:shared`) powering both Android Mobile/Tablet and Web (JS/Wasm) with 100% UI and model code sharing. |
-| **Compose Multiplatform (CMP)** | Declarative UI delivering unified Main HUD, GIS Map, Incident Reporter, and Admin Console across Web & Android. |
+| **Compose Multiplatform (CMP)** | Declarative UI delivering unified Main HUD, Modern Tactical Meter, GIS Map, and Incident Reporter across Web & Android. |
+| **Wear OS 3.0+ (Compose for Wear OS)** | Companion smartwatch application (`:wearApp`) rendering the circular Modern Tactical Meter with tier-differentiated wrist haptics. |
+| **Wearable Data Layer API** | Low-latency state synchronization (`DataClient`) and instant incursion alerts / reverse mute (`MessageClient`) between Mobile & Watch. |
+| **Ionic & Capacitor (`ionic-app`)** | Mobile field application with native background geofencing and `WearSyncPlugin` companion bridge. |
 | **Angular 22 (web-admin)** | High-density desktop operations portal with Google Maps JS API, 2-column Map-Picker tabs, and category wizards. |
 | **Google Maps JS API** | Interactive pin drop, reverse geocoding, geofence polygon/circle authoring, and cluster visualization. |
 | **Cloud Firestore** | Low-latency, offline-capable NoSQL database with 3-Role RBAC security rules and persistent repository layer. |
@@ -328,11 +350,20 @@ CoExistShieldAI/
 │   │   ├── ai/coexistshield/model/      # Core types, Incidents, Roadkill, Geofences, KakiTrees
 │   │   ├── ai/coexistshield/network/    # Ktor REST client & GeminiTriageService
 │   │   ├── ai/coexistshield/repository/ # Incident & Geofence repositories (with offline queue)
-│   │   └── ai/coexistshield/ui/         # Main HUD, Slippy GIS Map (ESRI raster), Clustering
+│   │   └── ai/coexistshield/ui/         # Main HUD, Modern Tactical Meter, GIS Map, Clustering
 │   ├── src/jsMain/                 # Compose Web entry point (Main.kt & index.html)
 │   └── src/commonTest/             # Unit tests for serialization and network client
 ├── composeApp/                     # Android Application module (:composeApp)
-│   └── src/androidMain/            # MainActivity.kt, AndroidManifest.xml, resources
+│   └── src/androidMain/            # MainActivity.kt, WearDataSyncManager.kt, resources
+├── wearApp/                        # Wear OS Companion Application module (:wearApp)
+│   └── src/androidMain/            # WearMainActivity, WearHudScreen, WearDataListenerService, WatchHapticManager
+├── ionic-app/                      # Ionic & Capacitor Mobile Application
+│   ├── android/app/src/main/       # Native GeofenceBridgePlugin, WearSyncPlugin, GeofenceBroadcastReceiver
+│   └── src/app/                    # Angular Signals HUD, GIS Map, Camera Report, WearSync plugin
+├── docs/                           # Architectural & design documentation
+│   ├── WEAR_OS_DESIGN.md           # Wear OS companion app, haptic waveforms & Data Layer protocol
+│   ├── DATA_MODEL.md               # Firestore & domain schemas
+│   └── IMPLEMENTATION_GUIDELINES.md# Development workflow, epic/feature branch rules
 ├── web-e2e/                        # Playwright E2E test suite for Compose Web app
 │   ├── tests/                      # Page load, Canvas rendering, offline resilience, perf tests
 │   └── playwright.config.ts        # Multi-viewport (Desktop & Mobile) test configuration
@@ -382,7 +413,31 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew :composeApp:assembleDebug
 ```
 
-### 9.3 Operations Admin Portal (Angular 22)
+### 9.3 Wear OS Companion Application (Compose for Wear OS)
+```bash
+# Set JAVA_HOME to JDK 21
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+
+# Assemble Wear OS Companion Debug APK (output in wearApp/build/outputs/apk/debug/wearApp-debug.apk)
+./gradlew :wearApp:assembleDebug
+```
+
+### 9.4 Mobile Field Application (Ionic & Capacitor)
+```bash
+cd ionic-app
+
+# Install dependencies and build Angular PWA
+npm install
+npm run build
+
+# Run unit tests in headless Chrome
+npm test -- --watch=false --browsers=ChromeHeadless
+
+# Sync Capacitor native plugins (including GeofenceBridge and WearSync)
+npm run cap:sync
+```
+
+### 9.5 Operations Admin Portal (Angular 22)
 ```bash
 # Navigate to web-admin directory
 cd web-admin
@@ -398,7 +453,7 @@ npm start
 npm run build
 ```
 
-### 9.4 E2E & Integration Tests (Playwright & Docker Compose)
+### 9.6 E2E & Integration Tests (Playwright & Docker Compose)
 The platform features automated Playwright End-to-End suites as well as containerized live backend integration tests:
 
 ```bash
@@ -411,7 +466,7 @@ npm test
 docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
 ```
 
-### 9.5 Deploy to Google Cloud Run & Firebase Hosting
+### 9.7 Deploy to Google Cloud Run & Firebase Hosting
 ```bash
 # Deploy Go microservice targeting Singapore (AI Builders Cup Demo Day region)
 ./scripts/deploy_cloudrun.sh corald asia-southeast1
@@ -423,7 +478,7 @@ firebase deploy --only hosting:app
 firebase deploy --only hosting:admin
 ```
 
-### 9.6 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
+### 9.8 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
 The microservices and continuous retraining pipeline are deployed and actively running on Google Cloud Run:
 
 - **Public Base URL:** `https://coexistshield-backend-4cerxfo4wq-as.a.run.app`
