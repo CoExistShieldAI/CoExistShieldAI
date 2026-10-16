@@ -12,11 +12,11 @@ val Slate800 = Color(0xFF1E293B)
 val Slate700 = Color(0xFF334155)
 val Slate100 = Color(0xFFF1F5F9)
 
-// Alert Tier Colors
+// Alert Tier Colors (aligned with ionic-app tactical presentation)
 val TierSafe = Color(0xFF10B981) // Emerald Green
-val TierNotice = Color(0xFFF59E0B) // Amber
-val TierWarning = Color(0xFFF97316) // Orange
-val TierDanger = Color(0xFFEF4444) // Crimson Red
+val TierNotice = Color(0xFF38BDF8) // Sky 400 (Vibrant Cyan)
+val TierWarning = Color(0xFFF59E0B) // Amber 500
+val TierDanger = Color(0xFFEF4444) // Crimson Red (Red 500)
 
 val DarkColorScheme = darkColorScheme(
     primary = Color(0xFF38BDF8),

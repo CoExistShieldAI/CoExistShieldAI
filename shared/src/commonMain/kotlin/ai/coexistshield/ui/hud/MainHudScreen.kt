@@ -277,7 +277,9 @@ fun MainHudScreen(
 
 /**
  * Graphical Status Display:
- * A stylish, circular radial gauge & threat orb that makes safety vs danger immediately apparent at a single glance.
+ * A high-precision, modern tactical HUD gauge matching the ionic-app presentation
+ * with ambient glow, outer track, dynamic proximity arc, inner dashed tactical ring,
+ * and clean central typography.
  */
 @Composable
 fun GraphicalStatusDisplay(
@@ -285,216 +287,31 @@ fun GraphicalStatusDisplay(
     species: List<WildlifeSpecies>,
     distanceMeters: Double?
 ) {
-    val (tierColor, tierLabel, tierIcon, tierDescription) = when (tier) {
-        AlertTier.SAFE -> Quadruple(
-            TierSafe,
-            "SAFE ZONE",
-            "🛡️",
-            "All clear • No active predators within 5km"
-        )
-        AlertTier.TIER_1_NOTICE -> Quadruple(
-            TierNotice,
-            "TIER 1 NOTICE",
-            "⚠️",
-            "Approaching moderate wildlife corridor"
-        )
-        AlertTier.TIER_2_WARNING -> Quadruple(
-            TierWarning,
-            "TIER 2 WARNING",
-            "⚡",
-            "Active scent plume & encounter hazard"
-        )
-        AlertTier.TIER_3_DANGER -> Quadruple(
-            TierDanger,
-            "IMMEDIATE DANGER",
-            "🚨",
-            "Apex predator / fresh kill-site nearby"
-        )
-    }
-
-    val animatedColor by animateColorAsState(targetValue = tierColor, animationSpec = tween(500))
-
-    // Pulse animation for warning and danger states
-    val infiniteTransition = rememberInfiniteTransition()
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (tier == AlertTier.TIER_3_DANGER) 500 else 1000),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-    val ringRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
-    )
-
-    // Calculate proximity gauge percentage (0.0 = far, 1.0 = immediate proximity)
-    val proximityRatio = if (distanceMeters != null) {
-        ((2000.0 - distanceMeters.coerceIn(50.0, 2000.0)) / 1950.0).toFloat()
-    } else if (tier == AlertTier.SAFE) {
-        0.0f
-    } else {
-        0.5f
+    val tierDescription = when (tier) {
+        AlertTier.SAFE -> "All clear • No active predators within 5km"
+        AlertTier.TIER_1_NOTICE -> "Approaching moderate wildlife corridor"
+        AlertTier.TIER_2_WARNING -> "Active scent plume & encounter hazard"
+        AlertTier.TIER_3_DANGER -> "Apex predator / fresh kill-site nearby"
     }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(vertical = 8.dp)
+        modifier = Modifier.padding(vertical = 4.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(220.dp)
-                .clip(CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            // High-Tech Canvas HUD Gauge Background & Animated Rings
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidthPx = 10.dp.toPx()
-                val radius = (size.minDimension - strokeWidthPx) / 2f
-                val centerOffset = Offset(size.width / 2f, size.height / 2f)
+        // Modern Tactical Meter from shared HUD component
+        ModernTacticalMeter(
+            tier = tier,
+            distanceMeters = distanceMeters,
+            species = species,
+            meterSize = 224.dp
+        )
 
-                // 1. Ambient Background Glow
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            animatedColor.copy(alpha = if (tier == AlertTier.TIER_3_DANGER) 0.28f else 0.14f),
-                            Color.Transparent
-                        ),
-                        center = centerOffset,
-                        radius = size.width / 1.5f
-                    ),
-                    radius = radius
-                )
+        Spacer(modifier = Modifier.height(10.dp))
 
-                // 2. Base subtle track ring
-                drawCircle(
-                    color = animatedColor.copy(alpha = 0.18f),
-                    radius = radius,
-                    style = Stroke(width = strokeWidthPx)
-                )
-
-                // 3. Dynamic Proximity Arc (fills based on threat closeness)
-                val arcSweep = if (tier == AlertTier.SAFE) {
-                    360f // Safe ring is continuous and calm
-                } else {
-                    (proximityRatio * 320f).coerceIn(45f, 320f)
-                }
-                val startAngle = -90f
-
-                drawArc(
-                    brush = Brush.sweepGradient(
-                        colors = listOf(
-                            animatedColor.copy(alpha = 0.4f),
-                            animatedColor,
-                            animatedColor.copy(alpha = 0.9f)
-                        ),
-                        center = centerOffset
-                    ),
-                    startAngle = startAngle,
-                    sweepAngle = arcSweep,
-                    useCenter = false,
-                    style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
-                )
-
-                // 4. Tick markers around circumference for tactical look
-                val tickCount = 24
-                for (i in 0 until tickCount) {
-                    val angleDeg = (i * (360f / tickCount) + ringRotation * 0.1f)
-                    val angleRad = angleDeg * (PI / 180f).toFloat()
-                    val innerR = radius - 14.dp.toPx()
-                    val outerR = radius - 8.dp.toPx()
-
-                    val startX = centerOffset.x + innerR * cos(angleRad)
-                    val startY = centerOffset.y + innerR * sin(angleRad)
-                    val endX = centerOffset.x + outerR * cos(angleRad)
-                    val endY = centerOffset.y + outerR * sin(angleRad)
-
-                    val isMajor = i % 6 == 0
-                    drawLine(
-                        color = if (isMajor) animatedColor.copy(alpha = 0.7f) else animatedColor.copy(alpha = 0.2f),
-                        start = Offset(startX, startY),
-                        end = Offset(endX, endY),
-                        strokeWidth = if (isMajor) 2.5.dp.toPx() else 1.dp.toPx()
-                    )
-                }
-            }
-
-            // Central Information Orb
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(16.dp)
-            ) {
-                // Tier Icon with pulse
-                Text(
-                    text = tierIcon,
-                    fontSize = if (tier == AlertTier.TIER_3_DANGER) 36.sp else 32.sp,
-                    modifier = Modifier.padding(bottom = 2.dp)
-                )
-
-                // Tier Status Header
-                Text(
-                    text = tierLabel,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 17.sp,
-                    color = animatedColor,
-                    textAlign = TextAlign.Center
-                )
-
-                // Distance or Safe state
-                if (distanceMeters != null) {
-                    Text(
-                        text = "${distanceMeters.toInt()}m",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 24.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "ESTIMATED PROXIMITY",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 9.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                } else {
-                    Text(
-                        text = "ALL SECURE",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "CONTINUOUS SENSING",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 9.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-
-                // Fauna Name if available
-                if (species.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = species.joinToString(" • ") { it.name.replace("_", " ") },
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.sp,
-                        color = animatedColor,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Subtitle status description
+        // Subtitle status description matching ionic-app
         Text(
             text = tierDescription,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
             textAlign = TextAlign.Center,
