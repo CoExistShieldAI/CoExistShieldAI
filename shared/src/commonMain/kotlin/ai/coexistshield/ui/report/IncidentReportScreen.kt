@@ -49,6 +49,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,26 +101,130 @@ fun IncidentReportScreen(
     onSyncOfflineQueueClick: () -> Unit = {},
     onSubmitReportClick: () -> Unit = {}
 ) {
+    var currentStep by remember { mutableStateOf(1) }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text("Forensic Incident & Field Report", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                },
-                navigationIcon = {
-                    Box(modifier = Modifier.padding(start = 12.dp)) {
-                        OutlinedButton(
-                            onClick = onBackClick,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 12.sp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "📸 Field Incident Report",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Step $currentStep of 3",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
+                        Text(
+                            "Guided Gemini 3.8 Flash Multimodal Verification",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    OutlinedButton(
+                        onClick = onBackClick,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("✕ Close", fontSize = 12.sp)
+                    }
+                }
+
+                // 3-Step Visual Progress Stepper
+                WizardStepperBar(
+                    currentStep = currentStep,
+                    onStepClick = { currentStep = it }
                 )
-            )
+            }
+        },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (currentStep > 1) {
+                    OutlinedButton(
+                        onClick = { currentStep -= 1 },
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("← Back", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (currentStep < 3) {
+                    Button(
+                        onClick = { currentStep += 1 },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = if (currentStep == 1) "Next: Photo & Scene Details →" else "Next: AI Triage & Review →",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            onSubmitReportClick()
+                            currentStep = 1
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (state.isOfflineMode) TierWarning
+                            else if (state.selectedCategory == ReportCategory.LIVESTOCK_DEPREDATION || state.selectedCategory == ReportCategory.ROADKILL)
+                                TierDanger else TierSafe
+                        )
+                    ) {
+                        Text(
+                            text = if (state.isOfflineMode) "📦 Save to Offline Queue"
+                            else "✨ Submit Verified Report",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
         }
     ) { paddingValues ->
         Column(
@@ -128,7 +235,7 @@ fun IncidentReportScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Offline Pending Queue Banner (Issue #2: Offline persistence badge)
+            // Offline Pending Queue Banner (always shown when pending reports exist)
             if (state.offlineQueueCount > 0) {
                 OfflineQueueBanner(
                     queueCount = state.offlineQueueCount,
@@ -136,99 +243,290 @@ fun IncidentReportScreen(
                 )
             }
 
-            // 2. Photo Viewfinder & GPS Metadata Card
-            PhotoMetadataCard(
-                photoCount = state.photoCount,
-                location = state.location,
-                onRetakePhotoClick = onRetakePhotoClick
-            )
+            when (currentStep) {
+                1 -> {
+                    // STEP 1: Visual Category Cards
+                    CategorySelectorSection(
+                        selectedCategory = state.selectedCategory,
+                        onCategoryChange = onCategoryChange
+                    )
+                }
 
-            // 3. Report Category Selector (5 distinct categories)
-            CategorySelectorSection(
-                selectedCategory = state.selectedCategory,
-                onCategoryChange = onCategoryChange
-            )
+                2 -> {
+                    // STEP 2: Selected Category Pill + Photo & GPS + Scene Context
+                    SelectedCategoryHeaderBar(
+                        selectedCategory = state.selectedCategory,
+                        onChangeClick = { currentStep = 1 }
+                    )
 
-            // 4. Instant Gemini Multimodal Triage Card
-            GeminiTriageCard(
-                category = state.selectedCategory,
-                result = state.geminiTriageResult,
-                isAnalyzing = state.isAnalyzing
-            )
+                    PhotoMetadataCard(
+                        photoCount = state.photoCount,
+                        location = state.location,
+                        onRetakePhotoClick = onRetakePhotoClick
+                    )
 
-            // 5. Dynamic Context Options by Category
-            when (state.selectedCategory) {
-                ReportCategory.WILDLIFE_SIGHTING -> {
-                    WildlifeSightingSection(
-                        selectedSpecies = state.selectedSpecies,
-                        onSpeciesChange = onSpeciesChange
-                    )
+                    when (state.selectedCategory) {
+                        ReportCategory.WILDLIFE_SIGHTING -> {
+                            WildlifeSightingSection(
+                                selectedSpecies = state.selectedSpecies,
+                                onSpeciesChange = onSpeciesChange
+                            )
+                        }
+                        ReportCategory.PHYSICAL_TRACE -> {
+                            PhysicalTraceContextSection(
+                                selectedTraceType = state.selectedTraceType,
+                                onTraceTypeChange = onTraceTypeChange
+                            )
+                        }
+                        ReportCategory.ROADKILL -> {
+                            RoadkillContextSection(
+                                selectedSpecies = state.selectedSpecies,
+                                selectedDecayState = state.selectedDecayState,
+                                onSpeciesChange = onSpeciesChange,
+                                onDecayStateChange = onDecayStateChange
+                            )
+                        }
+                        ReportCategory.ATTRACTANT_FRUIT_TREE -> {
+                            FruitTreeContextSection(
+                                selectedTag = state.selectedPropertyTag,
+                                isNearSchoolRoute = state.isNearSchoolRoute,
+                                onPropertyTagChange = onPropertyTagChange,
+                                onNearSchoolRouteChange = onNearSchoolRouteChange
+                            )
+                        }
+                        ReportCategory.LIVESTOCK_DEPREDATION -> {
+                            LivestockDepredationSection(
+                                selectedSpecies = state.selectedSpecies,
+                                onSpeciesChange = onSpeciesChange
+                            )
+                        }
+                    }
                 }
-                ReportCategory.PHYSICAL_TRACE -> {
-                    PhysicalTraceContextSection(
-                        selectedTraceType = state.selectedTraceType,
-                        onTraceTypeChange = onTraceTypeChange
+
+                3 -> {
+                    // STEP 3: Instant Gemini Multimodal Triage + Summary + Offline Mode + Privacy
+                    GeminiTriageCard(
+                        category = state.selectedCategory,
+                        result = state.geminiTriageResult,
+                        isAnalyzing = state.isAnalyzing
                     )
-                }
-                ReportCategory.ROADKILL -> {
-                    RoadkillContextSection(
-                        selectedSpecies = state.selectedSpecies,
-                        selectedDecayState = state.selectedDecayState,
-                        onSpeciesChange = onSpeciesChange,
-                        onDecayStateChange = onDecayStateChange
+
+                    ReportReviewSummaryCard(
+                        state = state,
+                        onEditDetailsClick = { currentStep = 2 }
                     )
-                }
-                ReportCategory.ATTRACTANT_FRUIT_TREE -> {
-                    FruitTreeContextSection(
-                        selectedTag = state.selectedPropertyTag,
-                        isNearSchoolRoute = state.isNearSchoolRoute,
-                        onPropertyTagChange = onPropertyTagChange,
-                        onNearSchoolRouteChange = onNearSchoolRouteChange
+
+                    OfflineModeToggleSection(
+                        isOffline = state.isOfflineMode,
+                        onToggleOffline = onToggleOfflineMode
                     )
-                }
-                ReportCategory.LIVESTOCK_DEPREDATION -> {
-                    LivestockDepredationSection(
-                        selectedSpecies = state.selectedSpecies,
-                        onSpeciesChange = onSpeciesChange
-                    )
+
+                    PrivacyNoticeCard(category = state.selectedCategory)
                 }
             }
+        }
+    }
+}
 
-            // 6. Offline Mode Simulator Toggle
-            OfflineModeToggleSection(
-                isOffline = state.isOfflineMode,
-                onToggleOffline = onToggleOfflineMode
-            )
-
-            // 7. Privacy & Security Notice
-            PrivacyNoticeCard(category = state.selectedCategory)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 8. Submit Button
-            Button(
-                onClick = onSubmitReportClick,
+@Composable
+fun WizardStepperBar(
+    currentStep: Int,
+    onStepClick: (Int) -> Unit
+) {
+    val steps = listOf(
+        1 to "1. Category",
+        2 to "2. Scene & Photo",
+        3 to "3. AI Review"
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        steps.forEach { (stepNum, title) ->
+            val isActive = currentStep == stepNum
+            val isCompleted = currentStep > stepNum
+            val indicatorColor = when {
+                isActive -> MaterialTheme.colorScheme.primary
+                isCompleted -> TierSafe
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.isOfflineMode) TierWarning
-                    else if (state.selectedCategory == ReportCategory.LIVESTOCK_DEPREDATION || state.selectedCategory == ReportCategory.ROADKILL)
-                        TierDanger else MaterialTheme.colorScheme.primary
-                )
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onStepClick(stepNum) }
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    text = if (state.isOfflineMode) "Save to Offline Queue (Local Sync)"
-                    else "Submit Verified Report (Gemini AI)",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .background(indicatorColor, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isCompleted) "✓" else stepNum.toString(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActive || isCompleted) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = title,
+                        fontSize = 11.sp,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isActive) MaterialTheme.colorScheme.onSurface
+                        else if (isCompleted) TierSafe
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(indicatorColor, RoundedCornerShape(2.dp))
                 )
             }
         }
     }
 }
+
+@Composable
+fun SelectedCategoryHeaderBar(
+    selectedCategory: ReportCategory,
+    onChangeClick: () -> Unit
+) {
+    val (icon, label) = when (selectedCategory) {
+        ReportCategory.ATTRACTANT_FRUIT_TREE -> "🍊" to "Fruit Tree / Crop Attractant"
+        ReportCategory.WILDLIFE_SIGHTING -> "🐻" to "Live Wildlife Sighting"
+        ReportCategory.PHYSICAL_TRACE -> "🐾" to "Physical Trace / Sign"
+        ReportCategory.ROADKILL -> "🐗" to "Roadkill Carcass"
+        ReportCategory.LIVESTOCK_DEPREDATION -> "🐅" to "Livestock Attack"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(icon, fontSize = 20.sp)
+                Column {
+                    Text(
+                        "SELECTED CATEGORY",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            OutlinedButton(
+                onClick = onChangeClick,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Change", fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun ReportReviewSummaryCard(
+    state: IncidentReportUiState,
+    onEditDetailsClick: () -> Unit
+) {
+    val categoryLabel = when (state.selectedCategory) {
+        ReportCategory.ATTRACTANT_FRUIT_TREE -> "🍊 Fruit Tree / Crop"
+        ReportCategory.WILDLIFE_SIGHTING -> "🐻 Live Sighting"
+        ReportCategory.PHYSICAL_TRACE -> "🐾 Physical Trace"
+        ReportCategory.ROADKILL -> "🐗 Roadkill Carcass"
+        ReportCategory.LIVESTOCK_DEPREDATION -> "🐅 Livestock Attack"
+    }
+    val detailLabel = when (state.selectedCategory) {
+        ReportCategory.WILDLIFE_SIGHTING -> state.selectedSpecies.name
+        ReportCategory.PHYSICAL_TRACE -> state.selectedTraceType
+        ReportCategory.ROADKILL -> "${state.selectedDecayState.name} (${state.selectedSpecies.name})"
+        ReportCategory.ATTRACTANT_FRUIT_TREE ->
+            if (state.isNearSchoolRoute) "${state.selectedPropertyTag.name} • School Route" else state.selectedPropertyTag.name
+        ReportCategory.LIVESTOCK_DEPREDATION -> "72h Tiger Caching Buffer"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Report Summary", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Edit Details",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onEditDetailsClick() }
+                )
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Text("Category", fontSize = 10.sp, color = Color.Gray)
+                    Text(categoryLabel, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Text("Scene Detail", fontSize = 10.sp, color = Color.Gray)
+                    Text(detailLabel, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Text("GPS Coordinates", fontSize = 10.sp, color = Color.Gray)
+                    Text("${state.location.latitude}, ${state.location.longitude}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TierSafe)
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Text("Evidence", fontSize = 10.sp, color = Color.Gray)
+                    Text("📷 ${state.photoCount} Photo (EXIF)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 fun OfflineQueueBanner(
@@ -339,39 +637,120 @@ fun CategorySelectorSection(
     selectedCategory: ReportCategory,
     onCategoryChange: (ReportCategory) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            text = "Report Category",
+            text = "Step 1 • What did you observe?",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = "Select the report type to pre-configure the AI forensic model and required scene details.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ReportCategory.values().forEach { category ->
-                val (label, isAlert) = when (category) {
-                    ReportCategory.WILDLIFE_SIGHTING -> "Live Sighting" to false
-                    ReportCategory.PHYSICAL_TRACE -> "Physical Trace" to false
-                    ReportCategory.ROADKILL -> "Roadkill Carcass" to true
-                    ReportCategory.LIVESTOCK_DEPREDATION -> "Livestock Attack" to true
-                    ReportCategory.ATTRACTANT_FRUIT_TREE -> "Fruit Tree / Crop" to false
-                }
+        val options = listOf(
+            ReportCategory.ATTRACTANT_FRUIT_TREE to listOf("🍊", "Fruit Tree / Crop Attractant", "Unharvested persimmon (kaki), sugarcane, or orchard drawing wildlife.", "Attractant Map", "false"),
+            ReportCategory.WILDLIFE_SIGHTING to listOf("🐻", "Live Wildlife Sighting", "Direct visual encounter with bear, tiger, elephant, boar, or deer.", "Encounter", "false"),
+            ReportCategory.PHYSICAL_TRACE to listOf("🐾", "Physical Trace / Sign", "Footprints, claw marks on tree bark, scat/droppings, or crop damage.", "Forensic Sign", "false"),
+            ReportCategory.ROADKILL to listOf("🐗", "Roadkill Carcass", "Roadside carcass acting as an olfactory predator magnet (800m lure zone).", "⚠️ Predator Lure", "true"),
+            ReportCategory.LIVESTOCK_DEPREDATION to listOf("🐅", "Livestock Attack", "Domestic herd predation triggering an immediate 72-hour Tiger Caching Buffer.", "🚨 Tier 3 Danger", "true")
+        )
 
-                FilterChip(
-                    selected = selectedCategory == category,
-                    onClick = { onCategoryChange(category) },
-                    label = { Text(label, fontSize = 12.sp) },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = if (isAlert) TierDanger.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = if (isAlert) TierDanger else MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+        options.forEach { (category, meta) ->
+            val icon = meta[0]
+            val label = meta[1]
+            val subtitle = meta[2]
+            val badgeText = meta[3]
+            val isAlert = meta[4] == "true"
+            val isSelected = selectedCategory == category
+            val highlightColor = if (isAlert) TierDanger else MaterialTheme.colorScheme.primary
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onCategoryChange(category) }
+                    .border(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) highlightColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) highlightColor.copy(alpha = 0.12f)
+                    else MaterialTheme.colorScheme.surface
                 )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(
+                                if (isSelected) highlightColor.copy(alpha = 0.2f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(icon, fontSize = 22.sp)
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        if (isAlert) TierDanger.copy(alpha = 0.15f)
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = badgeText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAlert) TierDanger else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Text(
+                            text = subtitle,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .background(
+                                if (isSelected) highlightColor else MaterialTheme.colorScheme.surfaceVariant,
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Text("✓", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
             }
         }
     }

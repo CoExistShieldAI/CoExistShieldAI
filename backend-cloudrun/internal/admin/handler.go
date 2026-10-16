@@ -10,10 +10,17 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"ai.coexistshield/backend/internal/model"
 )
 
+type GeofenceChangeListener func(action string, geofenceID string, loc *model.ActiveGeofencePoint, tier string)
+type IncidentListener func(category string, id string, species string, lat float64, lng float64, status string)
+
 type Handler struct {
-	store *Store
+	store                  *Store
+	geofenceChangeListener GeofenceChangeListener
+	incidentListener       IncidentListener
 }
 
 func NewHandler(store *Store) *Handler {
@@ -25,6 +32,29 @@ func NewHandler(store *Store) *Handler {
 		store.StartPeriodicWeatherSync(context.Background(), 15*time.Minute)
 	}
 	return &Handler{store: store}
+}
+
+// SetGeofenceChangeListener registers a callback for geofence mutations.
+func (h *Handler) SetGeofenceChangeListener(l GeofenceChangeListener) {
+	h.geofenceChangeListener = l
+}
+
+// SetIncidentListener registers a callback for wildlife and roadkill incident creation.
+func (h *Handler) SetIncidentListener(l IncidentListener) {
+	h.incidentListener = l
+}
+
+func (h *Handler) notifyGeofenceChange(action string, geofenceID string, loc *model.ActiveGeofencePoint, tier string) {
+	if h.geofenceChangeListener != nil {
+		h.geofenceChangeListener(action, geofenceID, loc, tier)
+	}
+}
+
+
+
+// GetStore returns the underlying Store.
+func (h *Handler) GetStore() *Store {
+	return h.store
 }
 
 // RegisterRoutes registers all admin endpoints on the provided ServeMux.
@@ -97,6 +127,13 @@ func (h *Handler) handleGeofences(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g = h.store.CreateGeofence(g)
+		var loc *model.ActiveGeofencePoint
+		if g.CircleCenter != nil {
+			loc = &model.ActiveGeofencePoint{Latitude: g.CircleCenter.Lat, Longitude: g.CircleCenter.Lng}
+		} else if len(g.Coordinates) > 0 {
+			loc = &model.ActiveGeofencePoint{Latitude: g.Coordinates[0].Lat, Longitude: g.Coordinates[0].Lng}
+		}
+		h.notifyGeofenceChange("created", g.ID, loc, g.ThreatLevel)
 		writeJSON(w, http.StatusCreated, g)
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -113,6 +150,7 @@ func (h *Handler) handleGeofenceDetail(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
 		if h.store.DeleteGeofence(id) {
+			h.notifyGeofenceChange("deleted", id, nil, "")
 			writeJSON(w, http.StatusOK, map[string]string{"status": "deleted", "id": id})
 		} else {
 			http.Error(w, "Geofence not found", http.StatusNotFound)
@@ -128,6 +166,7 @@ func (h *Handler) handleClearAllManualGeofences(w http.ResponseWriter, r *http.R
 		return
 	}
 	count := h.store.ClearAllManualGeofences()
+	h.notifyGeofenceChange("deleted", "all_manual", nil, "")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":        "success",
 		"purged_count":  count,
@@ -140,11 +179,19 @@ func (h *Handler) handleRecalculateGeofences(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	count, executedAt := h.store.RecalculateAiGeofences()
+	count, executedAt, busy := h.store.RecalculateAiGeofences()
+	if busy {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"status":  "in_progress",
+			"message": "AI Geofence Engine is currently recalculating hazard boundaries. Please wait for completion.",
+		})
+		return
+	}
+	h.notifyGeofenceChange("recalculated", "ai_all", nil, "")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":             "recalculated",
+		"status":              "recalculated",
 		"refreshed_ai_fences": count,
-		"executed_at":        executedAt.Format(time.RFC3339),
+		"executed_at":         executedAt.Format(time.RFC3339),
 	})
 }
 
@@ -162,7 +209,11 @@ func (h *Handler) handleWildlife(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		item = h.store.CreateWildlife(item)
+		if h.incidentListener != nil {
+			h.incidentListener("WILDLIFE", item.ID, item.Species, item.Location.Lat, item.Location.Lng, item.Status)
+		}
 		writeJSON(w, http.StatusCreated, item)
+
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
@@ -224,7 +275,11 @@ func (h *Handler) handleRoadkill(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rk = h.store.CreateRoadkill(rk)
+		if h.incidentListener != nil {
+			h.incidentListener("ROADKILL", rk.ID, rk.Species, rk.Location.Lat, rk.Location.Lng, rk.Status)
+		}
 		writeJSON(w, http.StatusCreated, rk)
+
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}

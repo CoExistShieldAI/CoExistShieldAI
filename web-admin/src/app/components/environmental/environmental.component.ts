@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
+import { GeocodingService } from '../../services/geocoding.service';
 import { AdminEnvironmentalData, AttractantCategory } from '../../models/admin.model';
 import { ImageUploadComponent } from '../image-upload/image-upload.component';
 
@@ -326,6 +327,7 @@ interface CategoryPreset {
 })
 export class EnvironmentalComponent implements OnInit {
   api = inject(AdminApiService);
+  geocodingService = inject(GeocodingService);
   activeTab = signal<'history' | 'entry'>('history');
   selectedCategory = signal<AttractantCategory | null>(null);
 
@@ -458,7 +460,10 @@ export class EnvironmentalComponent implements OnInit {
     if (event.latLng) {
       this.itemLat = Number(event.latLng.lat().toFixed(5));
       this.itemLng = Number(event.latLng.lng().toFixed(5));
-      this.newItem.location_desc = `Geocoded Spot: Lat ${this.itemLat}, Lng ${this.itemLng}`;
+      this.newItem.location_desc = 'Resolving location...';
+      this.geocodingService.reverseGeocode(this.itemLat, this.itemLng).subscribe(loc => {
+        this.newItem.location_desc = loc;
+      });
     }
   }
 

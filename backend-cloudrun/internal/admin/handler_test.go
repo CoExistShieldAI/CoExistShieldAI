@@ -478,4 +478,118 @@ func TestLiveOpenMeteoWeatherSync(t *testing.T) {
 	}
 }
 
+func TestRecalculateAiGeofences_NaraBearKakiCorrelation(t *testing.T) {
+	ts, _ := setupTestServer()
+	defer ts.Close()
+
+	// 1. Register Asian Black Bear sighting in Nara
+	wildlifeJSON := `{
+		"species": "Asian Black Bear",
+		"location": {
+			"lat": 34.685,
+			"lng": 135.832,
+			"region": "Nara, Japan",
+			"road_name": "Kasugayama Primeval Forest Route"
+		},
+		"threat_level": "TIER_2_ALERT",
+		"status": "VERIFIED",
+		"reporter": "Nara Prefecture Forest Patrol",
+		"description": "Adult Asian black bear observed foraging near residential edge."
+	}`
+	wResp, err := http.Post(ts.URL+"/api/v1/admin/incidents/wildlife", "application/json", strings.NewReader(wildlifeJSON))
+	if err != nil || wResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Failed to create Nara wildlife incident: %v, status: %d", err, wResp.StatusCode)
+	}
+	wResp.Body.Close()
+
+	// 2. Register Persimmon (Kaki) Orchard in Nara (~500m from sighting)
+	envJSON := `{
+		"category": "PERSIMMON_KAKI",
+		"name": "Nara Foothill Persimmon Orchard",
+		"location_desc": "Abandoned sweet persimmon orchard near Kasugayama slope",
+		"geometry_type": "circle",
+		"circle_center": {
+			"lat": 34.688,
+			"lng": 135.836
+		},
+		"radius_meters": 1200,
+		"risk_weight": 0.88,
+		"active_season": "Autumn (Oct-Nov)"
+	}`
+	eResp, err := http.Post(ts.URL+"/api/v1/admin/environmental", "application/json", strings.NewReader(envJSON))
+	if err != nil || eResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Failed to create Nara environmental kaki layer: %v, status: %d", err, eResp.StatusCode)
+	}
+	eResp.Body.Close()
+
+	// 3. Trigger Run AI Geofence Engine recalculation
+	recalcResp, err := http.Post(ts.URL+"/api/v1/admin/geofences/recalculate", "application/json", nil)
+	if err != nil || recalcResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to trigger recalculate: %v, status: %d", err, recalcResp.StatusCode)
+	}
+	var recalcResult map[string]interface{}
+	_ = json.NewDecoder(recalcResp.Body).Decode(&recalcResult)
+	recalcResp.Body.Close()
+
+	if recalcResult["status"] != "recalculated" {
+		t.Errorf("Expected status recalculated, got %v", recalcResult["status"])
+	}
+
+	// 4. Verify that Nara bear-kaki AI geofence was dynamically generated
+	listResp, err := http.Get(ts.URL + "/api/v1/admin/geofences?source=ai")
+	if err != nil || listResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to list geofences: %v", err)
+	}
+	var aiFences []AdminGeofence
+	_ = json.NewDecoder(listResp.Body).Decode(&aiFences)
+	listResp.Body.Close()
+
+	foundNaraFence := false
+	for _, f := range aiFences {
+		if strings.Contains(f.Name, "Nara") && strings.Contains(f.Reason, "persimmon (kaki)") {
+			foundNaraFence = true
+			if f.ThreatLevel != "TIER_3_CRITICAL" {
+				t.Errorf("Expected TIER_3_CRITICAL for correlated bear-kaki zone, got %s", f.ThreatLevel)
+			}
+			if f.TargetSpecies != "Asian Black Bear" {
+				t.Errorf("Expected target species Asian Black Bear, got %s", f.TargetSpecies)
+			}
+			if f.CircleRadiusMeters <= 0 {
+				t.Errorf("Expected positive radius, got %f", f.CircleRadiusMeters)
+			}
+			break
+		}
+	}
+
+	if !foundNaraFence {
+		t.Errorf("Expected dynamically generated Nara Bear-Kaki AI Geofence, but none was found in %+v", aiFences)
+	}
+}
+
+func TestRecalculateAiGeofences_BusyMutex(t *testing.T) {
+	ts, store := setupTestServer()
+	defer ts.Close()
+
+	// Simulate engine is currently calculating
+	store.mu.Lock()
+	store.isRecalculating = true
+	store.mu.Unlock()
+
+	resp, err := http.Post(ts.URL+"/api/v1/admin/geofences/recalculate", "application/json", nil)
+	if err != nil {
+		t.Fatalf("Failed to call recalculate: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("Expected 409 Conflict when busy, got %d", resp.StatusCode)
+	}
+
+	var res map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&res)
+	if res["status"] != "in_progress" {
+		t.Errorf("Expected status in_progress, got %v", res["status"])
+	}
+}
+
 

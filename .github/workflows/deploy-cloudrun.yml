@@ -37,8 +37,9 @@ jobs:
             --region ${{ github.event.inputs.gcp_region }} \
             --project ${{ github.event.inputs.gcp_project_id }} \
             --allow-unauthenticated \
-            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }},AUTH_PROJECT_ID=${{ github.event.inputs.gcp_project_id }}" \
+            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}",AUTH_PROJECT_ID="${{ github.event.inputs.gcp_project_id }}",GCP_PROJECT_ID="${{ github.event.inputs.gcp_project_id }}",BIGQUERY_STREAMING_ENABLED="true",BIGQUERY_PROJECT_ID="${{ github.event.inputs.gcp_project_id }}",BIGQUERY_DATASET="coexist_spatiotemporal_lake",BIGQUERY_TABLE="wildlife_incidents_streaming" \
             --min-instances 0 \
             --max-instances 10 \
             --cpu 1 \
-            --memory 256Mi
+            --memory 512Mi
+

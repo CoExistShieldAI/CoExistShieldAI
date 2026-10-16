@@ -5,14 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"ai.coexistshield/backend/internal/admin"
+
 	"ai.coexistshield/backend/internal/auth"
 	"ai.coexistshield/backend/internal/coldstart"
 	"ai.coexistshield/backend/internal/compliance"
@@ -86,6 +90,62 @@ func NewRouter(
 		})
 	}
 
+	// Real-time synchronization: Wire admin console geofence changes to EventHub
+	if r.adminHandler != nil && r.geofenceEngine != nil && r.geofenceEngine.GetEventHub() != nil {
+		r.adminHandler.SetGeofenceChangeListener(func(action string, geofenceID string, loc *model.ActiveGeofencePoint, tier string) {
+			eventType := "UPDATED"
+			switch action {
+			case "created":
+				eventType = "CREATED"
+			case "deleted":
+				eventType = "DELETED"
+			case "recalculated":
+				eventType = "RECALCULATED"
+			}
+			r.geofenceEngine.GetEventHub().Broadcast(model.GeofenceEvent{
+				Type:       eventType,
+				Action:     action,
+				GeofenceID: geofenceID,
+				Location:   loc,
+				Tier:       tier,
+				Message:    fmt.Sprintf("Admin geofence mutation: %s (id: %s)", action, geofenceID),
+				Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			})
+		})
+	}
+
+	// Real-time synchronization: Wire admin console wildlife & roadkill incidents to BigQuery GIS
+	if r.adminHandler != nil {
+		r.adminHandler.SetIncidentListener(func(category string, id string, species string, lat float64, lng float64, status string) {
+			if r.bigqueryReplicator != nil && lat != 0 && lng != 0 {
+				incursionVal := 0
+				if strings.EqualFold(status, "VERIFIED") || category == "WILDLIFE" {
+					incursionVal = 1
+				}
+				streamEvent := ml.IncidentStreamingEvent{
+					EventID:           fmt.Sprintf("evt_%s", id),
+					IncidentID:        id,
+					Species:           species,
+					Category:          category,
+					Latitude:          lat,
+					Longitude:         lng,
+					Timestamp:         time.Now().UTC(),
+					IsIncursion:       incursionVal,
+					VerificationState: status,
+				}
+				go func() {
+					count, err := r.bigqueryReplicator.StreamSyncBatch([]ml.IncidentStreamingEvent{streamEvent})
+					if err != nil {
+						log.Printf("[BigQuery GIS] Admin stream sync error for %s: %v", id, err)
+					} else {
+						log.Printf("[BigQuery GIS] Successfully streamed admin incident %s to BigQuery GIS (count: %d)", id, count)
+					}
+				}()
+			}
+		})
+	}
+
+
 	// Seed data is ONLY loaded in development / demo mode or test runs (never in bare production)
 	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" || os.Getenv("ENV") == "test" || os.Getenv("CI") != "" || os.Getenv("AUTH_PROJECT_ID") == "" {
 		r.initSeedData()
@@ -102,6 +162,19 @@ func (r *Router) SetRepositories(incRepo repository.IncidentRepository, rkRepo r
 	}
 	if rkRepo != nil {
 		r.roadkillRepo = rkRepo
+	}
+}
+
+// InitAdminPersistence initializes Firestore persistence for the admin dashboard datasets
+func (r *Router) InitAdminPersistence(projectID string) {
+	if r.adminHandler != nil && r.adminHandler.GetStore() != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := r.adminHandler.GetStore().InitPersistence(ctx, projectID); err != nil {
+			fmt.Printf("[Router] Warning: failed to initialize admin persistence with Firestore: %v\n", err)
+		} else {
+			fmt.Printf("[Router] Admin persistence successfully synchronized with Firestore for project %s\n", projectID)
+		}
 	}
 }
 
@@ -155,6 +228,7 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("/api/v1/roadkills", r.handleGetRoadkills)
 	r.mux.HandleFunc("/api/v1/roadkills/", r.officialOnly(r.handleRoadkillAction))
 	r.mux.HandleFunc("/api/v1/geofences/active", r.handleGetActiveGeofences)
+	r.mux.HandleFunc("/api/v1/geofences/events", r.handleGeofenceEvents)
 
 	r.mux.HandleFunc("/api/v1/geofences/recalculate", r.handleGeofencesRecalculate)
 	r.mux.HandleFunc("/api/v1/geofences/scent-plume", r.handleGeneratePlumeGeofences)
@@ -335,7 +409,233 @@ func (r *Router) handleGetActiveGeofences(w http.ResponseWriter, req *http.Reque
 	}
 
 	zones := r.geofenceEngine.GetActiveGeofences(lat, lon, radiusKm)
+	existingIDs := make(map[string]bool)
+	for _, z := range zones {
+		existingIDs[z.Id] = true
+	}
+
+	// Merge geofences from Admin Store (AI & manual geofences configured on Admin Portal)
+	if r.adminHandler != nil && r.adminHandler.GetStore() != nil {
+		adminGeos := r.adminHandler.GetStore().ListGeofences("")
+		for _, ag := range adminGeos {
+			if existingIDs[ag.ID] {
+				continue
+			}
+			zone := adminGeofenceToActiveZone(ag)
+			distKm := haversineDistanceKm(lat, lon, zone.Centroid.Latitude, zone.Centroid.Longitude)
+			// Return if within radiusKm or if large regional overview is requested
+			if radiusKm >= 1000.0 || distKm <= (radiusKm+zone.RadiusMeters/1000.0) {
+				zones = append(zones, zone)
+				existingIDs[ag.ID] = true
+			}
+		}
+	}
+
+	// Threat-Proximity Ranking & Quota Limiting (Mobile OS Geofence Limit Compliance)
+	limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
+	tierWeight := func(tier string) float64 {
+		switch tier {
+		case "TIER_3_DANGER", "TIER_3_CRITICAL":
+			return 100.0
+		case "TIER_2_WARNING", "TIER_2_ALERT":
+			return 50.0
+		case "TIER_1_NOTICE", "TIER_1_CAUTION":
+			return 20.0
+		default:
+			return 5.0
+		}
+	}
+
+	sort.Slice(zones, func(i, j int) bool {
+		distI := haversineDistanceKm(lat, lon, zones[i].Centroid.Latitude, zones[i].Centroid.Longitude)
+		distJ := haversineDistanceKm(lat, lon, zones[j].Centroid.Latitude, zones[j].Centroid.Longitude)
+		scoreI := tierWeight(zones[i].Tier) / (1.0 + distI)
+		scoreJ := tierWeight(zones[j].Tier) / (1.0 + distJ)
+		return scoreI > scoreJ
+	})
+
+	if limit > 0 && len(zones) > limit {
+		zones = zones[:limit]
+	}
+
+	if zones == nil {
+		zones = []model.ActiveGeofenceZone{}
+	}
+
 	writeJSON(w, http.StatusOK, zones)
+}
+
+// handleGeofenceEvents establishes a Server-Sent Events (SSE) stream for real-time mobile geofence synchronization.
+func (r *Router) handleGeofenceEvents(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	if r.geofenceEngine == nil || r.geofenceEngine.GetEventHub() == nil {
+		http.Error(w, "Event hub unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	hub := r.geofenceEngine.GetEventHub()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	ch := hub.Subscribe()
+	defer hub.Unsubscribe(ch)
+
+	// Send initial connection event
+	initEvent := model.GeofenceEvent{
+		Type:      "CONNECTED",
+		Action:    "connected",
+		Message:   "Connected to real-time geofence synchronization stream",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	initBytes, _ := json.Marshal(initEvent)
+	fmt.Fprintf(w, "data: %s\n\n", initBytes)
+	flusher.Flush()
+
+	ctx := req.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
+			eventBytes, err := json.Marshal(event)
+			if err != nil {
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", eventBytes)
+			flusher.Flush()
+		}
+	}
+}
+
+func haversineDistanceKm(lat1, lon1, lat2, lon2 float64) float64 {
+	dLat := (lat2 - lat1) * (math.Pi / 180.0)
+	dLon := (lon2 - lon1) * (math.Pi / 180.0)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*(math.Pi/180.0))*math.Cos(lat2*(math.Pi/180.0))*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return 6371.0 * c
+}
+
+func adminGeofenceToActiveZone(g admin.AdminGeofence) model.ActiveGeofenceZone {
+	tier := "TIER_2_WARNING"
+	riskScore := 0.75
+	switch g.ThreatLevel {
+	case "TIER_3_CRITICAL", "TIER_3_DANGER":
+		tier = "TIER_3_DANGER"
+		riskScore = 0.95
+	case "TIER_2_ALERT", "TIER_2_WARNING":
+		tier = "TIER_2_WARNING"
+		riskScore = 0.75
+	case "TIER_1_CAUTION", "TIER_1_NOTICE":
+		tier = "TIER_1_NOTICE"
+		riskScore = 0.45
+	default:
+		tier = "SAFE"
+		riskScore = 0.10
+	}
+
+	centroid := model.ActiveGeofencePoint{Latitude: 0, Longitude: 0}
+	if g.CircleCenter != nil {
+		centroid.Latitude = g.CircleCenter.Lat
+		centroid.Longitude = g.CircleCenter.Lng
+	} else if len(g.Coordinates) > 0 {
+		var sumLat, sumLng float64
+		for _, c := range g.Coordinates {
+			sumLat += c.Lat
+			sumLng += c.Lng
+		}
+		centroid.Latitude = sumLat / float64(len(g.Coordinates))
+		centroid.Longitude = sumLng / float64(len(g.Coordinates))
+	}
+
+	radiusMeters := g.CircleRadiusMeters
+	if radiusMeters <= 0 {
+		if len(g.Coordinates) > 0 {
+			var maxDist float64
+			for _, c := range g.Coordinates {
+				dist := haversineDistanceKm(centroid.Latitude, centroid.Longitude, c.Lat, c.Lng) * 1000.0
+				if dist > maxDist {
+					maxDist = dist
+				}
+			}
+			radiusMeters = maxDist
+		}
+		if radiusMeters <= 0 {
+			radiusMeters = 1000.0
+		}
+	}
+
+	var coords []model.ActiveGeofencePoint
+	if len(g.Coordinates) > 0 {
+		coords = make([]model.ActiveGeofencePoint, len(g.Coordinates))
+		for i, c := range g.Coordinates {
+			coords[i] = model.ActiveGeofencePoint{Latitude: c.Lat, Longitude: c.Lng}
+		}
+	} else if centroid.Latitude != 0 || centroid.Longitude != 0 {
+		// Generate 32 polygon vertices for circle representation
+		coords = make([]model.ActiveGeofencePoint, 32)
+		rDegLat := (radiusMeters / 6378137.0) * (180.0 / math.Pi)
+		rDegLon := rDegLat
+		cosLat := math.Cos(centroid.Latitude * math.Pi / 180.0)
+		if cosLat > 0.0001 {
+			rDegLon = rDegLat / cosLat
+		}
+		for i := 0; i < 32; i++ {
+			theta := 2.0 * math.Pi * float64(i) / 32.0
+			coords[i] = model.ActiveGeofencePoint{
+				Latitude:  centroid.Latitude + rDegLat*math.Sin(theta),
+				Longitude: centroid.Longitude + rDegLon*math.Cos(theta),
+			}
+		}
+	}
+
+	validFrom := g.CreatedAt.UTC().Format(time.RFC3339)
+	validUntil := g.CreatedAt.Add(72 * time.Hour).UTC().Format(time.RFC3339)
+	if g.ExpiresAt != nil {
+		validUntil = g.ExpiresAt.UTC().Format(time.RFC3339)
+	}
+
+	targetSpecies := []string{g.TargetSpecies}
+	if g.TargetSpecies == "" {
+		targetSpecies = []string{"Wildlife"}
+	}
+
+	explanation := fmt.Sprintf("%s (%s): %s", g.Name, g.TargetSpecies, g.Reason)
+	if g.Reason == "" {
+		explanation = fmt.Sprintf("%s: Active barrier monitored by CoExist Shield AI", g.Name)
+	}
+
+	return model.ActiveGeofenceZone{
+		Id:                   g.ID,
+		Tier:                 tier,
+		TargetSpecies:        targetSpecies,
+		Coordinates:          coords,
+		Centroid:             centroid,
+		RadiusMeters:         radiusMeters,
+		CausalExplanation:    explanation,
+		PrimaryAttractantRef: g.ID,
+		ActiveRiskScore:      riskScore,
+		ValidFrom:            validFrom,
+		ValidUntil:           validUntil,
+		GeneratedAt:          validFrom,
+	}
 }
 
 func (r *Router) handleGetCurrentMeteorology(w http.ResponseWriter, req *http.Request) {
@@ -1168,13 +1468,35 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 
+	// Synchronize citizen/mobile incident into Admin store so AI Geofence recalculation correlates it
+	if r.adminHandler != nil && r.adminHandler.GetStore() != nil && dto.Location.Latitude != 0 && dto.Location.Longitude != 0 {
+		threat := "TIER_2_ALERT"
+		if strings.EqualFold(dto.VerificationStatus, "VERIFIED") {
+			threat = "TIER_3_CRITICAL"
+		}
+		r.adminHandler.GetStore().CreateWildlife(admin.AdminWildlifeIncident{
+			ID:      dto.Id,
+			Species: dto.Species,
+			Location: admin.IncidentLocation{
+				Lat:    dto.Location.Latitude,
+				Lng:    dto.Location.Longitude,
+				Region: dto.Region,
+			},
+			ThreatLevel: threat,
+			Status:      dto.VerificationStatus,
+			Reporter:    "Citizen Mobile User",
+			Description: dto.Description,
+			ReportedAt:  time.Now().UTC(),
+		})
+	}
+
 	// Issue #20: Replicate incident event in real time to BigQuery GIS for feature enrichment & ML staging (<60s SLA)
 	if r.bigqueryReplicator != nil && dto.Location.Latitude != 0 && dto.Location.Longitude != 0 {
 		incursionVal := 0
 		if dto.VerificationStatus == "VERIFIED" {
 			incursionVal = 1
 		}
-		_, _ = r.bigqueryReplicator.ReplicateIncidentEvent(ml.IncidentStreamingEvent{
+		streamEvent := ml.IncidentStreamingEvent{
 			EventID:           fmt.Sprintf("evt_%s", dto.Id),
 			IncidentID:        dto.Id,
 			Species:           dto.Species,
@@ -1184,8 +1506,17 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 			Timestamp:         time.Now().UTC(),
 			IsIncursion:       incursionVal,
 			VerificationState: dto.VerificationStatus,
-		})
+		}
+		go func() {
+			count, err := r.bigqueryReplicator.StreamSyncBatch([]ml.IncidentStreamingEvent{streamEvent})
+			if err != nil {
+				log.Printf("[BigQuery GIS] Stream sync error for incident %s: %v", dto.Id, err)
+			} else {
+				log.Printf("[BigQuery GIS] Successfully streamed %d event(s) to BigQuery GIS for incident %s", count, dto.Id)
+			}
+		}()
 	}
+
 
 	writeJSON(w, http.StatusCreated, dto)
 }
@@ -1384,6 +1715,9 @@ func (r *Router) initSeedData() {
 		},
 	}
 
+	if r.geofenceEngine != nil {
+		r.geofenceEngine.LoadFixtureZones()
+	}
 	if r.coldstartEngine != nil {
 		r.coldstartEngine.LoadFixtureMacroDatasets()
 	}

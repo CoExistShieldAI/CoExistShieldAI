@@ -51,6 +51,19 @@ data class GeofenceRecalculateResponse(
 )
 
 @Serializable
+data class GeofenceEventDto(
+    val type: String,
+    val action: String? = null,
+    val geofenceId: String? = null,
+    val location: ai.coexistshield.model.GeoLocation? = null,
+    val radiusMeters: Double? = null,
+    val tier: String? = null,
+    val message: String? = null,
+    val timestamp: String? = null
+)
+
+
+@Serializable
 data class PriorityKakiTreeDto(
     val treeId: String,
     val hazardScore: Double,

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
+import { GeocodingService } from '../../services/geocoding.service';
 import { AdminWildlifeIncident, ThreatLevel, WildlifeStatus } from '../../models/admin.model';
 import { ImageUploadComponent } from '../image-upload/image-upload.component';
 
@@ -257,6 +258,7 @@ import { ImageUploadComponent } from '../image-upload/image-upload.component';
 })
 export class WildlifeComponent implements OnInit {
   api = inject(AdminApiService);
+  geocodingService = inject(GeocodingService);
   activeTab = signal<'history' | 'entry'>('history');
   searchQuery = '';
   filterSpecies = '';
@@ -307,7 +309,10 @@ export class WildlifeComponent implements OnInit {
     if (event.latLng) {
       this.pinLat = Number(event.latLng.lat().toFixed(5));
       this.pinLng = Number(event.latLng.lng().toFixed(5));
-      this.itemRoad = `Geocoded Spot: Lat ${this.pinLat}, Lng ${this.pinLng}`;
+      this.itemRoad = 'Resolving location...';
+      this.geocodingService.reverseGeocode(this.pinLat, this.pinLng).subscribe(loc => {
+        this.itemRoad = loc;
+      });
     }
   }
 

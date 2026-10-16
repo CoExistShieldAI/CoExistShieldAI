@@ -1,9 +1,11 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"ai.coexistshield/backend/internal/api"
@@ -46,6 +48,19 @@ func main() {
 	if projectID == "" {
 		projectID = os.Getenv("GCP_PROJECT")
 	}
+	if projectID == "" {
+		// Attempt auto-detection from GCP Metadata Server (Cloud Run / GCE)
+		client := &http.Client{Timeout: 800 * time.Millisecond}
+		req, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/project/project-id", nil)
+		if err == nil {
+			req.Header.Set("Metadata-Flavor", "Google")
+			if resp, err := client.Do(req); err == nil && resp.StatusCode == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				projectID = strings.TrimSpace(string(body))
+			}
+		}
+	}
 
 	if projectID != "" {
 		router.SetAuthVerifier(auth.NewVerifier(projectID, ""))
@@ -53,10 +68,12 @@ func main() {
 
 		firestoreRepo := repository.NewFirestoreRepository(projectID)
 		router.SetRepositories(firestoreRepo, firestoreRepo)
-		log.Printf("Firestore persistence enabled for project %s", projectID)
+		router.InitAdminPersistence(projectID)
+		log.Printf("Firestore persistence enabled for project %s (including admin datasets: wildlife, env, weather, roadkill, geofences)", projectID)
 	} else if emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST"); emulatorHost != "" {
 		firestoreRepo := repository.NewFirestoreRepository("demo-coexist")
 		router.SetRepositories(firestoreRepo, firestoreRepo)
+		router.InitAdminPersistence("demo-coexist")
 		log.Printf("Firestore persistence enabled via emulator at %s", emulatorHost)
 	} else {
 		log.Printf("AUTH_PROJECT_ID not set; running in open demo mode with in-memory persistence")

@@ -2,9 +2,11 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,13 +14,15 @@ import (
 )
 
 type Store struct {
-	mu            sync.RWMutex
-	geofences     map[string]AdminGeofence
-	wildlife      map[string]AdminWildlifeIncident
-	roadkills     map[string]AdminRoadkillRecord
-	environmental map[string]AdminEnvironmentalData
-	weather       map[string]AdminWeatherData
-	userCount     int
+	mu              sync.RWMutex
+	geofences       map[string]AdminGeofence
+	wildlife        map[string]AdminWildlifeIncident
+	roadkills       map[string]AdminRoadkillRecord
+	environmental   map[string]AdminEnvironmentalData
+	weather         map[string]AdminWeatherData
+	userCount       int
+	isRecalculating bool
+	persistence     *FirestorePersistence
 }
 
 func NewStore() *Store {
@@ -32,6 +36,154 @@ func NewStore() *Store {
 	}
 	s.seedDefaultData()
 	return s
+}
+
+func (s *Store) SetPersistence(p *FirestorePersistence) {
+	s.mu.Lock()
+	s.persistence = p
+	s.mu.Unlock()
+}
+
+func (s *Store) GetPersistence() *FirestorePersistence {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.persistence
+}
+
+func (s *Store) InitPersistence(ctx context.Context, projectID string) error {
+	p := NewFirestorePersistence(projectID)
+	s.SetPersistence(p)
+	return p.RestoreOrSeed(ctx, s)
+}
+
+func (s *Store) persistGeofence(g AdminGeofence) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.SaveGeofence(ctx, g)
+		}()
+	}
+}
+
+func (s *Store) persistDeleteGeofence(id string) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.DeleteGeofence(ctx, id)
+		}()
+	}
+}
+
+func (s *Store) persistWildlife(w AdminWildlifeIncident) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.SaveWildlife(ctx, w)
+		}()
+	}
+}
+
+func (s *Store) persistDeleteWildlife(id string) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.DeleteWildlife(ctx, id)
+		}()
+	}
+}
+
+func (s *Store) persistRoadkill(rk AdminRoadkillRecord) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.SaveRoadkill(ctx, rk)
+		}()
+	}
+}
+
+func (s *Store) persistDeleteRoadkill(id string) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.DeleteRoadkill(ctx, id)
+		}()
+	}
+}
+
+func (s *Store) persistEnvironmental(env AdminEnvironmentalData) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.SaveEnvironmental(ctx, env)
+		}()
+	}
+}
+
+func (s *Store) persistDeleteEnvironmental(id string) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.DeleteEnvironmental(ctx, id)
+		}()
+	}
+}
+
+func (s *Store) persistWeather(w AdminWeatherData) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.SaveWeather(ctx, w)
+		}()
+	}
+}
+
+func (s *Store) persistDeleteWeather(id string) {
+	s.mu.RLock()
+	p := s.persistence
+	s.mu.RUnlock()
+	if p != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = p.DeleteWeather(ctx, id)
+		}()
+	}
 }
 
 func (s *Store) seedDefaultData() {
@@ -141,6 +293,13 @@ func (s *Store) seedDefaultData() {
 	s.geofences[geo4.ID] = geo4
 	s.geofences[geo5.ID] = geo5
 	s.geofences[geoManual.ID] = geoManual
+
+	s.upsertGraduatedBuffersLocked(geo1, now)
+	s.upsertGraduatedBuffersLocked(geo2, now)
+	s.upsertGraduatedBuffersLocked(geo3, now)
+	s.upsertGraduatedBuffersLocked(geo4, now)
+	s.upsertGraduatedBuffersLocked(geo5, now)
+	s.upsertGraduatedBuffersLocked(geoManual, now)
 
 	// 2. Wildlife Sightings (Empirical Web Data across Thailand, Sumatra, India, Japan)
 	wList := []AdminWildlifeIncident{
@@ -1264,10 +1423,104 @@ func (s *Store) ListGeofences(sourceFilter string) []AdminGeofence {
 	return res
 }
 
+func scalePolygonCoords(coords []Coordinate, factor float64) []Coordinate {
+	if len(coords) == 0 {
+		return nil
+	}
+	var sumLat, sumLng float64
+	for _, c := range coords {
+		sumLat += c.Lat
+		sumLng += c.Lng
+	}
+	cLat := sumLat / float64(len(coords))
+	cLng := sumLng / float64(len(coords))
+	res := make([]Coordinate, len(coords))
+	for i, c := range coords {
+		res[i] = Coordinate{
+			Lat: cLat + (c.Lat-cLat)*factor,
+			Lng: cLng + (c.Lng-cLng)*factor,
+		}
+	}
+	return res
+}
+
+func (s *Store) upsertGraduatedBuffersLocked(core AdminGeofence, now time.Time) {
+	if strings.HasSuffix(core.ID, "-tier2-buffer") || strings.HasSuffix(core.ID, "-tier1-buffer") {
+		return
+	}
+
+	if core.ThreatLevel == "TIER_3_CRITICAL" || core.ThreatLevel == "TIER_3_DANGER" {
+		// Tier 2 Buffer (1.75x)
+		tier2ID := core.ID + "-tier2-buffer"
+		t2 := AdminGeofence{
+			ID:            tier2ID,
+			Name:          core.Name + " (Tier 2 Warning Buffer)",
+			Source:        core.Source,
+			IsPersistent:  core.IsPersistent,
+			GeometryType:  core.GeometryType,
+			ThreatLevel:   "TIER_2_ALERT",
+			TargetSpecies: core.TargetSpecies,
+			CreatedAt:     now,
+			Reason:        fmt.Sprintf("Graduated Tier 2 warning buffer surrounding active hazard zone (%s)", core.ID),
+		}
+		if core.GeometryType == "circle" && core.CircleCenter != nil {
+			center := *core.CircleCenter
+			t2.CircleCenter = &center
+			t2.CircleRadiusMeters = core.CircleRadiusMeters * 1.75
+		} else if len(core.Coordinates) > 0 {
+			t2.Coordinates = scalePolygonCoords(core.Coordinates, 1.75)
+		}
+		s.geofences[tier2ID] = t2
+
+		// Tier 1 Buffer (2.60x)
+		tier1ID := core.ID + "-tier1-buffer"
+		t1 := AdminGeofence{
+			ID:            tier1ID,
+			Name:          core.Name + " (Tier 1 Advisory Buffer)",
+			Source:        core.Source,
+			IsPersistent:  core.IsPersistent,
+			GeometryType:  core.GeometryType,
+			ThreatLevel:   "TIER_1_CAUTION",
+			TargetSpecies: core.TargetSpecies,
+			CreatedAt:     now,
+			Reason:        fmt.Sprintf("Graduated Tier 1 advisory buffer surrounding active hazard zone (%s)", core.ID),
+		}
+		if core.GeometryType == "circle" && core.CircleCenter != nil {
+			center := *core.CircleCenter
+			t1.CircleCenter = &center
+			t1.CircleRadiusMeters = core.CircleRadiusMeters * 2.60
+		} else if len(core.Coordinates) > 0 {
+			t1.Coordinates = scalePolygonCoords(core.Coordinates, 2.60)
+		}
+		s.geofences[tier1ID] = t1
+
+	} else if core.ThreatLevel == "TIER_2_ALERT" || core.ThreatLevel == "TIER_2_WARNING" {
+		// Tier 1 Buffer (1.75x)
+		tier1ID := core.ID + "-tier1-buffer"
+		t1 := AdminGeofence{
+			ID:            tier1ID,
+			Name:          core.Name + " (Tier 1 Advisory Buffer)",
+			Source:        core.Source,
+			IsPersistent:  core.IsPersistent,
+			GeometryType:  core.GeometryType,
+			ThreatLevel:   "TIER_1_CAUTION",
+			TargetSpecies: core.TargetSpecies,
+			CreatedAt:     now,
+			Reason:        fmt.Sprintf("Graduated Tier 1 advisory buffer surrounding active hazard zone (%s)", core.ID),
+		}
+		if core.GeometryType == "circle" && core.CircleCenter != nil {
+			center := *core.CircleCenter
+			t1.CircleCenter = &center
+			t1.CircleRadiusMeters = core.CircleRadiusMeters * 1.75
+		} else if len(core.Coordinates) > 0 {
+			t1.Coordinates = scalePolygonCoords(core.Coordinates, 1.75)
+		}
+		s.geofences[tier1ID] = t1
+	}
+}
+
 func (s *Store) CreateGeofence(g AdminGeofence) AdminGeofence {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if g.ID == "" {
 		g.ID = fmt.Sprintf("geo-manual-%d", time.Now().UnixNano()%100000)
 	}
@@ -1277,50 +1530,380 @@ func (s *Store) CreateGeofence(g AdminGeofence) AdminGeofence {
 	if g.CreatedAt.IsZero() {
 		g.CreatedAt = time.Now().UTC()
 	}
+
+	var lat, lng float64
+	if g.CircleCenter != nil {
+		lat = g.CircleCenter.Lat
+		lng = g.CircleCenter.Lng
+	} else if len(g.Coordinates) > 0 {
+		lat = g.Coordinates[0].Lat
+		lng = g.Coordinates[0].Lng
+	}
+	g.Name = EnhanceGeofenceNameWithLocation(g.Name, g.TargetSpecies, lat, lng)
+
 	s.geofences[g.ID] = g
+	s.upsertGraduatedBuffersLocked(g, g.CreatedAt)
+	s.mu.Unlock()
+
+	s.persistGeofence(g)
 	return g
 }
 
 func (s *Store) DeleteGeofence(id string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.geofences[id]; !exists {
+		s.mu.Unlock()
 		return false
 	}
 	delete(s.geofences, id)
+	t2ID := id + "-tier2-buffer"
+	t1ID := id + "-tier1-buffer"
+	hasT2 := false
+	hasT1 := false
+	if _, exists := s.geofences[t2ID]; exists {
+		delete(s.geofences, t2ID)
+		hasT2 = true
+	}
+	if _, exists := s.geofences[t1ID]; exists {
+		delete(s.geofences, t1ID)
+		hasT1 = true
+	}
+	s.mu.Unlock()
+
+	s.persistDeleteGeofence(id)
+	if hasT2 {
+		s.persistDeleteGeofence(t2ID)
+	}
+	if hasT1 {
+		s.persistDeleteGeofence(t1ID)
+	}
 	return true
 }
 
 func (s *Store) ClearAllManualGeofences() int {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	deletedCount := 0
+	toDelete := make([]string, 0)
 	for id, g := range s.geofences {
 		if g.Source == "manual" {
 			delete(s.geofences, id)
 			deletedCount++
+			toDelete = append(toDelete, id)
 		}
+	}
+	s.mu.Unlock()
+
+	for _, id := range toDelete {
+		s.persistDeleteGeofence(id)
 	}
 	return deletedCount
 }
 
-func (s *Store) RecalculateAiGeofences() (int, time.Time) {
+func haversineDistanceKm(lat1, lon1, lat2, lon2 float64) float64 {
+	dLat := (lat2 - lat1) * (math.Pi / 180.0)
+	dLon := (lon2 - lon1) * (math.Pi / 180.0)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*(math.Pi/180.0))*math.Cos(lat2*(math.Pi/180.0))*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return 6371.0 * c
+}
+
+func extractRegionLabel(region, road, desc, fallback string) string {
+	candidates := []string{region, road, desc}
+	for _, c := range candidates {
+		lower := strings.ToLower(c)
+		if strings.Contains(lower, "nara") || strings.Contains(c, "奈良") {
+			return "Nara"
+		}
+		if strings.Contains(lower, "nagano") || strings.Contains(c, "長野") {
+			return "Nagano"
+		}
+		if strings.Contains(lower, "iwate") || strings.Contains(c, "岩手") || strings.Contains(lower, "morioka") || strings.Contains(c, "盛岡") {
+			return "Morioka/Iwate"
+		}
+		if strings.Contains(lower, "hokkaido") || strings.Contains(c, "北海道") || strings.Contains(lower, "shiretoko") {
+			return "Hokkaido"
+		}
+		if strings.Contains(lower, "thai") || strings.Contains(lower, "phetchaburi") {
+			return "Thailand"
+		}
+		if strings.Contains(lower, "sumatra") || strings.Contains(lower, "riau") {
+			return "Sumatra"
+		}
+	}
+	if region != "" {
+		parts := strings.Split(region, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	return fallback
+}
+
+func getEnvCenterLat(env AdminEnvironmentalData) float64 {
+	if env.CircleCenter != nil && env.CircleCenter.Lat != 0 {
+		return env.CircleCenter.Lat
+	}
+	if len(env.Coordinates) > 0 {
+		var sum float64
+		for _, c := range env.Coordinates {
+			sum += c.Lat
+		}
+		return sum / float64(len(env.Coordinates))
+	}
+	return 0
+}
+
+func getEnvCenterLng(env AdminEnvironmentalData) float64 {
+	if env.CircleCenter != nil && env.CircleCenter.Lng != 0 {
+		return env.CircleCenter.Lng
+	}
+	if len(env.Coordinates) > 0 {
+		var sum float64
+		for _, c := range env.Coordinates {
+			sum += c.Lng
+		}
+		return sum / float64(len(env.Coordinates))
+	}
+	return 0
+}
+
+func (s *Store) RecalculateAiGeofences() (int, time.Time, bool) {
+	s.mu.Lock()
+	if s.isRecalculating {
+		s.mu.Unlock()
+		return 0, time.Time{}, true // busy / conflict
+	}
+	s.isRecalculating = true
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		s.isRecalculating = false
+		s.mu.Unlock()
+	}()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC()
-	// Update timestamp and slight jitter to simulate fresh AI inference without wiping manual fences
-	aiCount := 0
+
+	// 1. Refresh existing baseline AI geofences
 	for id, g := range s.geofences {
 		if g.Source == "ai" {
 			g.CreatedAt = now
 			s.geofences[id] = g
+		}
+	}
+
+	// 2. Correlate Wildlife Incidents with Environmental Attractants & Generate Dynamic AI Geofences
+	correlatedWildlife := make(map[string]bool)
+
+	// Scan Bear, Elephant, Tiger sightings against attractants
+	for wID, w := range s.wildlife {
+		if w.Status == "RESOLVED" || w.Status == "FALSE_ALARM" {
+			continue
+		}
+		if w.Location.Lat == 0 && w.Location.Lng == 0 {
+			continue
+		}
+
+		isBear := strings.Contains(strings.ToLower(w.Species), "bear") || strings.Contains(w.Species, "クマ")
+		isElephant := strings.Contains(strings.ToLower(w.Species), "elephant") || strings.Contains(w.Species, "ゾウ")
+		isTiger := strings.Contains(strings.ToLower(w.Species), "tiger") || strings.Contains(w.Species, "トラ")
+
+		for eID, env := range s.environmental {
+			envLat := getEnvCenterLat(env)
+			envLng := getEnvCenterLng(env)
+			if envLat == 0 && envLng == 0 {
+				continue
+			}
+
+			distKm := haversineDistanceKm(w.Location.Lat, w.Location.Lng, envLat, envLng)
+
+			// Rule 1: Bear + Persimmon (Kaki) within 10 km
+			isKaki := env.Category == "PERSIMMON_KAKI" ||
+				strings.Contains(strings.ToLower(env.Name), "kaki") ||
+				strings.Contains(strings.ToLower(env.Name), "persimmon") ||
+				strings.Contains(strings.ToLower(env.LocationDesc), "kaki") ||
+				strings.Contains(env.Name, "柿") ||
+				strings.Contains(env.LocationDesc, "柿")
+
+			if isBear && isKaki && distKm <= 10.0 {
+				correlatedWildlife[wID] = true
+				geoID := fmt.Sprintf("geo-ai-corr-%s-%s", wID, eID)
+				centerLat := (w.Location.Lat + envLat) / 2.0
+				centerLng := (w.Location.Lng + envLng) / 2.0
+				radiusM := (distKm*1000.0)/2.0 + 1500.0
+				if radiusM < 1500.0 {
+					radiusM = 1500.0
+				}
+				if radiusM > 4500.0 {
+					radiusM = 4500.0
+				}
+
+				regionLabel := extractRegionLabel(w.Location.Region, w.Location.RoadName, w.Description, "Nara")
+
+				centerCoord := Coordinate{Lat: centerLat, Lng: centerLng}
+				s.geofences[geoID] = AdminGeofence{
+					ID:                 geoID,
+					Name:               fmt.Sprintf("AI Dynamic Shield: %s Bear-Persimmon Hazard Zone", regionLabel),
+					Source:             "ai",
+					IsPersistent:       false,
+					GeometryType:       "circle",
+					CircleCenter:       &centerCoord,
+					CircleRadiusMeters: radiusM,
+					ThreatLevel:        "TIER_3_CRITICAL",
+					TargetSpecies:      w.Species,
+					CreatedAt:          now,
+					Reason:             fmt.Sprintf("AI Spatial Correlation: %s sighted within %.1fkm of unharvested persimmon (kaki) attractant '%s'. Autumn hyperphagia incursion alert.", w.Species, distKm, env.Name),
+				}
+			}
+
+			// Rule 2: Elephant + Crop Phenology (Sugarcane/Fruit) within 10 km
+			isCrop := env.Category == "CROP_PHENOLOGY" ||
+				strings.Contains(strings.ToLower(env.Name), "sugar") ||
+				strings.Contains(strings.ToLower(env.Name), "crop") ||
+				strings.Contains(strings.ToLower(env.Name), "farm")
+			if isElephant && isCrop && distKm <= 10.0 {
+				correlatedWildlife[wID] = true
+				geoID := fmt.Sprintf("geo-ai-corr-%s-%s", wID, eID)
+				centerCoord := Coordinate{Lat: (w.Location.Lat + envLat) / 2.0, Lng: (w.Location.Lng + envLng) / 2.0}
+				radiusM := (distKm*1000.0)/2.0 + 2000.0
+				if radiusM > 5000.0 {
+					radiusM = 5000.0
+				}
+				s.geofences[geoID] = AdminGeofence{
+					ID:                 geoID,
+					Name:               fmt.Sprintf("AI Dynamic Shield: %s Crop-Raiding Corridor", env.Name),
+					Source:             "ai",
+					IsPersistent:       false,
+					GeometryType:       "circle",
+					CircleCenter:       &centerCoord,
+					CircleRadiusMeters: radiusM,
+					ThreatLevel:        "TIER_3_CRITICAL",
+					TargetSpecies:      w.Species,
+					CreatedAt:          now,
+					Reason:             fmt.Sprintf("AI Spatial Correlation: %s breeding herd moving towards ripening crop cluster '%s' (%.1fkm).", w.Species, env.Name, distKm),
+				}
+			}
+
+			// Rule 3: Tiger + Livestock Pasture within 10 km
+			isPasture := env.Category == "LIVESTOCK_PASTURE" ||
+				strings.Contains(strings.ToLower(env.Name), "pasture") ||
+				strings.Contains(strings.ToLower(env.Name), "livestock") ||
+				strings.Contains(strings.ToLower(env.Name), "cattle")
+			if isTiger && isPasture && distKm <= 10.0 {
+				correlatedWildlife[wID] = true
+				geoID := fmt.Sprintf("geo-ai-corr-%s-%s", wID, eID)
+				centerCoord := Coordinate{Lat: (w.Location.Lat + envLat) / 2.0, Lng: (w.Location.Lng + envLng) / 2.0}
+				radiusM := (distKm*1000.0)/2.0 + 2500.0
+				if radiusM > 5500.0 {
+					radiusM = 5500.0
+				}
+				s.geofences[geoID] = AdminGeofence{
+					ID:                 geoID,
+					Name:               fmt.Sprintf("AI Dynamic Shield: %s Depredation Perimeter", env.Name),
+					Source:             "ai",
+					IsPersistent:       false,
+					GeometryType:       "circle",
+					CircleCenter:       &centerCoord,
+					CircleRadiusMeters: radiusM,
+					ThreatLevel:        "TIER_3_CRITICAL",
+					TargetSpecies:      w.Species,
+					CreatedAt:          now,
+					Reason:             fmt.Sprintf("AI Spatial Correlation: %s detected within %.1fkm of unfenced livestock '%s'. Nighttime predatory ambush alert.", w.Species, distKm, env.Name),
+				}
+			}
+		}
+	}
+
+	// 3. Standalone verified sightings without matched attractant get dynamic alert zones
+	for wID, w := range s.wildlife {
+		if correlatedWildlife[wID] || w.Status == "RESOLVED" || w.Status == "FALSE_ALARM" {
+			continue
+		}
+		if w.Location.Lat == 0 && w.Location.Lng == 0 {
+			continue
+		}
+		// Sighting within last 7 days gets active geofence
+		if now.Sub(w.ReportedAt) < 7*24*time.Hour || w.ReportedAt.IsZero() {
+			geoID := fmt.Sprintf("geo-ai-sighting-%s", wID)
+			centerCoord := Coordinate{Lat: w.Location.Lat, Lng: w.Location.Lng}
+			tier := "TIER_2_ALERT"
+			if w.ThreatLevel == "TIER_3_CRITICAL" {
+				tier = "TIER_3_CRITICAL"
+			}
+			locationName := w.Location.RoadName
+			if locationName == "" || strings.HasPrefix(locationName, "Geocoded Spot") {
+				locationName = w.Location.Region
+			}
+			if locationName == "" {
+				locationName = ReverseGeocode(w.Location.Lat, w.Location.Lng)
+			}
+			s.geofences[geoID] = AdminGeofence{
+				ID:                 geoID,
+				Name:               fmt.Sprintf("AI Alert: %s Sighting Buffer (%s)", w.Species, locationName),
+				Source:             "ai",
+				IsPersistent:       false,
+				GeometryType:       "circle",
+				CircleCenter:       &centerCoord,
+				CircleRadiusMeters: 1800.0,
+				ThreatLevel:        tier,
+				TargetSpecies:      w.Species,
+				CreatedAt:          now,
+				Reason:             fmt.Sprintf("Active verified sighting reported by %s: %s", w.Reporter, w.Description),
+			}
+		}
+	}
+
+	// 4. Roadkills pending removal generate carcass scent plume alert zones
+	for rkID, rk := range s.roadkills {
+		if rk.Status == "PENDING_REMOVAL" && !rk.IsExcluded && (rk.Location.Lat != 0 || rk.Location.Lng != 0) {
+			geoID := fmt.Sprintf("geo-ai-roadkill-%s", rkID)
+			centerCoord := Coordinate{Lat: rk.Location.Lat, Lng: rk.Location.Lng}
+			roadName := rk.Location.RoadName
+			if roadName == "" || strings.HasPrefix(roadName, "Geocoded Spot") {
+				roadName = rk.Location.Region
+			}
+			if roadName == "" {
+				roadName = ReverseGeocode(rk.Location.Lat, rk.Location.Lng)
+			}
+			s.geofences[geoID] = AdminGeofence{
+				ID:                 geoID,
+				Name:               fmt.Sprintf("AI Carcass Scent Buffer: %s (%s)", rk.Species, roadName),
+				Source:             "ai",
+				IsPersistent:       false,
+				GeometryType:       "circle",
+				CircleCenter:       &centerCoord,
+				CircleRadiusMeters: 2000.0,
+				ThreatLevel:        "TIER_2_ALERT",
+				TargetSpecies:      "Apex Predator / Scavenger",
+				CreatedAt:          now,
+				Reason:             fmt.Sprintf("Uncollected %s carcass (%s decay, %.0fkg). Predicted apex predator attraction radius.", rk.Species, rk.DecayStage, rk.EstimatedWeightKg),
+			}
+		}
+	}
+
+	// 4.5. Generate graduated concentric buffers (Tier 2 / Tier 1) for AI hazard zones
+	var aiCoreFences []AdminGeofence
+	for _, g := range s.geofences {
+		if g.Source == "ai" && !strings.HasSuffix(g.ID, "-tier2-buffer") && !strings.HasSuffix(g.ID, "-tier1-buffer") {
+			aiCoreFences = append(aiCoreFences, g)
+		}
+	}
+	for _, g := range aiCoreFences {
+		s.upsertGraduatedBuffersLocked(g, now)
+	}
+
+	// 5. Count total AI geofences
+	aiCount := 0
+	for _, g := range s.geofences {
+		if g.Source == "ai" {
 			aiCount++
 		}
 	}
-	return aiCount, now
+
+	return aiCount, now, false
 }
 
 // --- Wildlife Incidents CRUD ---
@@ -1338,8 +1921,6 @@ func (s *Store) ListWildlife() []AdminWildlifeIncident {
 
 func (s *Store) CreateWildlife(w AdminWildlifeIncident) AdminWildlifeIncident {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if w.ID == "" {
 		w.ID = fmt.Sprintf("wildlife-%d", time.Now().UnixNano()%100000)
 	}
@@ -1350,30 +1931,37 @@ func (s *Store) CreateWildlife(w AdminWildlifeIncident) AdminWildlifeIncident {
 		w.Status = "UNVERIFIED"
 	}
 	s.wildlife[w.ID] = w
+	s.mu.Unlock()
+
+	s.persistWildlife(w)
 	return w
 }
 
 func (s *Store) DeleteWildlife(id string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.wildlife[id]; !exists {
+		s.mu.Unlock()
 		return false
 	}
 	delete(s.wildlife, id)
+	s.mu.Unlock()
+
+	s.persistDeleteWildlife(id)
 	return true
 }
 
 func (s *Store) UpdateWildlifeStatus(id string, status string) (AdminWildlifeIncident, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	w, exists := s.wildlife[id]
 	if !exists {
+		s.mu.Unlock()
 		return AdminWildlifeIncident{}, false
 	}
 	w.Status = status
 	s.wildlife[id] = w
+	s.mu.Unlock()
+
+	s.persistWildlife(w)
 	return w, true
 }
 
@@ -1395,8 +1983,6 @@ func (s *Store) ListRoadkills(includeExcluded bool) []AdminRoadkillRecord {
 
 func (s *Store) CreateRoadkill(rk AdminRoadkillRecord) AdminRoadkillRecord {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if rk.ID == "" {
 		rk.ID = fmt.Sprintf("rk-%d", time.Now().UnixNano()%100000)
 	}
@@ -1415,32 +2001,39 @@ func (s *Store) CreateRoadkill(rk AdminRoadkillRecord) AdminRoadkillRecord {
 		rk.PhotoURLs = []string{rk.PhotoURL}
 	}
 	s.roadkills[rk.ID] = rk
+	s.mu.Unlock()
+
+	s.persistRoadkill(rk)
 	return rk
 }
 
 func (s *Store) SetRoadkillExclusion(id string, isExcluded bool) (AdminRoadkillRecord, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	rk, exists := s.roadkills[id]
 	if !exists {
+		s.mu.Unlock()
 		return AdminRoadkillRecord{}, false
 	}
 	rk.IsExcluded = isExcluded
 	s.roadkills[id] = rk
+	s.mu.Unlock()
+
+	s.persistRoadkill(rk)
 	return rk, true
 }
 
 func (s *Store) SetRoadkillDisposed(id string) (AdminRoadkillRecord, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	rk, exists := s.roadkills[id]
 	if !exists {
+		s.mu.Unlock()
 		return AdminRoadkillRecord{}, false
 	}
 	rk.Status = "DISPOSED"
 	s.roadkills[id] = rk
+	s.mu.Unlock()
+
+	s.persistRoadkill(rk)
 	return rk, true
 }
 
@@ -1459,8 +2052,6 @@ func (s *Store) ListEnvironmental() []AdminEnvironmentalData {
 
 func (s *Store) CreateEnvironmental(env AdminEnvironmentalData) AdminEnvironmentalData {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if env.ID == "" {
 		env.ID = fmt.Sprintf("env-%d", time.Now().UnixNano()%100000)
 	}
@@ -1468,17 +2059,22 @@ func (s *Store) CreateEnvironmental(env AdminEnvironmentalData) AdminEnvironment
 		env.LastUpdated = time.Now().UTC()
 	}
 	s.environmental[env.ID] = env
+	s.mu.Unlock()
+
+	s.persistEnvironmental(env)
 	return env
 }
 
 func (s *Store) DeleteEnvironmental(id string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.environmental[id]; !exists {
+		s.mu.Unlock()
 		return false
 	}
 	delete(s.environmental, id)
+	s.mu.Unlock()
+
+	s.persistDeleteEnvironmental(id)
 	return true
 }
 
@@ -1508,8 +2104,6 @@ func (s *Store) GetWeather(id string) (AdminWeatherData, bool) {
 
 func (s *Store) CreateWeather(w AdminWeatherData) AdminWeatherData {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if w.ID == "" {
 		w.ID = fmt.Sprintf("weather-%d", time.Now().UnixNano())
 	}
@@ -1533,14 +2127,16 @@ func (s *Store) CreateWeather(w AdminWeatherData) AdminWeatherData {
 		}
 	}
 	s.weather[w.ID] = w
+	s.mu.Unlock()
+
+	s.persistWeather(w)
 	return w
 }
 
 func (s *Store) UpdateWeather(id string, w AdminWeatherData) (AdminWeatherData, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.weather[id]; !exists {
+		s.mu.Unlock()
 		return AdminWeatherData{}, false
 	}
 	w.ID = id
@@ -1549,17 +2145,22 @@ func (s *Store) UpdateWeather(id string, w AdminWeatherData) (AdminWeatherData, 
 		w.IsFloodedRiverRisk = true
 	}
 	s.weather[id] = w
+	s.mu.Unlock()
+
+	s.persistWeather(w)
 	return w, true
 }
 
 func (s *Store) DeleteWeather(id string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.weather[id]; !exists {
+		s.mu.Unlock()
 		return false
 	}
 	delete(s.weather, id)
+	s.mu.Unlock()
+
+	s.persistDeleteWeather(id)
 	return true
 }
 

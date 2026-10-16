@@ -21,6 +21,7 @@ type Engine struct {
 	activeZones        map[string]model.ActiveGeofenceZone
 	activeModelVersion string
 	modelWeights       map[string]float64
+	eventHub           *EventHub
 }
 
 // NewEngine initializes the dynamic geofencing engine.
@@ -30,12 +31,22 @@ func NewEngine() *Engine {
 		activeZones:        make(map[string]model.ActiveGeofenceZone),
 		activeModelVersion: "v2026.10.01-baseline",
 		modelWeights:       make(map[string]float64),
+		eventHub:           NewEventHub(),
 	}
 	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" {
 		e.LoadFixtureZones()
 	}
 	return e
 }
+
+// GetEventHub returns the event broadcast hub for real-time mobile sync.
+func (e *Engine) GetEventHub() *EventHub {
+	if e == nil {
+		return nil
+	}
+	return e.eventHub
+}
+
 
 // LoadFixtureZones populates calibrated test geofence zones.
 func (e *Engine) LoadFixtureZones() {
@@ -207,9 +218,88 @@ func (e *Engine) seedDefaultGeofenceZones() {
 		GeneratedAt:          nowStr,
 	}
 
-	e.activeZones[zone1.Id] = zone1
-	e.activeZones[zone2.Id] = zone2
-	e.activeZones[zone3.Id] = zone3
+	e.registerZoneWithGraduatedBuffers(zone1)
+	e.registerZoneWithGraduatedBuffers(zone2)
+	e.registerZoneWithGraduatedBuffers(zone3)
+}
+
+// registerZoneWithGraduatedBuffers stores the core zone along with concentric lower-tier buffer zones
+// so that a Tier 3 Danger zone is naturally surrounded by a Tier 2 Warning buffer and a Tier 1 Notice perimeter,
+// and a Tier 2 Warning zone is surrounded by a Tier 1 Notice perimeter.
+func (e *Engine) registerZoneWithGraduatedBuffers(coreZone model.ActiveGeofenceZone) {
+	e.activeZones[coreZone.Id] = coreZone
+	for _, buf := range GenerateConcentricBufferZones(coreZone) {
+		e.activeZones[buf.Id] = buf
+	}
+}
+
+// GenerateConcentricBufferZones creates graduated outer buffer zones around a higher-tier core zone.
+// - TIER_3_DANGER -> adjacent TIER_2_WARNING buffer (1.75x radius) + outer TIER_1_NOTICE buffer (2.60x radius)
+// - TIER_2_WARNING -> adjacent TIER_1_NOTICE buffer (1.75x radius)
+func GenerateConcentricBufferZones(coreZone model.ActiveGeofenceZone) []model.ActiveGeofenceZone {
+	var buffers []model.ActiveGeofenceZone
+
+	switch coreZone.Tier {
+	case "TIER_3_DANGER":
+		tier2Poly := shrinkPolygon(coreZone.PolygonGeoJson, coreZone.Centroid.Latitude, coreZone.Centroid.Longitude, 1.75)
+		tier2Coords := extractCoordinatesFromPolygon(tier2Poly)
+		tier2Zone := model.ActiveGeofenceZone{
+			Id:                   fmt.Sprintf("%s_tier2_buffer", coreZone.Id),
+			Tier:                 "TIER_2_WARNING",
+			TargetSpecies:        coreZone.TargetSpecies,
+			Coordinates:          tier2Coords,
+			Centroid:             coreZone.Centroid,
+			RadiusMeters:         roundToDecimals(coreZone.RadiusMeters*1.75, 1),
+			CausalExplanation:    fmt.Sprintf("Tier 2 Warning Buffer: Graduated transition zone adjacent to Tier 3 Danger core (%s).", coreZone.Id),
+			PrimaryAttractantRef: coreZone.PrimaryAttractantRef,
+			ActiveRiskScore:      roundToDecimals(math.Min(0.79, math.Max(0.62, coreZone.ActiveRiskScore*0.75)), 2),
+			PolygonGeoJson:       tier2Poly,
+			ValidFrom:            coreZone.ValidFrom,
+			ValidUntil:           coreZone.ValidUntil,
+			GeneratedAt:          coreZone.GeneratedAt,
+		}
+
+		tier1Poly := shrinkPolygon(coreZone.PolygonGeoJson, coreZone.Centroid.Latitude, coreZone.Centroid.Longitude, 2.60)
+		tier1Coords := extractCoordinatesFromPolygon(tier1Poly)
+		tier1Zone := model.ActiveGeofenceZone{
+			Id:                   fmt.Sprintf("%s_tier1_buffer", coreZone.Id),
+			Tier:                 "TIER_1_NOTICE",
+			TargetSpecies:        coreZone.TargetSpecies,
+			Coordinates:          tier1Coords,
+			Centroid:             coreZone.Centroid,
+			RadiusMeters:         roundToDecimals(coreZone.RadiusMeters*2.60, 1),
+			CausalExplanation:    fmt.Sprintf("Tier 1 Notice Perimeter: Outer early-warning buffer surrounding Tier 2/3 hazard (%s).", coreZone.Id),
+			PrimaryAttractantRef: coreZone.PrimaryAttractantRef,
+			ActiveRiskScore:      roundToDecimals(math.Min(0.54, math.Max(0.35, coreZone.ActiveRiskScore*0.48)), 2),
+			PolygonGeoJson:       tier1Poly,
+			ValidFrom:            coreZone.ValidFrom,
+			ValidUntil:           coreZone.ValidUntil,
+			GeneratedAt:          coreZone.GeneratedAt,
+		}
+		buffers = append(buffers, tier2Zone, tier1Zone)
+
+	case "TIER_2_WARNING":
+		tier1Poly := shrinkPolygon(coreZone.PolygonGeoJson, coreZone.Centroid.Latitude, coreZone.Centroid.Longitude, 1.75)
+		tier1Coords := extractCoordinatesFromPolygon(tier1Poly)
+		tier1Zone := model.ActiveGeofenceZone{
+			Id:                   fmt.Sprintf("%s_tier1_buffer", coreZone.Id),
+			Tier:                 "TIER_1_NOTICE",
+			TargetSpecies:        coreZone.TargetSpecies,
+			Coordinates:          tier1Coords,
+			Centroid:             coreZone.Centroid,
+			RadiusMeters:         roundToDecimals(coreZone.RadiusMeters*1.75, 1),
+			CausalExplanation:    fmt.Sprintf("Tier 1 Notice Perimeter: Graduated early-warning buffer adjacent to Tier 2 Warning zone (%s).", coreZone.Id),
+			PrimaryAttractantRef: coreZone.PrimaryAttractantRef,
+			ActiveRiskScore:      roundToDecimals(math.Min(0.54, math.Max(0.35, coreZone.ActiveRiskScore*0.60)), 2),
+			PolygonGeoJson:       tier1Poly,
+			ValidFrom:            coreZone.ValidFrom,
+			ValidUntil:           coreZone.ValidUntil,
+			GeneratedAt:          coreZone.GeneratedAt,
+		}
+		buffers = append(buffers, tier1Zone)
+	}
+
+	return buffers
 }
 
 // GenerateScentPlumeGeofences synthesizes active attractant hubs, wind-driven scent plumes,
@@ -313,10 +403,9 @@ func (e *Engine) GenerateScentPlumeGeofences(req model.GeneratePlumeGeofencesReq
 		}
 		zones = append(zones, zoneDto)
 
-		// Register in active cache
+		// Register in active cache with graduated concentric buffers (Tier 3 -> Tier 2 -> Tier 1)
 		coords := extractCoordinatesFromPolygon(polygon)
-		e.mu.Lock()
-		e.activeZones[zoneDto.Id] = model.ActiveGeofenceZone{
+		coreZone := model.ActiveGeofenceZone{
 			Id:                   zoneDto.Id,
 			Tier:                 zoneDto.Tier,
 			TargetSpecies:        zoneDto.TargetSpecies,
@@ -330,6 +419,12 @@ func (e *Engine) GenerateScentPlumeGeofences(req model.GeneratePlumeGeofencesReq
 			ValidFrom:            time.Now().UTC().Format(time.RFC3339),
 			ValidUntil:           zoneDto.ExpiresAt,
 			GeneratedAt:          zoneDto.CreatedAt,
+		}
+
+		e.mu.Lock()
+		e.activeZones[coreZone.Id] = coreZone
+		for _, buf := range GenerateConcentricBufferZones(coreZone) {
+			e.activeZones[buf.Id] = buf
 		}
 		e.mu.Unlock()
 	}
@@ -509,6 +604,22 @@ func (e *Engine) Recalculate(req model.GeofenceRecalculateRequest) model.Geofenc
 	}
 
 	e.activeZones[newZone.Id] = newZone
+	for _, buf := range GenerateConcentricBufferZones(newZone) {
+		e.activeZones[buf.Id] = buf
+	}
+
+	if e.eventHub != nil {
+		e.eventHub.Broadcast(model.GeofenceEvent{
+			Type:         "RECALCULATED",
+			Action:       "recalculated",
+			GeofenceID:   newZone.Id,
+			Location:     &newZone.Centroid,
+			RadiusMeters: newZone.RadiusMeters,
+			Tier:         newZone.Tier,
+			Message:      fmt.Sprintf("Dynamic spatial recalibration triggered for zone %s", newZone.Id),
+			Timestamp:    nowStr,
+		})
+	}
 
 	return model.GeofenceRecalculateResponse{
 		RecalculatedGeofencesCount: len(e.activeZones),
@@ -620,4 +731,65 @@ func (e *Engine) ActiveModelVersion() string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.activeModelVersion
+}
+
+// EvaluateLocationTier evaluates GPS coordinates against active geofences and their graduated buffers.
+// It returns the highest matching tier, distance to nearest hazard boundary, and the matching zone ID.
+func (e *Engine) EvaluateLocationTier(lat, lon float64) (string, float64, string) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	tierRank := map[string]int{
+		"SAFE":            0,
+		"TIER_1_NOTICE":   1,
+		"TIER_2_WARNING":  2,
+		"TIER_3_DANGER":   3,
+	}
+
+	highestTier := "SAFE"
+	minDistMeters := math.MaxFloat64
+	bestZoneId := ""
+
+	for _, zone := range e.activeZones {
+		distKm := haversineDistanceKm(lat, lon, zone.Centroid.Latitude, zone.Centroid.Longitude)
+		distMeters := distKm * 1000.0
+		effectiveBoundaryDist := math.Max(0, distMeters-zone.RadiusMeters)
+
+		if effectiveBoundaryDist < minDistMeters {
+			minDistMeters = effectiveBoundaryDist
+			bestZoneId = zone.Id
+		}
+
+		// Direct containment
+		if distMeters <= zone.RadiusMeters {
+			if tierRank[zone.Tier] > tierRank[highestTier] {
+				highestTier = zone.Tier
+			}
+		} else {
+			// Proximity-based buffer halo fallback
+			if zone.Tier == "TIER_3_DANGER" {
+				if effectiveBoundaryDist <= math.Max(1200.0, zone.RadiusMeters*0.75) {
+					if tierRank["TIER_2_WARNING"] > tierRank[highestTier] {
+						highestTier = "TIER_2_WARNING"
+					}
+				} else if effectiveBoundaryDist <= math.Max(2500.0, zone.RadiusMeters*1.60) {
+					if tierRank["TIER_1_NOTICE"] > tierRank[highestTier] {
+						highestTier = "TIER_1_NOTICE"
+					}
+				}
+			} else if zone.Tier == "TIER_2_WARNING" {
+				if effectiveBoundaryDist <= math.Max(1500.0, zone.RadiusMeters*0.75) {
+					if tierRank["TIER_1_NOTICE"] > tierRank[highestTier] {
+						highestTier = "TIER_1_NOTICE"
+					}
+				}
+			}
+		}
+	}
+
+	if minDistMeters == math.MaxFloat64 {
+		minDistMeters = 0
+	}
+
+	return highestTier, roundToDecimals(minDistMeters, 1), bestZoneId
 }

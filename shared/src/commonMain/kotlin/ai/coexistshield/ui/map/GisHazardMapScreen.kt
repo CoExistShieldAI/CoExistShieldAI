@@ -56,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,6 +109,7 @@ object MapZoomHelper {
 }
 
 enum class MapLayerType(val label: String) {
+    GEOFENCES("Dynamic Geofences"),
     ROADKILL("Roadkill"),
     PERSIMMON_TREES("Kaki Trees (Japan)"),
     ELEPHANT_CROPS("Elephant Crops (Thai)"),
@@ -124,6 +126,8 @@ data class SelectedEntityDetails(
     val canMarkResolved: Boolean = false,
     val isRoadkill: Boolean = false,
     val roadkillStatus: ClearanceStatus? = null,
+    val isGeofence: Boolean = false,
+    val radiusMeters: Double? = null,
     val latitude: Double? = null,
     val longitude: Double? = null
 )
@@ -134,6 +138,7 @@ data class GisMapUiState(
     val roadkills: List<RoadkillRecord> = emptyList(),
     val proximityRoadkillAlert: RoadkillRecord? = null,
     val activeLayers: Set<MapLayerType> = setOf(
+        MapLayerType.GEOFENCES,
         MapLayerType.ROADKILL,
         MapLayerType.PERSIMMON_TREES,
         MapLayerType.ELEPHANT_CROPS,
@@ -161,7 +166,9 @@ data class MapPinItem(
     val pinColor: Color,
     val geminiBadge: String,
     val isRoadkill: Boolean = false,
-    val roadkillStatus: ClearanceStatus? = null
+    val roadkillStatus: ClearanceStatus? = null,
+    val isGeofence: Boolean = false,
+    val radiusMeters: Double? = null
 )
 
 sealed interface MapDisplayItem {
@@ -189,16 +196,85 @@ data class ClusterDisplay(
 @Composable
 fun GisHazardMapScreen(
     state: GisMapUiState,
+    initialRegion: MapRegion? = null,
+    initialTargetLocation: GeoLocation? = null,
+    initialSelectedEntityId: String? = null,
     onBackClick: () -> Unit = {},
     onToggleLayer: (MapLayerType) -> Unit = {},
     onSelectEntity: (SelectedEntityDetails?) -> Unit = {},
     onOfficialActionClick: (String) -> Unit = {},
     onUpdateRoadkillStatus: (String, ClearanceStatus) -> Unit = { _, _ -> }
 ) {
-    var selectedRegion by remember { mutableStateOf(MapRegion.JAPAN_IWATE) }
+    var selectedRegion by remember { mutableStateOf(initialRegion ?: MapRegion.JAPAN_IWATE) }
     var panOffsetX by remember { mutableStateOf(0f) }
     var panOffsetY by remember { mutableStateOf(0f) }
     var zoomLevel by remember { mutableStateOf(MapZoomHelper.DEFAULT_ZOOM) }
+
+    LaunchedEffect(initialTargetLocation, initialSelectedEntityId, initialRegion) {
+        val targetReg = initialRegion ?: initialTargetLocation?.let { loc ->
+            when {
+                loc.latitude in 25.0..50.0 -> MapRegion.JAPAN_IWATE
+                loc.latitude in 5.0..25.0 -> MapRegion.THAILAND_KUI_BURI
+                else -> MapRegion.INDONESIA_SUMATRA
+            }
+        }
+        if (targetReg != null) {
+            selectedRegion = targetReg
+        }
+
+        if (initialTargetLocation != null) {
+            val reg = targetReg ?: selectedRegion
+            val targetZoom = 13.5f
+            val metrics = MapZoomHelper.calculateMetrics(targetZoom)
+            val centerTileX = TileCoordinateUtils.lonToTileX(reg.centerLon, metrics.discreteZoom)
+            val centerTileY = TileCoordinateUtils.latToTileY(reg.centerLat, metrics.discreteZoom)
+            val targetTileX = TileCoordinateUtils.lonToTileX(initialTargetLocation.longitude, metrics.discreteZoom)
+            val targetTileY = TileCoordinateUtils.latToTileY(initialTargetLocation.latitude, metrics.discreteZoom)
+            panOffsetX = -((targetTileX - centerTileX).toFloat() * metrics.tileSizePx)
+            panOffsetY = -((targetTileY - centerTileY).toFloat() * metrics.tileSizePx)
+            zoomLevel = targetZoom
+        }
+
+        if (initialSelectedEntityId != null) {
+            val geofence = state.activeGeofences.firstOrNull { it.id == initialSelectedEntityId }
+            if (geofence != null) {
+                onSelectEntity(
+                    SelectedEntityDetails(
+                        id = geofence.id,
+                        title = geofence.causalExplanation.substringBefore(":").trim().ifEmpty { "Active Geofence Shield" },
+                        subtitle = geofence.causalExplanation,
+                        speciesOrType = geofence.targetSpecies.firstOrNull()?.name ?: "UNKNOWN",
+                        threatTier = geofence.tier,
+                        geminiBadgeText = "Gemini Spatial: Active Hazard Zone • Radius ${geofence.radiusMeters?.toInt() ?: 1500}m",
+                        canMarkResolved = false,
+                        isGeofence = true,
+                        radiusMeters = geofence.radiusMeters,
+                        latitude = geofence.centroid?.latitude,
+                        longitude = geofence.centroid?.longitude
+                    )
+                )
+            } else {
+                val rk = state.roadkills.firstOrNull { it.id == initialSelectedEntityId }
+                if (rk != null) {
+                    onSelectEntity(
+                        SelectedEntityDetails(
+                            id = rk.id,
+                            title = "Decomposing ${rk.species.name.replace("_", " ")} Carcass",
+                            subtitle = "Active Apex Predator Lure • Attractant Threat Score ${rk.attractantThreatScore}",
+                            speciesOrType = rk.species.name,
+                            threatTier = AlertTier.TIER_2_WARNING,
+                            geminiBadgeText = "Gemini Forensics: ${rk.decayState.name} • Threat ${rk.attractantThreatScore}",
+                            canMarkResolved = true,
+                            isRoadkill = true,
+                            roadkillStatus = rk.clearanceStatus,
+                            latitude = rk.location.latitude,
+                            longitude = rk.location.longitude
+                        )
+                    )
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -261,6 +337,8 @@ fun GisHazardMapScreen(
                             canMarkResolved = true,
                             isRoadkill = pin.isRoadkill,
                             roadkillStatus = pin.roadkillStatus,
+                            isGeofence = pin.isGeofence,
+                            radiusMeters = pin.radiusMeters,
                             latitude = pin.lat,
                             longitude = pin.lon
                         )
@@ -502,8 +580,55 @@ fun GoogleMapsVectorCanvas(
     )
 
     // Build the pins based on active region and active layers
-    val pins = remember(region, state.activeLayers, state.roadkills) {
+    val pins = remember(region, state.activeLayers, state.roadkills, state.activeGeofences) {
         mutableListOf<MapPinItem>().apply {
+            // Dynamic Active Geofences (AI & Manual geofences managed via Admin Console)
+            if (state.activeLayers.contains(MapLayerType.GEOFENCES)) {
+                state.activeGeofences.forEach { gf ->
+                    val dLat = gf.centroid.latitude - region.centerLat
+                    val dLon = gf.centroid.longitude - region.centerLon
+                    // Show geofences within ~1500km of the current region center
+                    if ((dLat * dLat + dLon * dLon) < 180.0) {
+                        val badgeColor = when (gf.tier) {
+                            AlertTier.TIER_3_DANGER -> TierDanger
+                            AlertTier.TIER_2_WARNING -> TierWarning
+                            AlertTier.TIER_1_NOTICE -> TierNotice
+                            AlertTier.SAFE -> TierSafe
+                        }
+                        val statusLabel = when (gf.tier) {
+                            AlertTier.TIER_3_DANGER -> "CRITICAL HAZARD"
+                            AlertTier.TIER_2_WARNING -> "ACTIVE ALERT"
+                            AlertTier.TIER_1_NOTICE -> "CAUTION ZONE"
+                            AlertTier.SAFE -> "SAFE ZONE"
+                        }
+                        val speciesEmoji = when {
+                            gf.targetSpecies.any { it.name.contains("ELEPHANT") } -> "🐘"
+                            gf.targetSpecies.any { it.name.contains("TIGER") } -> "🐅"
+                            gf.targetSpecies.any { it.name.contains("BEAR") } -> "🐻"
+                            gf.targetSpecies.any { it.name.contains("BOAR") } -> "🐗"
+                            else -> "🛡️"
+                        }
+                        val speciesText = gf.targetSpecies.joinToString(", ") { it.name.replace("_", " ") }.ifEmpty { "Wildlife" }
+                        add(
+                            MapPinItem(
+                                id = gf.id,
+                                lat = gf.centroid.latitude,
+                                lon = gf.centroid.longitude,
+                                iconEmoji = speciesEmoji,
+                                title = "Geofence #${gf.id} ($statusLabel)",
+                                subtitle = "${gf.causalExplanation} • Radius ${gf.radiusMeters.toInt()}m",
+                                layerType = MapLayerType.GEOFENCES,
+                                threatTier = gf.tier,
+                                pinColor = badgeColor,
+                                geminiBadge = "Autonomous AI Barrier • Target: $speciesText",
+                                isGeofence = true,
+                                radiusMeters = gf.radiusMeters
+                            )
+                        )
+                    }
+                }
+            }
+
             when (region) {
                 MapRegion.JAPAN_IWATE -> {
                     // Roadkill Carcasses
@@ -683,8 +808,31 @@ fun GoogleMapsVectorCanvas(
                 drawTopographyAndForest(center, relativeZoom, region)
             }
 
-            // 5. Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON Simulation)
-            drawGeofencePolygons(center, relativeZoom, region)
+            val metrics = MapZoomHelper.calculateMetrics(zoomLevel)
+            val discreteZoom = metrics.discreteZoom
+            val tileSizePx = metrics.tileSizePx
+            val centerTileX = TileCoordinateUtils.lonToTileX(region.centerLon, discreteZoom)
+            val centerTileY = TileCoordinateUtils.latToTileY(region.centerLat, discreteZoom)
+            val screenCenterX = size.width / 2f
+            val screenCenterY = size.height / 2f
+
+            val geoToOffset: (Double, Double) -> Offset = { lat, lon ->
+                val tX = TileCoordinateUtils.lonToTileX(lon, discreteZoom)
+                val tY = TileCoordinateUtils.latToTileY(lat, discreteZoom)
+                val pxX = screenCenterX + (tX - centerTileX).toFloat() * tileSizePx + panOffsetX
+                val pxY = screenCenterY + (tY - centerTileY).toFloat() * tileSizePx + panOffsetY
+                Offset(pxX, pxY)
+            }
+
+            // 5. Dynamic Geofence Hazard Polygons (Live Backend Geofences & GeoJSON Simulation)
+            drawGeofencePolygons(
+                center = center,
+                zoom = relativeZoom,
+                region = region,
+                geofences = state.activeGeofences,
+                isLayerActive = state.activeLayers.contains(MapLayerType.GEOFENCES),
+                geoToOffset = geoToOffset
+            )
 
             // 6. Scent Plume & Wind Vector (Causal Layer)
             drawCausalScentPlumes(center, relativeZoom, region)
@@ -1052,8 +1200,76 @@ private fun DrawScope.drawRoadwaysNetwork(center: Offset, zoom: Float, region: M
     drawPath(avenue2, color = Color(0xFF334155), style = Stroke(width = 4f * zoom))
 }
 
-// Draw Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON simulation)
-private fun DrawScope.drawGeofencePolygons(center: Offset, zoom: Float, region: MapRegion) {
+// Draw Dynamic Geofence Hazard Polygons (Tier 1/2/3 GeoJSON simulation & Live Backend Geofences)
+private fun DrawScope.drawGeofencePolygons(
+    center: Offset,
+    zoom: Float,
+    region: MapRegion,
+    geofences: List<GeofenceZone> = emptyList(),
+    isLayerActive: Boolean = true,
+    geoToOffset: (Double, Double) -> Offset = { _, _ -> Offset.Zero }
+) {
+    if (!isLayerActive) return
+
+    if (geofences.isNotEmpty()) {
+        geofences.forEach { gf ->
+            val zoneColor = when (gf.tier) {
+                AlertTier.TIER_3_DANGER -> TierDanger
+                AlertTier.TIER_2_WARNING -> TierWarning
+                AlertTier.TIER_1_NOTICE -> TierNotice
+                AlertTier.SAFE -> TierSafe
+            }
+
+            if (gf.coordinates.size >= 3) {
+                val path = Path().apply {
+                    val first = gf.coordinates[0]
+                    val firstPt = geoToOffset(first.latitude, first.longitude)
+                    moveTo(firstPt.x, firstPt.y)
+                    for (i in 1 until gf.coordinates.size) {
+                        val pt = gf.coordinates[i]
+                        val off = geoToOffset(pt.latitude, pt.longitude)
+                        lineTo(off.x, off.y)
+                    }
+                    close()
+                }
+                drawPath(path, color = zoneColor.copy(alpha = 0.22f), style = Fill)
+                drawPath(
+                    path,
+                    color = zoneColor,
+                    style = Stroke(
+                        width = (2.5f * zoom).coerceIn(1.5f, 4.0f),
+                        pathEffect = if (gf.tier == AlertTier.TIER_2_WARNING) {
+                            PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        } else null
+                    )
+                )
+            } else if (gf.centroid.latitude != 0.0 || gf.centroid.longitude != 0.0) {
+                val centerPos = geoToOffset(gf.centroid.latitude, gf.centroid.longitude)
+                val edgePos = geoToOffset(
+                    gf.centroid.latitude,
+                    gf.centroid.longitude + (gf.radiusMeters / 111320.0)
+                )
+                val rPx = kotlin.math.hypot(edgePos.x - centerPos.x, edgePos.y - centerPos.y).coerceAtLeast(12f)
+                drawCircle(
+                    color = zoneColor.copy(alpha = 0.20f),
+                    radius = rPx,
+                    center = centerPos,
+                    style = Fill
+                )
+                drawCircle(
+                    color = zoneColor,
+                    radius = rPx,
+                    center = centerPos,
+                    style = Stroke(
+                        width = (2.5f * zoom).coerceIn(1.5f, 4.0f),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                    )
+                )
+            }
+        }
+        return
+    }
+
     when (region) {
         MapRegion.JAPAN_IWATE -> {
             // Tier 2 Warning Bear Corridor Polygon (Orange)
@@ -1337,6 +1553,28 @@ fun EntityDetailCard(
                     ClearanceStatus.REPORTED -> TierWarning to "STATUS: REPORTED (Pending Sanitation Dispatch)"
                     ClearanceStatus.DISPATCHED -> Color(0xFF38BDF8) to "STATUS: DISPATCHED (Truck En Route)"
                     ClearanceStatus.CLEARED -> TierSafe to "STATUS: CLEARED (Mitigation Complete)"
+                }
+                Box(
+                    modifier = Modifier
+                        .background(chipColor.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = label,
+                        color = chipColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Status chip for geofence barrier
+            if (entity.isGeofence) {
+                val (chipColor, label) = when (entity.threatTier) {
+                    AlertTier.TIER_3_DANGER -> TierDanger to "DEFENSIVE PERIMETER: CRITICAL (Detour Required)"
+                    AlertTier.TIER_2_WARNING -> TierWarning to "DEFENSIVE PERIMETER: ACTIVE WARNING (Proceed with Caution)"
+                    AlertTier.TIER_1_NOTICE -> TierNotice to "DEFENSIVE PERIMETER: CAUTION ZONE"
+                    AlertTier.SAFE -> TierSafe to "DEFENSIVE PERIMETER: SAFE BUFFER"
                 }
                 Box(
                     modifier = Modifier

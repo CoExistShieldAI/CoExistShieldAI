@@ -2,6 +2,56 @@
   "hosting": [
     {
       "target": "app",
+      "public": "ionic-app/dist/ionic-app/browser",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "coexistshield-backend",
+            "region": "asia-southeast1"
+          }
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=3600"
+            }
+          ]
+        },
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "SAMEORIGIN"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "kmp",
       "public": "shared/build/dist/js/productionExecutable",
       "ignore": [
         "firebase.json",
@@ -9,6 +59,13 @@
         "**/node_modules/**"
       ],
       "rewrites": [
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "coexistshield-backend",
+            "region": "asia-southeast1"
+          }
+        },
         {
           "source": "**",
           "destination": "/index.html"
@@ -65,6 +122,13 @@
         "**/node_modules/**"
       ],
       "rewrites": [
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "coexistshield-backend",
+            "region": "asia-southeast1"
+          }
+        },
         {
           "source": "**",
           "destination": "/index.html"

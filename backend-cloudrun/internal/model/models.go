@@ -421,4 +421,16 @@ type UpdateRoadkillStatusRequestDto struct {
 	AssignedOfficialId string `json:"assignedOfficialId,omitempty"`
 }
 
+type GeofenceEvent struct {
+	Type         string               `json:"type"` // "CREATED", "UPDATED", "DELETED", "RECALCULATED", "CONNECTED"
+	Action       string               `json:"action"` // "created", "updated", "deleted", "recalculated", "connected"
+	GeofenceID   string               `json:"geofenceId,omitempty"`
+	Location     *ActiveGeofencePoint `json:"location,omitempty"`
+	RadiusMeters float64              `json:"radiusMeters,omitempty"`
+	Tier         string               `json:"tier,omitempty"`
+	Message      string               `json:"message,omitempty"`
+	Timestamp    string               `json:"timestamp"`
+}
+
+
 

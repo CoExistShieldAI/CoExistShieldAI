@@ -1,21 +1,36 @@
 package ai.coexistshield.ui.hud
 
 import ai.coexistshield.model.AlertTier
+import ai.coexistshield.model.GeoLocation
 import ai.coexistshield.model.UserRole
 import ai.coexistshield.model.WildlifeSpecies
+import ai.coexistshield.network.DispatchRecommendationDto
+import ai.coexistshield.ui.map.MapRegion
+import ai.coexistshield.ui.theme.Slate100
+import ai.coexistshield.ui.theme.Slate700
+import ai.coexistshield.ui.theme.Slate800
+import ai.coexistshield.ui.theme.Slate900
 import ai.coexistshield.ui.theme.TierDanger
 import ai.coexistshield.ui.theme.TierNotice
 import ai.coexistshield.ui.theme.TierSafe
 import ai.coexistshield.ui.theme.TierWarning
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +52,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -45,16 +61,29 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import ai.coexistshield.network.DispatchRecommendationDto
 import androidx.compose.ui.unit.sp
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
+/**
+ * UI State for the Main HUD Screen.
+ */
 data class MainHudUiState(
     val currentTier: AlertTier = AlertTier.SAFE,
     val targetSpecies: List<WildlifeSpecies> = emptyList(),
@@ -65,20 +94,40 @@ data class MainHudUiState(
     val isHapticActive: Boolean = false,
     val suggestedDetour: String? = null,
     val activeRole: UserRole = UserRole.CITIZEN,
-    val dispatchRecommendations: List<DispatchRecommendationDto> = emptyList()
+    val dispatchRecommendations: List<DispatchRecommendationDto> = emptyList(),
+    val hazardLocation: GeoLocation? = null,
+    val hazardEntityId: String? = null,
+    val hazardRegion: MapRegion? = null,
+    val hazardLabel: String? = null
 )
+
+/**
+ * Filter sections for collapsible detail intelligence.
+ */
+enum class HudIntelSection(val label: String, val icon: String) {
+    AI_CAUSAL("AI Analysis", "🤖"),
+    DETOUR("Detour Route", "🔀"),
+    SAFETY_PROTOCOL("Safety Rules", "🛡️"),
+    MUNICIPAL_TASKS("Tasks", "🎯"),
+    DETERRENT_SIREN("Siren & Haptic", "🚨")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainHudScreen(
     state: MainHudUiState,
     onOpenMapClick: () -> Unit = {},
+    onOpenHazardMapClick: (GeoLocation, String?, MapRegion?) -> Unit = { _, _, _ -> },
     onQuickReportClick: () -> Unit = {},
     onOfficialDispatchClick: () -> Unit = {},
     onEmergencySosClick: () -> Unit = {},
     onToggleSirenClick: () -> Unit = {},
     onToggleOfflineClick: () -> Unit = {}
 ) {
+    // Collapsible intel state: By default, keep the HUD clean & minimal.
+    var showAllDetails by remember { mutableStateOf(false) }
+    var activeIntelFilter by remember { mutableStateOf<HudIntelSection?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -109,69 +158,112 @@ fun MainHudScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Primary Dynamic Alert Banner
-            AlertBannerCard(
+            // 1. Primary Graphical Status Display (Graphical Threat Orb & Proximity Gauge)
+            GraphicalStatusDisplay(
                 tier = state.currentTier,
                 species = state.targetSpecies,
-                distanceMeters = state.closestDistanceMeters,
+                distanceMeters = state.closestDistanceMeters
+            )
+
+            // 2. High-Priority Alert & Direct Map Link Card
+            StatusSummaryAndMapLinkCard(
+                state = state,
+                onOpenHazardMapClick = onOpenHazardMapClick,
+                onOpenMapClick = onOpenMapClick,
                 onEmergencySosClick = onEmergencySosClick
             )
 
-            // 2. Spatial Distance Tracking Gauge Card
-            if (state.closestDistanceMeters != null) {
-                SpatialDistanceTrackingCard(
-                    distanceMeters = state.closestDistanceMeters,
-                    tier = state.currentTier
-                )
-            }
-
-            // 3. Tier 3 Acoustic Siren & Haptic Alert Card
-            if (state.currentTier == AlertTier.TIER_3_DANGER) {
-                Tier3SirenHapticsCard(
-                    isSirenPlaying = state.isSirenPlaying,
-                    isHapticActive = state.isHapticActive,
-                    onToggleSirenClick = onToggleSirenClick
-                )
-            }
-
-            // 4. Detour Route Suggestion (Tier 2 & 3)
-            if (state.suggestedDetour != null) {
-                DetourSuggestionCard(detour = state.suggestedDetour)
-            }
-
-            // 5. AI Causal Explanation (Explainable AI Grounding via Gemini 3.8 Flash)
-            CausalExplanationCard(
-                explanation = state.causalExplanation,
-                tier = state.currentTier
+            // 3. Collapsible Intel Control Bar (Simple by default, expandable on demand)
+            IntelExpandControlBar(
+                state = state,
+                isExpanded = showAllDetails,
+                activeFilter = activeIntelFilter,
+                onToggleExpandAll = {
+                    showAllDetails = !showAllDetails
+                    if (!showAllDetails) activeIntelFilter = null
+                },
+                onSelectFilter = { filter ->
+                    if (activeIntelFilter == filter) {
+                        activeIntelFilter = null
+                    } else {
+                        activeIntelFilter = filter
+                        showAllDetails = true
+                    }
+                }
             )
 
-            // 5b. Prioritized Municipal Action Tasks (Dispatch Recommendations)
-            if (state.dispatchRecommendations.isNotEmpty()) {
-                ActionableDispatchRecommendationsCard(
-                    recommendations = state.dispatchRecommendations
-                )
+            // 4. On-Demand Expandable Intelligence Content
+            AnimatedVisibility(
+                visible = showAllDetails || activeIntelFilter != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Filter: Siren & Haptics (Tier 3 or manually triggered)
+                    if ((activeIntelFilter == null || activeIntelFilter == HudIntelSection.DETERRENT_SIREN) &&
+                        (state.currentTier == AlertTier.TIER_3_DANGER || state.isSirenPlaying)
+                    ) {
+                        Tier3SirenHapticsCard(
+                            isSirenPlaying = state.isSirenPlaying,
+                            isHapticActive = state.isHapticActive,
+                            onToggleSirenClick = onToggleSirenClick
+                        )
+                    }
+
+                    // Filter: Detour Suggestion
+                    if ((activeIntelFilter == null || activeIntelFilter == HudIntelSection.DETOUR) &&
+                        state.suggestedDetour != null
+                    ) {
+                        DetourSuggestionCard(
+                            detour = state.suggestedDetour,
+                            onViewOnMap = {
+                                if (state.hazardLocation != null) {
+                                    onOpenHazardMapClick(state.hazardLocation, state.hazardEntityId, state.hazardRegion)
+                                } else {
+                                    onOpenMapClick()
+                                }
+                            }
+                        )
+                    }
+
+                    // Filter: AI Causal Explanation
+                    if (activeIntelFilter == null || activeIntelFilter == HudIntelSection.AI_CAUSAL) {
+                        CausalExplanationCard(
+                            explanation = state.causalExplanation,
+                            tier = state.currentTier
+                        )
+                    }
+
+                    // Filter: Species-Specific Safety Guidance Protocol
+                    if ((activeIntelFilter == null || activeIntelFilter == HudIntelSection.SAFETY_PROTOCOL) &&
+                        state.targetSpecies.isNotEmpty()
+                    ) {
+                        SpeciesSafetyInstructionsCard(species = state.targetSpecies)
+                    }
+
+                    // Filter: Municipal Action Tasks (Dispatch recommendations for official/admin)
+                    if ((activeIntelFilter == null || activeIntelFilter == HudIntelSection.MUNICIPAL_TASKS) &&
+                        state.dispatchRecommendations.isNotEmpty() &&
+                        (state.activeRole == UserRole.OFFICIAL || state.activeRole == UserRole.ADMIN)
+                    ) {
+                        ActionableDispatchRecommendationsCard(
+                            recommendations = state.dispatchRecommendations
+                        )
+                    }
+                }
             }
 
-            // 6. Species-Specific Safety Guidance Protocol
-            if (state.targetSpecies.isNotEmpty()) {
-                SpeciesSafetyInstructionsCard(species = state.targetSpecies)
-            }
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // 7. Active Target Fauna Card
-            if (state.targetSpecies.isNotEmpty()) {
-                SpeciesThreatCard(
-                    species = state.targetSpecies,
-                    distanceMeters = state.closestDistanceMeters
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f, fill = false))
-
-            // 8. Primary Actions Footer
+            // 5. Primary Actions Footer
             ActionFooter(
                 role = state.activeRole,
                 tier = state.currentTier,
@@ -179,6 +271,466 @@ fun MainHudScreen(
                 onQuickReportClick = onQuickReportClick,
                 onOfficialDispatchClick = onOfficialDispatchClick
             )
+        }
+    }
+}
+
+/**
+ * Graphical Status Display:
+ * A stylish, circular radial gauge & threat orb that makes safety vs danger immediately apparent at a single glance.
+ */
+@Composable
+fun GraphicalStatusDisplay(
+    tier: AlertTier,
+    species: List<WildlifeSpecies>,
+    distanceMeters: Double?
+) {
+    val (tierColor, tierLabel, tierIcon, tierDescription) = when (tier) {
+        AlertTier.SAFE -> Quadruple(
+            TierSafe,
+            "SAFE ZONE",
+            "🛡️",
+            "All clear • No active predators within 5km"
+        )
+        AlertTier.TIER_1_NOTICE -> Quadruple(
+            TierNotice,
+            "TIER 1 NOTICE",
+            "⚠️",
+            "Approaching moderate wildlife corridor"
+        )
+        AlertTier.TIER_2_WARNING -> Quadruple(
+            TierWarning,
+            "TIER 2 WARNING",
+            "⚡",
+            "Active scent plume & encounter hazard"
+        )
+        AlertTier.TIER_3_DANGER -> Quadruple(
+            TierDanger,
+            "IMMEDIATE DANGER",
+            "🚨",
+            "Apex predator / fresh kill-site nearby"
+        )
+    }
+
+    val animatedColor by animateColorAsState(targetValue = tierColor, animationSpec = tween(500))
+
+    // Pulse animation for warning and danger states
+    val infiniteTransition = rememberInfiniteTransition()
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (tier == AlertTier.TIER_3_DANGER) 500 else 1000),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+    val ringRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        )
+    )
+
+    // Calculate proximity gauge percentage (0.0 = far, 1.0 = immediate proximity)
+    val proximityRatio = if (distanceMeters != null) {
+        ((2000.0 - distanceMeters.coerceIn(50.0, 2000.0)) / 1950.0).toFloat()
+    } else if (tier == AlertTier.SAFE) {
+        0.0f
+    } else {
+        0.5f
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(vertical = 8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(220.dp)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            // High-Tech Canvas HUD Gauge Background & Animated Rings
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidthPx = 10.dp.toPx()
+                val radius = (size.minDimension - strokeWidthPx) / 2f
+                val centerOffset = Offset(size.width / 2f, size.height / 2f)
+
+                // 1. Ambient Background Glow
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            animatedColor.copy(alpha = if (tier == AlertTier.TIER_3_DANGER) 0.28f else 0.14f),
+                            Color.Transparent
+                        ),
+                        center = centerOffset,
+                        radius = size.width / 1.5f
+                    ),
+                    radius = radius
+                )
+
+                // 2. Base subtle track ring
+                drawCircle(
+                    color = animatedColor.copy(alpha = 0.18f),
+                    radius = radius,
+                    style = Stroke(width = strokeWidthPx)
+                )
+
+                // 3. Dynamic Proximity Arc (fills based on threat closeness)
+                val arcSweep = if (tier == AlertTier.SAFE) {
+                    360f // Safe ring is continuous and calm
+                } else {
+                    (proximityRatio * 320f).coerceIn(45f, 320f)
+                }
+                val startAngle = -90f
+
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        colors = listOf(
+                            animatedColor.copy(alpha = 0.4f),
+                            animatedColor,
+                            animatedColor.copy(alpha = 0.9f)
+                        ),
+                        center = centerOffset
+                    ),
+                    startAngle = startAngle,
+                    sweepAngle = arcSweep,
+                    useCenter = false,
+                    style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                )
+
+                // 4. Tick markers around circumference for tactical look
+                val tickCount = 24
+                for (i in 0 until tickCount) {
+                    val angleDeg = (i * (360f / tickCount) + ringRotation * 0.1f)
+                    val angleRad = angleDeg * (PI / 180f).toFloat()
+                    val innerR = radius - 14.dp.toPx()
+                    val outerR = radius - 8.dp.toPx()
+
+                    val startX = centerOffset.x + innerR * cos(angleRad)
+                    val startY = centerOffset.y + innerR * sin(angleRad)
+                    val endX = centerOffset.x + outerR * cos(angleRad)
+                    val endY = centerOffset.y + outerR * sin(angleRad)
+
+                    val isMajor = i % 6 == 0
+                    drawLine(
+                        color = if (isMajor) animatedColor.copy(alpha = 0.7f) else animatedColor.copy(alpha = 0.2f),
+                        start = Offset(startX, startY),
+                        end = Offset(endX, endY),
+                        strokeWidth = if (isMajor) 2.5.dp.toPx() else 1.dp.toPx()
+                    )
+                }
+            }
+
+            // Central Information Orb
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                // Tier Icon with pulse
+                Text(
+                    text = tierIcon,
+                    fontSize = if (tier == AlertTier.TIER_3_DANGER) 36.sp else 32.sp,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+
+                // Tier Status Header
+                Text(
+                    text = tierLabel,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    color = animatedColor,
+                    textAlign = TextAlign.Center
+                )
+
+                // Distance or Safe state
+                if (distanceMeters != null) {
+                    Text(
+                        text = "${distanceMeters.toInt()}m",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 24.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "ESTIMATED PROXIMITY",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                } else {
+                    Text(
+                        text = "ALL SECURE",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "CONTINUOUS SENSING",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                // Fauna Name if available
+                if (species.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = species.joinToString(" • ") { it.name.replace("_", " ") },
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        color = animatedColor,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Subtitle status description
+        Text(
+            text = tierDescription,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+    }
+}
+
+/**
+ * Status Summary & Direct Map Navigation Link:
+ * Provides immediate feedback on why the alert is active and a 1-click button to view the exact hazard on the GIS map.
+ */
+@Composable
+fun StatusSummaryAndMapLinkCard(
+    state: MainHudUiState,
+    onOpenHazardMapClick: (GeoLocation, String?, MapRegion?) -> Unit,
+    onOpenMapClick: () -> Unit,
+    onEmergencySosClick: () -> Unit
+) {
+    val tierColor = when (state.currentTier) {
+        AlertTier.SAFE -> TierSafe
+        AlertTier.TIER_1_NOTICE -> TierNotice
+        AlertTier.TIER_2_WARNING -> TierWarning
+        AlertTier.TIER_3_DANGER -> TierDanger
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, tierColor.copy(alpha = 0.4f), RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Direct Link to GIS Map for this hazard
+            if (state.currentTier != AlertTier.SAFE) {
+                Button(
+                    onClick = {
+                        if (state.hazardLocation != null) {
+                            onOpenHazardMapClick(state.hazardLocation, state.hazardEntityId, state.hazardRegion)
+                        } else {
+                            onOpenMapClick()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = tierColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text("📍", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val distanceText = state.closestDistanceMeters?.let { " (${it.toInt()}m ahead)" } ?: ""
+                        Text(
+                            text = "View Hazard Location on Map$distanceText",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+
+            // Emergency SOS for Tier 3 Immediate Danger
+            if (state.currentTier == AlertTier.TIER_3_DANGER) {
+                OutlinedButton(
+                    onClick = onEmergencySosClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = TierDanger
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        Brush.horizontalGradient(listOf(TierDanger, Color(0xFFB91C1C)))
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "🚨 BROADCAST EMERGENCY SOS DISPATCH",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        color = TierDanger
+                    )
+                }
+            }
+
+            // Brief summary tag
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (state.currentTier == AlertTier.SAFE) "Autonomous Sensor Perimeter: Nominal" else "Active Threat Perimeter Detected",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                if (state.hazardRegion != null) {
+                    Text(
+                        text = state.hazardRegion.label,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Collapsible Intel Control Bar:
+ * Allows user to view detailed intelligence on demand using convenient category chips or an expand-all toggle.
+ */
+@Composable
+fun IntelExpandControlBar(
+    state: MainHudUiState,
+    isExpanded: Boolean,
+    activeFilter: HudIntelSection?,
+    onToggleExpandAll: () -> Unit,
+    onSelectFilter: (HudIntelSection) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Additional Intelligence",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = if (isExpanded) "Active" else "Collapsed",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            FilledTonalButton(
+                onClick = onToggleExpandAll,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Text(
+                    text = if (isExpanded) "Hide Details ▲" else "View Details ▼",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Quick Category Filter Chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            HudIntelSection.values().forEach { section ->
+                // Skip tasks for non-officials
+                if (section == HudIntelSection.MUNICIPAL_TASKS &&
+                    state.activeRole != UserRole.OFFICIAL && state.activeRole != UserRole.ADMIN
+                ) {
+                    return@forEach
+                }
+
+                // Skip detour if no detour available
+                if (section == HudIntelSection.DETOUR && state.suggestedDetour == null) {
+                    return@forEach
+                }
+
+                // Skip siren if not Tier 3 or playing
+                if (section == HudIntelSection.DETERRENT_SIREN &&
+                    state.currentTier != AlertTier.TIER_3_DANGER && !state.isSirenPlaying
+                ) {
+                    return@forEach
+                }
+
+                val isSelected = activeFilter == section
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                        .border(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable { onSelectFilter(section) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(section.icon, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = section.label,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -230,119 +782,87 @@ fun ConnectionStatusIndicator(
 }
 
 @Composable
-fun AlertBannerCard(
-    tier: AlertTier,
-    species: List<WildlifeSpecies>,
-    distanceMeters: Double?,
-    onEmergencySosClick: () -> Unit
+fun DetourSuggestionCard(
+    detour: String,
+    onViewOnMap: () -> Unit = {}
 ) {
-    val (tierColor, title, subtitle) = when (tier) {
-        AlertTier.SAFE -> Triple(
-            TierSafe,
-            "SAFE ZONE",
-            "No active predator threats detected nearby."
-        )
-        AlertTier.TIER_1_NOTICE -> Triple(
-            TierNotice,
-            "TIER 1 : NOTICE",
-            "Heightened vigilance advised. Approaching moderate wildlife corridor."
-        )
-        AlertTier.TIER_2_WARNING -> Triple(
-            TierWarning,
-            "TIER 2 : WARNING",
-            "High encounter probability. Scent plume / attractant corridor active."
-        )
-        AlertTier.TIER_3_DANGER -> Triple(
-            TierDanger,
-            "TIER 3 : IMMEDIATE DANGER",
-            "IMMINENT HAZARD. Active apex predator or fresh kill-site nearby."
-        )
-    }
-
-    val animatedColor by animateColorAsState(targetValue = tierColor)
-
-    // Pulse animation for Tier 3
-    val infiniteTransition = rememberInfiniteTransition()
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                width = if (tier == AlertTier.TIER_3_DANGER) 3.dp else 1.dp,
-                color = if (tier == AlertTier.TIER_3_DANGER) animatedColor.copy(alpha = pulseAlpha) else animatedColor,
-                shape = RoundedCornerShape(16.dp)
-            ),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = animatedColor.copy(alpha = 0.12f)
-        )
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+        border = CardDefaults.outlinedCardBorder()
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    color = animatedColor,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 20.sp
-                )
-                if (tier == AlertTier.TIER_3_DANGER) {
-                    Button(
-                        onClick = onEmergencySosClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = TierDanger),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("EMERGENCY SOS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🔀", fontSize = 20.sp)
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Recommended Safety Detour Route",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = detour,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
-
-            Text(
-                text = subtitle,
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
-            )
-
-            if (distanceMeters != null) {
-                Text(
-                    text = "Proximity: Approximately ${distanceMeters.toInt()} meters away",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = animatedColor
-                )
+            OutlinedButton(
+                onClick = onViewOnMap,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("🗺️ View Detour Corridor on Map", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
 @Composable
-fun SpatialDistanceTrackingCard(
-    distanceMeters: Double,
+fun CausalExplanationCard(
+    explanation: String,
     tier: AlertTier
 ) {
-    val (tierColor, rangeDesc) = when {
-        distanceMeters < 250 -> TierDanger to "Critical Proximity (< 250m) • Immediate Encounter Zone"
-        distanceMeters < 800 -> TierWarning to "Warning Buffer (250m - 800m) • Active Scent Corridor"
-        else -> TierNotice to "Awareness Perimeter (> 800m) • Peripheral Monitoring"
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "AI Causal Reasoning",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "• Powered by Gemini 3.8 Flash",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = explanation,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
+}
 
-    val progress = ((2000.0 - distanceMeters.coerceIn(50.0, 2000.0)) / 1950.0).toFloat()
-
+@Composable
+fun SpeciesSafetyInstructionsCard(species: List<WildlifeSpecies>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -353,45 +873,40 @@ fun SpatialDistanceTrackingCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🛡️", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Spatial Distance Tracking",
-                    fontSize = 13.sp,
+                    text = "Species Safety & Deterrent Protocol",
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "${distanceMeters.toInt()}m",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    color = tierColor
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-            ) {
+            species.forEach { sp ->
+                val (name, protocol) = when (sp) {
+                    WildlifeSpecies.BEAR -> "Asian Black Bear (Ursus thibetanus)" to
+                        "1. Make presence known with voice / bear bell.\n2. Do NOT run or climb trees; stand ground.\n3. Back away slowly facing animal.\n4. Arm capsaicin spray."
+                    WildlifeSpecies.TIGER -> "Sumatran Tiger (Panthera tigris sumatrae)" to
+                        "1. Maintain upright posture; never crouch.\n2. Do NOT turn your back or run.\n3. Keep continuous eye contact.\n4. Retreat slowly to vehicle or night corral."
+                    WildlifeSpecies.ELEPHANT -> "Asian Elephant (Elephas maximus)" to
+                        "1. Dim headlights and do NOT sound vehicle horns.\n2. Maintain minimum 100m standoff buffer.\n3. Do NOT block migration trails to water or crop buffers."
+                    else -> sp.name to "Maintain distance and avoid confrontation."
+                }
+
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(fraction = progress.coerceIn(0.05f, 1.0f))
-                        .height(8.dp)
-                        .background(tierColor, RoundedCornerShape(4.dp))
-                )
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(text = protocol, fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
-
-            Text(
-                text = rangeDesc,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
         }
     }
 }
@@ -487,227 +1002,6 @@ fun Tier3SirenHapticsCard(
 }
 
 @Composable
-fun DetourSuggestionCard(detour: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
-        border = CardDefaults.outlinedCardBorder()
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("🔀", fontSize = 20.sp)
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = "Recommended Safety Detour Route",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = detour,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SpeciesSafetyInstructionsCard(species: List<WildlifeSpecies>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = CardDefaults.outlinedCardBorder()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🛡️", fontSize = 16.sp)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Species-Specific Safety & Deterrent Protocol",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            species.forEach { sp ->
-                val (name, protocol) = when (sp) {
-                    WildlifeSpecies.BEAR -> "Asian Black Bear (ツキノワグマ)" to
-                        "1. Make presence known with voice / bear bell.\n2. Do NOT run or climb trees; stand ground.\n3. Back away slowly facing animal.\n4. Arm capsaicin spray."
-                    WildlifeSpecies.TIGER -> "Sumatran Tiger (Harimau Sumatera)" to
-                        "1. Maintain upright posture; never crouch.\n2. Do NOT turn your back or run.\n3. Keep continuous eye contact.\n4. Retreat slowly to vehicle or night corral."
-                    WildlifeSpecies.ELEPHANT -> "Asian Elephant (ช้างป่า)" to
-                        "1. Dim headlights and do NOT sound vehicle horns.\n2. Maintain minimum 100m standoff buffer.\n3. Do NOT block migration trails to water or crop buffers."
-                    else -> sp.name to "Maintain distance and avoid confrontation."
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                        .padding(10.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(text = name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                        Text(text = protocol, fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun CausalExplanationCard(
-    explanation: String,
-    tier: AlertTier
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "AI Causal Reasoning",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "• Powered by Gemini 3.8 Flash",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = explanation,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Composable
-fun SpeciesThreatCard(
-    species: List<WildlifeSpecies>,
-    distanceMeters: Double?
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Active Target Fauna",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = species.joinToString(", ") { it.name.replace("_", " ") },
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            if (distanceMeters != null) {
-                Box(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "< ${distanceMeters.toInt()}m",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ActionFooter(
-    role: UserRole,
-    tier: AlertTier,
-    onOpenMapClick: () -> Unit,
-    onQuickReportClick: () -> Unit,
-    onOfficialDispatchClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Button(
-            onClick = onOpenMapClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(text = "Open Interactive GIS Map", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedButton(
-                onClick = onQuickReportClick,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Camera Report", fontSize = 14.sp)
-            }
-
-            if (role == UserRole.OFFICIAL || role == UserRole.ADMIN) {
-                FilledTonalButton(
-                    onClick = onOfficialDispatchClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Official Console", fontSize = 14.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun ActionableDispatchRecommendationsCard(
     recommendations: List<DispatchRecommendationDto>
 ) {
@@ -792,3 +1086,56 @@ fun ActionableDispatchRecommendationsCard(
         }
     }
 }
+
+@Composable
+fun ActionFooter(
+    role: UserRole,
+    tier: AlertTier,
+    onOpenMapClick: () -> Unit,
+    onQuickReportClick: () -> Unit,
+    onOfficialDispatchClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = onOpenMapClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(text = "Open Interactive GIS Map", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onQuickReportClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Camera Report", fontSize = 14.sp)
+            }
+
+            if (role == UserRole.OFFICIAL || role == UserRole.ADMIN) {
+                FilledTonalButton(
+                    onClick = onOfficialDispatchClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Official Console", fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

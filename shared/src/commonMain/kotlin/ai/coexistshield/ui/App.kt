@@ -7,6 +7,7 @@ import ai.coexistshield.auth.SessionStore
 import ai.coexistshield.model.AlertTier
 import ai.coexistshield.model.ClearanceStatus
 import ai.coexistshield.model.DecayState
+import ai.coexistshield.model.GeofenceZone
 import ai.coexistshield.model.GeoLocation
 import ai.coexistshield.model.Incident
 import ai.coexistshield.model.ReportCategory
@@ -52,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -118,6 +120,11 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
         var isSirenPlaying by remember { mutableStateOf(false) }
         var offlinePendingCount by remember { mutableStateOf(0) }
 
+        // Navigation state for targeting hazards from HUD to Map
+        var pendingMapLocation by remember { mutableStateOf<GeoLocation?>(null) }
+        var pendingMapEntityId by remember { mutableStateOf<String?>(null) }
+        var pendingMapRegion by remember { mutableStateOf<ai.coexistshield.ui.map.MapRegion?>(null) }
+
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
 
@@ -127,49 +134,83 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
         val incidentRepository = remember {
             ai.coexistshield.repository.IncidentRepository(ai.coexistshield.network.ApiClient.createHttpClient())
         }
+        val geofenceManager = remember {
+            ai.coexistshield.geofence.GeofenceManager(
+                repository = geofenceRepository,
+                maxGeofences = 20,
+                movementThresholdMeters = 500.0,
+                searchRadiusKm = 50.0
+            )
+        }
+        val registeredGeofences by geofenceManager.registeredGeofences.collectAsState()
+        val allCachedGeofences by geofenceManager.allCachedGeofences.collectAsState()
+        val geofenceSyncState by geofenceManager.syncState.collectAsState()
+
 
         // 1. Dynamic HUD State synchronized with interactive demo controllers (Issue #1)
         val hudState = remember(currentRole, currentTier, isAppOffline, isSirenPlaying) {
-            val (species, distance, explanation) = when (currentTier) {
-                AlertTier.SAFE -> Triple(
-                    emptyList(),
-                    null,
-                    "Clear Zone — Continuous causal sensors indicate safe passage within 5km radius."
+            when (currentTier) {
+                AlertTier.SAFE -> MainHudUiState(
+                    currentTier = AlertTier.SAFE,
+                    targetSpecies = emptyList(),
+                    closestDistanceMeters = null,
+                    causalExplanation = "Clear Zone — Continuous causal sensors indicate safe passage within 5km radius.",
+                    isOfflineMode = isAppOffline,
+                    isSirenPlaying = isSirenPlaying,
+                    isHapticActive = false,
+                    suggestedDetour = null,
+                    activeRole = currentRole,
+                    hazardLocation = null,
+                    hazardEntityId = null,
+                    hazardRegion = null,
+                    hazardLabel = null
                 )
-                AlertTier.TIER_1_NOTICE -> Triple(
-                    listOf(WildlifeSpecies.BEAR),
-                    1800.0,
-                    "Tier 1 Notice: Approaching moderate bear migration corridor in Iwate valley."
+                AlertTier.TIER_1_NOTICE -> MainHudUiState(
+                    currentTier = AlertTier.TIER_1_NOTICE,
+                    targetSpecies = listOf(WildlifeSpecies.BEAR),
+                    closestDistanceMeters = 1800.0,
+                    causalExplanation = "Tier 1 Notice: Approaching moderate bear migration corridor in Iwate valley.",
+                    isOfflineMode = isAppOffline,
+                    isSirenPlaying = isSirenPlaying,
+                    isHapticActive = false,
+                    suggestedDetour = null,
+                    activeRole = currentRole,
+                    hazardLocation = GeoLocation(39.7180, 141.1620),
+                    hazardEntityId = "geo_jp_kaki_01",
+                    hazardRegion = ai.coexistshield.ui.map.MapRegion.JAPAN_IWATE,
+                    hazardLabel = "Iwate Bear Migration Corridor"
                 )
-                AlertTier.TIER_2_WARNING -> Triple(
-                    listOf(WildlifeSpecies.BEAR, WildlifeSpecies.TIGER),
-                    620.0,
-                    "Tier 2 Warning: New Moon night + 14 km/h westerly wind blowing toward unharvested persimmon grove 620m away."
+                AlertTier.TIER_2_WARNING -> MainHudUiState(
+                    currentTier = AlertTier.TIER_2_WARNING,
+                    targetSpecies = listOf(WildlifeSpecies.BEAR, WildlifeSpecies.TIGER),
+                    closestDistanceMeters = 620.0,
+                    causalExplanation = "Tier 2 Warning: New Moon night + 14 km/h westerly wind blowing toward unharvested persimmon grove 620m away.",
+                    isOfflineMode = isAppOffline,
+                    isSirenPlaying = isSirenPlaying,
+                    isHapticActive = false,
+                    suggestedDetour = "Bypass Forestry Route 4 via Prefectural Highway 396 (+1.2km • 0% Encounter Probability)",
+                    activeRole = currentRole,
+                    hazardLocation = GeoLocation(39.7020, 141.1520),
+                    hazardEntityId = "geo_jp_kaki_01",
+                    hazardRegion = ai.coexistshield.ui.map.MapRegion.JAPAN_IWATE,
+                    hazardLabel = "Morioka Takamatsu Persimmon Grove Corridor"
                 )
-                AlertTier.TIER_3_DANGER -> Triple(
-                    listOf(WildlifeSpecies.TIGER),
-                    180.0,
-                    "IMMEDIATE DANGER: Fresh livestock kill-site located 180m away. High probability of tiger returning within 72 hours."
+                AlertTier.TIER_3_DANGER -> MainHudUiState(
+                    currentTier = AlertTier.TIER_3_DANGER,
+                    targetSpecies = listOf(WildlifeSpecies.TIGER),
+                    closestDistanceMeters = 180.0,
+                    causalExplanation = "IMMEDIATE DANGER: Fresh livestock kill-site located 180m away. High probability of tiger returning within 72 hours.",
+                    isOfflineMode = isAppOffline,
+                    isSirenPlaying = isSirenPlaying,
+                    isHapticActive = true,
+                    suggestedDetour = "EVACUATE IMMEDIATELY: Divert 90° away from downwind scent corridor to Shelter Hub #2",
+                    activeRole = currentRole,
+                    hazardLocation = GeoLocation(0.125, 101.450),
+                    hazardEntityId = "geo_id_sumatra_01",
+                    hazardRegion = ai.coexistshield.ui.map.MapRegion.INDONESIA_SUMATRA,
+                    hazardLabel = "Bukit Kesuma Tiger Buffer Zone"
                 )
             }
-
-            val detour = when (currentTier) {
-                AlertTier.TIER_2_WARNING -> "Bypass Forestry Route 4 via Prefectural Highway 396 (+1.2km • 0% Encounter Probability)"
-                AlertTier.TIER_3_DANGER -> "EVACUATE IMMEDIATELY: Divert 90° away from downwind scent corridor to Shelter Hub #2"
-                else -> null
-            }
-
-            MainHudUiState(
-                currentTier = currentTier,
-                targetSpecies = species,
-                closestDistanceMeters = distance,
-                causalExplanation = explanation,
-                isOfflineMode = isAppOffline,
-                isSirenPlaying = isSirenPlaying,
-                isHapticActive = currentTier == AlertTier.TIER_3_DANGER,
-                suggestedDetour = detour,
-                activeRole = currentRole
-            )
         }
 
         // 2. Roadkill Lifecycle State (Issue #3)
@@ -213,10 +254,133 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
             )
         }
 
-        // 3. Map State
+        // 3. Geofences & Map State (Synchronized with Admin Console)
+        var geofenceList by remember {
+            mutableStateOf(
+                listOf(
+                    GeofenceZone(
+                        id = "geo_jp_kaki_01",
+                        tier = AlertTier.TIER_2_WARNING,
+                        targetSpecies = listOf(WildlifeSpecies.BEAR),
+                        coordinates = listOf(
+                            GeoLocation(39.7180, 141.1620),
+                            GeoLocation(39.7350, 141.1850),
+                            GeoLocation(39.7250, 141.1400),
+                            GeoLocation(39.6950, 141.1350)
+                        ),
+                        centroid = GeoLocation(39.7020, 141.1520),
+                        radiusMeters = 1800.0,
+                        causalExplanation = "Morioka Takamatsu Bear Corridor Shield (Asian Black Bear): Overripe persimmon fruit drops with westerly scent plume extending toward residential fringe.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    ),
+                    GeofenceZone(
+                        id = "geo-ai-japan-03",
+                        tier = AlertTier.TIER_1_NOTICE,
+                        targetSpecies = listOf(WildlifeSpecies.BEAR),
+                        coordinates = listOf(
+                            GeoLocation(36.650, 138.180),
+                            GeoLocation(36.675, 138.220),
+                            GeoLocation(36.640, 138.245),
+                            GeoLocation(36.620, 138.200)
+                        ),
+                        centroid = GeoLocation(36.64625, 138.21125),
+                        radiusMeters = 3500.0,
+                        causalExplanation = "Nagano Valley Bear Foraging Zone (Asian Black Bear): Clustered abandoned persimmon (kaki) trees entering peak ripeness ahead of hibernation.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    ),
+                    GeofenceZone(
+                        id = "geo_th_kui_buri_01",
+                        tier = AlertTier.TIER_3_DANGER,
+                        targetSpecies = listOf(WildlifeSpecies.ELEPHANT),
+                        coordinates = listOf(
+                            GeoLocation(12.062, 99.815),
+                            GeoLocation(12.075, 99.840),
+                            GeoLocation(12.045, 99.855),
+                            GeoLocation(12.030, 99.825)
+                        ),
+                        centroid = GeoLocation(12.052, 99.821),
+                        radiusMeters = 2800.0,
+                        causalExplanation = "Kui Buri National Park Border Shield (Asian Elephant): Commercial sugarcane and fruit plantation border attracting active elephant foraging herds.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    ),
+                    GeofenceZone(
+                        id = "geo-ai-thai-01",
+                        tier = AlertTier.TIER_3_DANGER,
+                        targetSpecies = listOf(WildlifeSpecies.ELEPHANT),
+                        coordinates = listOf(
+                            GeoLocation(12.875, 99.630),
+                            GeoLocation(12.890, 99.670),
+                            GeoLocation(12.860, 99.695),
+                            GeoLocation(12.845, 99.650)
+                        ),
+                        centroid = GeoLocation(12.8675, 99.66125),
+                        radiusMeters = 4500.0,
+                        causalExplanation = "Kaeng Krachan Eastern Buffer (Asian Elephant): High sugarcane maturation detected; breeding herd movement intersects Route 3219.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    ),
+                    GeofenceZone(
+                        id = "geo-manual-debug-01",
+                        tier = AlertTier.TIER_2_WARNING,
+                        targetSpecies = listOf(WildlifeSpecies.ELEPHANT),
+                        centroid = GeoLocation(12.820, 99.620),
+                        radiusMeters = 2500.0,
+                        causalExplanation = "Ranger Station 4 Patrol Perimeter (Asian Elephant): Manual field team patrol perimeter: Night thermal camera deployment.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    ),
+                    GeofenceZone(
+                        id = "geo_id_sumatra_01",
+                        tier = AlertTier.TIER_3_DANGER,
+                        targetSpecies = listOf(WildlifeSpecies.TIGER),
+                        centroid = GeoLocation(0.125, 101.450),
+                        radiusMeters = 3200.0,
+                        causalExplanation = "Bukit Kesuma Tiger Buffer Zone (Sumatran Tiger): Fresh livestock kill-site located; high probability of adult tiger returning within 72h window.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    ),
+                    GeofenceZone(
+                        id = "geo-ai-sumatra-02",
+                        tier = AlertTier.TIER_2_WARNING,
+                        targetSpecies = listOf(WildlifeSpecies.TIGER),
+                        centroid = GeoLocation(0.520, 101.450),
+                        radiusMeters = 4500.0,
+                        causalExplanation = "Siak-Minas Palm Border Tiger Alert (Sumatran Tiger): Recent cattle depredation report & roadkill carcass scent plume drifting towards village border.",
+                        validFrom = "2026-10-14T00:00:00Z",
+                        validUntil = "2026-10-17T00:00:00Z",
+                        generatedAt = "2026-10-14T00:00:00Z"
+                    )
+                )
+            )
+        }
+
+        // Real-time Geofence Synchronization & Proximity-based OS Quota Allocation
+        val deviceLocation = remember { GeoLocation(39.702, 141.152) }
+        LaunchedEffect(Unit) {
+            geofenceManager.startRealtimeSync(this)
+            geofenceManager.onLocationChanged(deviceLocation, forceRefresh = true)
+        }
+
+        // Whenever registeredGeofences update, reflect in geofenceList
+        LaunchedEffect(registeredGeofences) {
+            if (registeredGeofences.isNotEmpty()) {
+                geofenceList = registeredGeofences
+            }
+        }
+
         var mapLayers by remember {
             mutableStateOf(
                 setOf(
+                    MapLayerType.GEOFENCES,
                     MapLayerType.ROADKILL,
                     MapLayerType.PERSIMMON_TREES,
                     MapLayerType.ELEPHANT_CROPS,
@@ -227,6 +391,7 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
         var mapSelectedEntity by remember { mutableStateOf<ai.coexistshield.ui.map.SelectedEntityDetails?>(null) }
         val mapState = GisMapUiState(
             userLocation = GeoLocation(39.702, 141.152),
+            activeGeofences = geofenceList,
             roadkills = roadkillList,
             activeLayers = mapLayers,
             selectedEntity = mapSelectedEntity,
@@ -269,18 +434,18 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
             gcfTreesClearedCount = adminGcfFelledCount,
             gcfAttractantReductionPct = adminGcfRiskReductionPct,
             top5PercentPriorityTrees = listOf(
-                ai.coexistshield.ui.admin.PriorityKakiItem("kt_1120", "盛岡市高松3丁目12-4 • 空き家", 0.95, true, 120, "GRANTED", "PERMIT-MRK-2026-1120", 1, "ABUNDANT (Falling)",
+                ai.coexistshield.ui.admin.PriorityKakiItem("kt_1120", "Morioka City Takamatsu 3-chome 12-4 • Vacant House", 0.95, true, 120, "GRANTED", "PERMIT-MRK-2026-1120", 1, "ABUNDANT (Falling)",
                     status = if (adminFelledTreeIds.contains("kt_1120")) ai.coexistshield.model.TreeManagementStatus.FELLED else ai.coexistshield.model.TreeManagementStatus.UNMANAGED),
-                ai.coexistshield.ui.admin.PriorityKakiItem("kt_0842", "盛岡市上米内字中野 • 林縁放置果樹園", 0.91, true, 240, "ORDINANCE_CLEARANCE", "PERMIT-MRK-2026-0842", 2, "ABUNDANT",
+                ai.coexistshield.ui.admin.PriorityKakiItem("kt_0842", "Morioka City Kamiyonai Nakano • Forest Border Abandoned Orchard", 0.91, true, 240, "ORDINANCE_CLEARANCE", "PERMIT-MRK-2026-0842", 2, "ABUNDANT",
                     status = if (adminFelledTreeIds.contains("kt_0842")) ai.coexistshield.model.TreeManagementStatus.FELLED else ai.coexistshield.model.TreeManagementStatus.SCHEDULED_REMOVAL),
-                ai.coexistshield.ui.admin.PriorityKakiItem("kt_0319", "盛岡市浅岸字二ツ森 • 住宅街裏山", 0.88, true, 310, "PENDING_CONSENT", "PERMIT-MRK-2026-0319", 3, "MODERATE",
+                ai.coexistshield.ui.admin.PriorityKakiItem("kt_0319", "Morioka City Asagishi Futatsumori • Residential Mountain Border", 0.88, true, 310, "PENDING_CONSENT", "PERMIT-MRK-2026-0319", 3, "MODERATE",
                     status = if (adminFelledTreeIds.contains("kt_0319")) ai.coexistshield.model.TreeManagementStatus.FELLED else ai.coexistshield.model.TreeManagementStatus.UNMANAGED)
             )
         )
 
         if (isRestoringSession) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("セッションを復元中...")
+                Text("Restoring session...")
             }
             return@CoExistShieldTheme
         }
@@ -290,7 +455,7 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
                 authService = authService,
                 onAuthenticated = { user ->
                     establishSession(user)
-                    scope.launch { snackbarHostState.showSnackbar("ようこそ、${user.email}") }
+                    scope.launch { snackbarHostState.showSnackbar("Welcome, ${user.email}") }
                 },
                 onContinueAsGuest = { isGuest = true }
             )
@@ -365,7 +530,18 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
                 when (currentDestination) {
                     AppNavDestination.HUD -> MainHudScreen(
                         state = hudState,
-                        onOpenMapClick = { currentDestination = AppNavDestination.MAP },
+                        onOpenMapClick = {
+                            pendingMapLocation = null
+                            pendingMapEntityId = null
+                            pendingMapRegion = null
+                            currentDestination = AppNavDestination.MAP
+                        },
+                        onOpenHazardMapClick = { location, entityId, region ->
+                            pendingMapLocation = location
+                            pendingMapEntityId = entityId
+                            pendingMapRegion = region
+                            currentDestination = AppNavDestination.MAP
+                        },
                         onQuickReportClick = { currentDestination = AppNavDestination.REPORT },
                         onOfficialDispatchClick = { currentDestination = AppNavDestination.ADMIN },
                         onToggleSirenClick = { isSirenPlaying = !isSirenPlaying },
@@ -384,6 +560,9 @@ fun App(sessionStore: SessionStore = remember { InMemorySessionStore() }) {
                     )
                     AppNavDestination.MAP -> GisHazardMapScreen(
                         state = mapState,
+                        initialRegion = pendingMapRegion,
+                        initialTargetLocation = pendingMapLocation,
+                        initialSelectedEntityId = pendingMapEntityId,
                         onBackClick = { currentDestination = AppNavDestination.HUD },
                         onToggleLayer = { layer ->
                             mapLayers = if (mapLayers.contains(layer)) mapLayers - layer else mapLayers + layer
@@ -608,11 +787,11 @@ fun DemoControlBar(
                     fontWeight = FontWeight.Bold
                 )
                 TextButton(onClick = onLogoutClick) {
-                    Text("ログアウト", fontSize = 11.sp)
+                    Text("Sign Out", fontSize = 11.sp)
                 }
             } else {
                 TextButton(onClick = onLoginClick) {
-                    Text("ログイン / 登録", fontSize = 11.sp)
+                    Text("Sign In / Register", fontSize = 11.sp)
                 }
             }
 

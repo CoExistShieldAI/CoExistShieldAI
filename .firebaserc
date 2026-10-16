@@ -8,6 +8,9 @@
         "app": [
           "corald"
         ],
+        "kmp": [
+          "corald-kmp"
+        ],
         "admin": [
           "corald-admin"
         ]

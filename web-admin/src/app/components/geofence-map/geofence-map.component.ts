@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GoogleMapsModule, MapInfoWindow, MapPolygon, MapCircle, MapMarker } from '@angular/google-maps';
 import { AdminApiService } from '../../services/admin-api.service';
+import { GeocodingService } from '../../services/geocoding.service';
 import {
   AdminGeofence,
   AdminWildlifeIncident,
@@ -476,9 +477,34 @@ export interface SelectedEntity {
 
           <form (ngSubmit)="saveManualGeofence()" class="space-y-4 text-xs">
             <div>
-              <label class="block text-slate-300 font-medium mb-1">Geofence Name</label>
-              <input type="text" [(ngModel)]="newFence.name" name="name" required placeholder="e.g. Field Station 3 Thermal Perimeter"
-                class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-purple-500">
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-slate-300 font-medium">Geofence Name</label>
+                @if (isResolvingLocation()) {
+                  <span class="text-[10px] text-purple-400 animate-pulse flex items-center gap-1 font-mono">
+                    <span>🔄</span> Resolving address...
+                  </span>
+                } @else if (resolvedLocationName()) {
+                  <button type="button" (click)="applyResolvedLocationToName()"
+                    class="text-[10px] text-purple-400 hover:text-purple-300 underline flex items-center gap-1 truncate max-w-[260px]"
+                    title="Click to apply reverse-geocoded location name">
+                    <span>📍 {{ resolvedLocationName() }}</span>
+                  </button>
+                }
+              </div>
+              <div class="relative">
+                <input type="text" [(ngModel)]="newFence.name" name="name" required placeholder="e.g. Field Station 3 Thermal Perimeter"
+                  class="w-full px-3 py-2 pr-20 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-purple-500">
+                <button type="button" (click)="resolveReverseGeocode()"
+                  class="absolute right-1 top-1 bottom-1 px-2.5 rounded bg-purple-700/60 hover:bg-purple-600 text-purple-200 text-[10px] font-medium flex items-center gap-1">
+                  <span>📍 Geocode</span>
+                </button>
+              </div>
+              @if (resolvedLocationName()) {
+                <p class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                  <span class="text-slate-500">Reverse Geocoded:</span>
+                  <span class="text-purple-300 font-medium">{{ resolvedLocationName() }}</span>
+                </p>
+              }
             </div>
 
             <div class="grid grid-cols-2 gap-3">
@@ -587,6 +613,7 @@ export interface SelectedEntity {
 })
 export class GeofenceMapComponent implements OnInit {
   api = inject(AdminApiService);
+  geocodingService = inject(GeocodingService);
   @ViewChild('infoWindow') infoWindow?: MapInfoWindow;
 
   // Viewport Centering
@@ -630,6 +657,10 @@ export class GeofenceMapComponent implements OnInit {
   selectedEntity = signal<SelectedEntity | null>(null);
   showAddModal = signal<boolean>(false);
   isDrawingMode = signal<boolean>(false);
+
+  // Reverse geocoded location status & cache
+  resolvedLocationName = signal<string>('');
+  isResolvingLocation = signal<boolean>(false);
 
   // New Geofence Model
   newFence: Partial<AdminGeofence> = {
@@ -813,6 +844,7 @@ export class GeofenceMapComponent implements OnInit {
     if (this.newFence.geometry_type === 'circle') {
       this.circleLat = clickedLat;
       this.circleLng = clickedLng;
+      this.resolveReverseGeocode(clickedLat, clickedLng, true);
     } else {
       const newLine = `${clickedLat}, ${clickedLng}`;
       if (!this.polygonCoordsText.trim()) {
@@ -820,6 +852,7 @@ export class GeofenceMapComponent implements OnInit {
       } else {
         this.polygonCoordsText += `\n${newLine}`;
       }
+      this.resolveReverseGeocode(clickedLat, clickedLng, true);
     }
   }
 
@@ -831,10 +864,48 @@ export class GeofenceMapComponent implements OnInit {
   finishDrawing() {
     this.isDrawingMode.set(false);
     this.showAddModal.set(true);
+    // When finishing drawing, trigger reverse geocode for polygon or circle
+    if (this.newFence.geometry_type === 'circle') {
+      this.resolveReverseGeocode(this.circleLat, this.circleLng, true);
+    } else {
+      const coords = this.parsedPolygonCoords;
+      if (coords.length > 0) {
+        this.resolveReverseGeocode(coords[0].lat, coords[0].lng, true);
+      }
+    }
   }
 
   clearPolygonVertices() {
     this.polygonCoordsText = '';
+  }
+
+  // --- Reverse Geocoding Helpers for Geofence Naming ---
+
+  resolveReverseGeocode(lat?: number, lng?: number, updateName = true) {
+    const targetLat = lat !== undefined ? lat : Number(this.circleLat);
+    const targetLng = lng !== undefined ? lng : Number(this.circleLng);
+    if (targetLat === 0 && targetLng === 0) return;
+
+    this.isResolvingLocation.set(true);
+    this.geocodingService.reverseGeocode(targetLat, targetLng).subscribe({
+      next: (placeName) => {
+        this.resolvedLocationName.set(placeName);
+        this.isResolvingLocation.set(false);
+        if (updateName) {
+          this.applyResolvedLocationToName(placeName);
+        }
+      },
+      error: () => this.isResolvingLocation.set(false)
+    });
+  }
+
+  applyResolvedLocationToName(place?: string) {
+    const loc = place || this.resolvedLocationName();
+    if (!loc) return;
+    const species = this.newFence.target_species || 'Wildlife';
+    const isPoly = this.newFence.geometry_type === 'polygon';
+    const prefix = isPoly ? 'Polygon Shield' : 'Buffer';
+    this.newFence.name = `${prefix}: ${species} (${loc})`;
   }
 
   // --- Entity Selection & One-Click Geofence Creation ---
@@ -857,30 +928,37 @@ export class GeofenceMapComponent implements OnInit {
   createGeofenceFromEntity(ent: SelectedEntity) {
     if (ent.type === 'wildlife') {
       const w: AdminWildlifeIncident = ent.data;
+      this.circleLat = w.location.lat;
+      this.circleLng = w.location.lng;
+      this.circleRadius = w.threat_level === 'TIER_3_CRITICAL' ? 4000 : 3000;
       this.newFence = {
-        name: `Buffer: ${w.species} (${w.location.road_name || 'Encounter Interface'})`,
+        name: `Buffer: ${w.species} (${w.location.road_name || 'Resolving location...'})`,
         geometry_type: 'circle',
         threat_level: w.threat_level,
         target_species: w.species,
         reason: `Targeted defense response for empirical sighting on ${w.reported_at?.slice(0, 10)}: ${w.description || 'Reported by ' + w.reporter}`
       };
-      this.circleLat = w.location.lat;
-      this.circleLng = w.location.lng;
-      this.circleRadius = w.threat_level === 'TIER_3_CRITICAL' ? 4000 : 3000;
+      this.resolveReverseGeocode(w.location.lat, w.location.lng, true);
     } else if (ent.type === 'roadkill') {
       const rk: AdminRoadkillRecord = ent.data;
+      this.circleLat = rk.location.lat;
+      this.circleLng = rk.location.lng;
+      this.circleRadius = rk.decay_stage === 'FRESH' ? 4500 : 2500;
       this.newFence = {
-        name: `Scent-Plume Zone: ${rk.species} Carcass (${rk.decay_stage})`,
+        name: `Scent-Plume Zone: ${rk.species} Carcass (${rk.location.road_name || 'Resolving location...'})`,
         geometry_type: 'circle',
         threat_level: rk.decay_stage === 'FRESH' ? 'TIER_3_CRITICAL' : 'TIER_2_ALERT',
         target_species: rk.species.includes('Boar') || rk.species.includes('Deer') ? 'Sumatran Tiger' : 'Apex Carnivore',
         reason: `Prevent roadside ambush risk attracted by ${rk.decay_stage} ${rk.species} (~${rk.estimated_weight_kg}kg) carcass scent plume`
       };
-      this.circleLat = rk.location.lat;
-      this.circleLng = rk.location.lng;
-      this.circleRadius = rk.decay_stage === 'FRESH' ? 4500 : 2500;
+      this.resolveReverseGeocode(rk.location.lat, rk.location.lng, true);
     } else if (ent.type === 'environmental') {
       const env: AdminEnvironmentalData = ent.data;
+      const lat = env.circle_center?.lat || 12.875;
+      const lng = env.circle_center?.lng || 99.650;
+      this.circleLat = lat;
+      this.circleLng = lng;
+      this.circleRadius = env.radius_meters || 3000;
       this.newFence = {
         name: `Attractant Defense: ${env.name}`,
         geometry_type: 'circle',
@@ -888,9 +966,15 @@ export class GeofenceMapComponent implements OnInit {
         target_species: env.category === 'CROP_PHENOLOGY' ? 'Asian Elephant' : env.category === 'PERSIMMON_KAKI' ? 'Asian Black Bear' : 'Sumatran Tiger',
         reason: `Ecological crop/pasture attractant protection during active window: ${env.active_season} (Risk weight ${env.risk_weight})`
       };
-      this.circleLat = env.circle_center?.lat || 12.875;
-      this.circleLng = env.circle_center?.lng || 99.650;
-      this.circleRadius = env.radius_meters || 3000;
+      this.isResolvingLocation.set(true);
+      this.geocodingService.reverseGeocode(lat, lng).subscribe({
+        next: (placeName) => {
+          this.resolvedLocationName.set(placeName);
+          this.newFence.name = `Attractant Defense: ${env.name} (${placeName})`;
+          this.isResolvingLocation.set(false);
+        },
+        error: () => this.isResolvingLocation.set(false)
+      });
     }
 
     this.showAddModal.set(true);
@@ -923,6 +1007,7 @@ export class GeofenceMapComponent implements OnInit {
       reason: ''
     };
     this.showAddModal.set(true);
+    this.resolveReverseGeocode(this.circleLat, this.circleLng, true);
   }
 
   saveManualGeofence() {
@@ -937,6 +1022,17 @@ export class GeofenceMapComponent implements OnInit {
       toSave.circle_radius_meters = Number(this.circleRadius);
     } else {
       toSave.coordinates = this.parsedPolygonCoords;
+    }
+
+    // Ensure geofence name contains reverse-geocoded location name
+    const lat = toSave.circle_center?.lat || (toSave.coordinates && toSave.coordinates[0]?.lat) || Number(this.circleLat);
+    const lng = toSave.circle_center?.lng || (toSave.coordinates && toSave.coordinates[0]?.lng) || Number(this.circleLng);
+    const place = this.resolvedLocationName() || this.geocodingService.resolveRegionalKnowledge(lat, lng);
+
+    if (!toSave.name || toSave.name.trim() === '' || toSave.name === 'Manual Geofence') {
+      toSave.name = `Buffer: ${toSave.target_species || 'Zone'} (${place})`;
+    } else if (!toSave.name.includes(place) && !toSave.name.includes('(')) {
+      toSave.name = `${toSave.name} (${place})`;
     }
 
     this.api.createGeofence(toSave).subscribe({
