@@ -1,7 +1,8 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed, effect } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import {
   ActiveLeftTab,
   AdminTab,
@@ -29,6 +30,7 @@ import {
   WildlifeSpecies
 } from '../models/shield.model';
 import { GeofenceBridge, haversineMeters } from '../plugins/geofence-bridge.plugin';
+import { WearSync } from '../plugins/wear-sync.plugin';
 import { AuthService } from './auth.service';
 
 const OFFLINE_QUEUE_STORAGE_KEY = 'coexist_offline_incident_queue_v1';
@@ -70,7 +72,9 @@ export class ShieldStateService {
   readonly backendBaseUrl =
     typeof window !== 'undefined' && window.location.hostname === 'localhost'
       ? 'http://localhost:8080'
-      : 'https://coexistshield-backend-400266593079.asia-southeast1.run.app';
+      : ((typeof window !== 'undefined' && (window as any).COEXIST_BACKEND_URL)
+          ? (window as any).COEXIST_BACKEND_URL
+          : 'https://coexistshield-backend-400266593079.asia-southeast1.run.app');
 
   // Navigation & Responsive Layout State
   readonly activeLeftTab = signal<ActiveLeftTab>('HUD');
@@ -92,6 +96,8 @@ export class ShieldStateService {
   readonly currentTier = signal<AlertTier>('TIER_2_WARNING');
   readonly userLocation = signal<GeoLocation>({ latitude: 39.702, longitude: 141.152 });
   readonly isGpsSimulateClickMode = signal<boolean>(true);
+  readonly gpsStepSizeMeters = signal<number>(10);
+  readonly isDpadVisible = signal<boolean>(true);
   readonly nativeBridgePlatform = signal<string>(
     Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web-capacitor-bridge'
   );
@@ -240,6 +246,82 @@ export class ShieldStateService {
       validFrom: '2026-10-14T00:00:00Z',
       validUntil: '2026-10-18T00:00:00Z',
       generatedAt: '2026-10-14T00:00:00Z'
+    },
+    // Graduated Concentric Buffer Zones (Adjacent Warning & Notice Zones)
+    {
+      id: 'geo_jp_kaki_01-tier1-buffer',
+      name: 'Morioka Takamatsu Bear Corridor Shield (Tier 1 Advisory Buffer)',
+      tier: 'TIER_1_NOTICE',
+      targetSpecies: ['BEAR'],
+      coordinates: [],
+      centroid: { latitude: 39.702, longitude: 141.152 },
+      radiusMeters: 3150,
+      causalExplanation:
+        'Graduated Tier 1 advisory buffer surrounding active Morioka hazard corridor. Heightened alert when traversing surrounding suburban fringe.',
+      source: 'ai',
+      validFrom: '2026-10-14T00:00:00Z',
+      validUntil: '2026-10-18T00:00:00Z',
+      generatedAt: '2026-10-14T00:00:00Z'
+    },
+    {
+      id: 'geo_th_kui_buri_01-tier2-buffer',
+      name: 'Kui Buri National Park Border Shield (Tier 2 Warning Buffer)',
+      tier: 'TIER_2_WARNING',
+      targetSpecies: ['ELEPHANT'],
+      coordinates: [],
+      centroid: { latitude: 12.052, longitude: 99.821 },
+      radiusMeters: 4900,
+      causalExplanation:
+        'Graduated Tier 2 warning buffer surrounding active Kui Buri elephant crop-raid perimeter.',
+      source: 'ai',
+      validFrom: '2026-10-14T00:00:00Z',
+      validUntil: '2026-10-18T00:00:00Z',
+      generatedAt: '2026-10-14T00:00:00Z'
+    },
+    {
+      id: 'geo_th_kui_buri_01-tier1-buffer',
+      name: 'Kui Buri National Park Border Shield (Tier 1 Advisory Buffer)',
+      tier: 'TIER_1_NOTICE',
+      targetSpecies: ['ELEPHANT'],
+      coordinates: [],
+      centroid: { latitude: 12.052, longitude: 99.821 },
+      radiusMeters: 7280,
+      causalExplanation:
+        'Graduated Tier 1 advisory buffer surrounding Kui Buri elephant zone. Visual awareness advised.',
+      source: 'ai',
+      validFrom: '2026-10-14T00:00:00Z',
+      validUntil: '2026-10-18T00:00:00Z',
+      generatedAt: '2026-10-14T00:00:00Z'
+    },
+    {
+      id: 'geo_id_sumatra_01-tier2-buffer',
+      name: 'Bukit Kesuma Tiger Buffer Zone (Tier 2 Warning Buffer)',
+      tier: 'TIER_2_WARNING',
+      targetSpecies: ['TIGER'],
+      coordinates: [],
+      centroid: { latitude: 0.125, longitude: 101.45 },
+      radiusMeters: 5600,
+      causalExplanation:
+        'Graduated Tier 2 warning buffer surrounding Bukit Kesuma livestock kill-site.',
+      source: 'ai',
+      validFrom: '2026-10-14T00:00:00Z',
+      validUntil: '2026-10-18T00:00:00Z',
+      generatedAt: '2026-10-14T00:00:00Z'
+    },
+    {
+      id: 'geo_id_sumatra_01-tier1-buffer',
+      name: 'Bukit Kesuma Tiger Buffer Zone (Tier 1 Advisory Buffer)',
+      tier: 'TIER_1_NOTICE',
+      targetSpecies: ['TIGER'],
+      coordinates: [],
+      centroid: { latitude: 0.125, longitude: 101.45 },
+      radiusMeters: 8320,
+      causalExplanation:
+        'Graduated Tier 1 advisory buffer surrounding Bukit Kesuma tiger corridor.',
+      source: 'ai',
+      validFrom: '2026-10-14T00:00:00Z',
+      validUntil: '2026-10-18T00:00:00Z',
+      generatedAt: '2026-10-14T00:00:00Z'
     }
   ]);
 
@@ -369,6 +451,7 @@ export class ShieldStateService {
   readonly reportDecayState = signal<DecayState>('BLOATED');
   readonly reportPropertyTag = signal<PropertyContextTag>('VACANT_HOUSE');
   readonly reportNearSchoolRoute = signal<boolean>(true);
+  readonly reportPhotoBase64 = signal<string | null>(null);
   readonly offlineQueue = signal<IncidentReport[]>([]);
 
   // Admin / Official Console State
@@ -613,8 +696,49 @@ export class ShieldStateService {
     this.loadPersistedOfflineQueue();
     this.initAuthSession();
     this.initCapacitorGeofenceBridge();
+    this.initWearSync();
     this.fetchBackendGeofences();
+    this.fetchBackendAttractants();
     this.connectRealtimeGeofenceEvents();
+    this.requestRealDeviceGps();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        if (this.offlineQueue().length > 0) {
+          this.syncOfflineQueue();
+        }
+      });
+    }
+  }
+
+  /**
+   * Initializes real-time synchronization with Wear OS smartwatches via WearSync plugin.
+   * Auto-syncs HUD meter presentation, alerts, and handles wrist actions.
+   */
+  private initWearSync() {
+    // Continuous state sync effect: whenever HUD presentation or siren state changes, sync to watch
+    effect(() => {
+      const hud = this.hudPresentation();
+      const isSiren = this.isSirenPlaying();
+      WearSync.syncHudState({
+        tier: hud.tier,
+        distanceMeters: hud.closestDistanceMeters,
+        species: hud.targetSpecies,
+        isSiren: isSiren
+      }).catch(() => {
+        // Ignore errors if watch is not currently connected
+      });
+    });
+
+    // Listen for reverse actions from the Wear OS watch
+    WearSync.addListener('onWatchAction', (event) => {
+      if (event.action === 'DISMISS') {
+        this.stopSiren();
+        this.showToast('Wear OS: Alert silenced & acknowledged from wrist');
+      } else if (event.action === 'SOS') {
+        this.triggerEmergencySos();
+        this.showToast('Wear OS: Emergency SOS triggered from wrist');
+      }
+    }).catch(() => {});
   }
 
   private async initAuthSession() {
@@ -728,7 +852,10 @@ export class ShieldStateService {
         this.currentTier.set(event.tier);
         if (event.tier === 'TIER_3_DANGER') {
           this.isSirenPlaying.set(true);
-          this.playTacticalBeep();
+          this.startSirenAudio();
+          this.triggerTactileHaptics('danger');
+        } else if (event.tier === 'TIER_2_WARNING') {
+          this.triggerTactileHaptics('warning');
         }
         this.showToast(
           `⚡ Geofence ENTER [${event.tier}]: ${event.zoneName} (${event.distanceMeters}m)`
@@ -822,6 +949,90 @@ export class ShieldStateService {
     });
   }
 
+  fetchBackendAttractants() {
+    // 1. Municipal Kaki Trees (Japan - Iwate)
+    this.http.get<any>(`${this.backendBaseUrl}/api/v1/municipal/kaki/priority-layer`).subscribe({
+      next: (resp) => {
+        const trees = resp?.priorityTrees || [];
+        if (!Array.isArray(trees) || trees.length === 0) return;
+        const mappedKaki: AttractantMarkerItem[] = trees.map((t: any) => ({
+          id: t.treeId,
+          lat: t.latitude,
+          lon: t.longitude,
+          iconEmoji: '🍊',
+          title: `Priority Persimmon #${t.treeId}`,
+          subtitle: `${t.address} • ${t.distanceToSchoolRouteMeters}m to School Route`,
+          layerType: 'PERSIMMON_TREES' as MapLayerType,
+          threatTier: (t.hazardScore >= 0.85 ? 'TIER_3_DANGER' : 'TIER_2_WARNING') as AlertTier,
+          geminiBadge: `Gemini Vision: Fruit Load ${t.fruitLoad || 'ABUNDANT'} • Clearance #${t.recommendedClearanceOrder || 1}`,
+          region: 'JAPAN_IWATE' as MapRegionId,
+          radiusMeters: t.estimatedBearAttractantRadiusM || 650,
+          isResolved: t.managementStatus === 'FELLED'
+        }));
+        this.mergeAttractants(mappedKaki);
+      },
+      error: () => {}
+    });
+
+    // 2. Thailand Elephant Attractant Crop Plots
+    this.http.get<any>(`${this.backendBaseUrl}/api/v1/analytics/thailand-hec/crop-plots`).subscribe({
+      next: (resp) => {
+        const plots = resp?.plots || [];
+        if (!Array.isArray(plots) || plots.length === 0) return;
+        const mappedPlots: AttractantMarkerItem[] = plots.map((p: any) => ({
+          id: p.id,
+          lat: p.latitude,
+          lon: p.longitude,
+          iconEmoji: p.cropType === 'JACKFRUIT' ? '🍌' : '🌾',
+          title: `${p.name || 'Crop Plot'} (#${p.id})`,
+          subtitle: `${p.province || 'Prachuap Khiri Khan'} • ${p.areaHectares || 10} ha ${p.cropType}`,
+          layerType: 'ELEPHANT_CROPS' as MapLayerType,
+          threatTier: (p.alertTier || (p.activeRiskScore >= 0.8 ? 'TIER_3_DANGER' : 'TIER_2_WARNING')) as AlertTier,
+          geminiBadge: `Gemini Vision: ${p.growthStage || 'RIPENING'} • Scent Buffer ${p.scentBufferMeters || 1000}m`,
+          region: 'THAILAND_KUI_BURI' as MapRegionId,
+          radiusMeters: p.scentBufferMeters || 1000,
+          isResolved: p.growthStage === 'HARVESTED' || p.growthStage === 'HARVESTED_CLEARED'
+        }));
+        this.mergeAttractants(mappedPlots);
+      },
+      error: () => {}
+    });
+
+    // 3. Sumatra Tiger Pastures & Depredation Kill-Sites
+    this.http.get<any>(`${this.backendBaseUrl}/api/v1/analytics/sumatra-tiger/pastures`).subscribe({
+      next: (resp) => {
+        const pastures = resp?.pastures || [];
+        if (!Array.isArray(pastures) || pastures.length === 0) return;
+        const mappedPastures: AttractantMarkerItem[] = pastures.map((ps: any) => ({
+          id: ps.id,
+          lat: ps.latitude,
+          lon: ps.longitude,
+          iconEmoji: ps.isActiveKillSite ? '🐅' : '🐄',
+          title: ps.name || `Pasture #${ps.id}`,
+          subtitle: `${ps.village || 'Riau'} • ${ps.headCount || 10} ${ps.livestockType || 'Cattle'}`,
+          layerType: 'LIVESTOCK_PREDATION' as MapLayerType,
+          threatTier: (ps.isActiveKillSite ? 'TIER_3_DANGER' : (ps.activeThreatScore >= 0.7 ? 'TIER_2_WARNING' : 'TIER_1_NOTICE')) as AlertTier,
+          geminiBadge: ps.isActiveKillSite
+            ? 'Gemini Forensics: Active 72h Predator Caching Zone'
+            : 'Continuous Causal Inference: Night Corral Monitored',
+          region: 'INDONESIA_SUMATRA' as MapRegionId,
+          radiusMeters: ps.scentBufferMeters || 1200,
+          isResolved: !ps.isActiveKillSite
+        }));
+        this.mergeAttractants(mappedPastures);
+      },
+      error: () => {}
+    });
+  }
+
+  private mergeAttractants(newItems: AttractantMarkerItem[]) {
+    this.attractantMarkers.update((current) => {
+      const incomingIds = new Set(newItems.map((n) => n.id));
+      const kept = current.filter((item) => !incomingIds.has(item.id));
+      return [...newItems, ...kept];
+    });
+  }
+
   private mapBackendThreatToTier(threat?: string): AlertTier {
     if (!threat) return 'TIER_2_WARNING';
     if (threat.includes('TIER_3') || threat.includes('CRITICAL') || threat.includes('DANGER')) {
@@ -873,11 +1084,18 @@ export class ShieldStateService {
     const next = !this.isSirenPlaying();
     this.isSirenPlaying.set(next);
     if (next) {
-      this.playTacticalBeep();
+      this.startSirenAudio();
       this.showToast('🚨 High-Frequency Acoustic Deterrent Siren Activated (95dB)');
     } else {
+      this.stopSirenAudio();
       this.showToast('🔇 Deterrent Siren Muted');
     }
+  }
+
+  stopSiren() {
+    this.isSirenPlaying.set(false);
+    this.stopSirenAudio();
+    this.showToast('🔇 Deterrent Siren Stopped');
   }
 
   toggleOfflineMode() {
@@ -903,6 +1121,7 @@ export class ShieldStateService {
     const lng = customLocation ? customLocation.longitude : cfg.centerLon;
     this.mapCenter.set({ lat, lng });
     this.mapZoom.set(customLocation ? 14 : cfg.defaultZoom);
+    this.fetchBackendAttractants();
 
     if (selectEntityId) {
       const gf = this.geofences().find((g) => g.id === selectEntityId);
@@ -970,6 +1189,62 @@ export class ShieldStateService {
     }
   }
 
+  /**
+   * Nudges the simulated GPS position by a displacement vector in meters.
+   * Enables fine-grained boundary testing (e.g. stepping 10m north/south across a geofence border).
+   */
+  async stepSimulatedLocation(
+    direction: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST',
+    customStepMeters?: number,
+    panMap = false
+  ) {
+    const meters = customStepMeters ?? this.gpsStepSizeMeters();
+    const currentLoc = this.userLocation();
+    const lat = currentLoc.latitude;
+    const lng = currentLoc.longitude;
+
+    // 1 degree latitude ~= 111,320m
+    // 1 degree longitude ~= 111,320m * cos(lat)
+    const latRad = (lat * Math.PI) / 180;
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.max(0.1, Math.cos(latRad));
+
+    let dLat = 0;
+    let dLng = 0;
+
+    switch (direction) {
+      case 'NORTH':
+        dLat = meters / metersPerDegreeLat;
+        break;
+      case 'SOUTH':
+        dLat = -meters / metersPerDegreeLat;
+        break;
+      case 'EAST':
+        dLng = meters / metersPerDegreeLng;
+        break;
+      case 'WEST':
+        dLng = -meters / metersPerDegreeLng;
+        break;
+    }
+
+    const newLoc: GeoLocation = {
+      latitude: Number((lat + dLat).toFixed(6)),
+      longitude: Number((lng + dLng).toFixed(6))
+    };
+
+    if (panMap) {
+      this.mapCenter.set({ lat: newLoc.latitude, lng: newLoc.longitude });
+    }
+
+    const arrowEmoji = direction === 'NORTH' ? '⬆️' : direction === 'SOUTH' ? '⬇️' : direction === 'EAST' ? '➡️' : '⬅️';
+    await this.updateDeviceLocation(newLoc, `${arrowEmoji} ${direction} ${meters}m`);
+  }
+
+  setGpsStepSize(meters: number) {
+    this.gpsStepSizeMeters.set(meters);
+    this.showToast(`🎯 GPS Step Size set to ${meters}m`);
+  }
+
   async requestRealDeviceGps() {
     try {
       const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 });
@@ -1034,7 +1309,8 @@ export class ShieldStateService {
       region: this.selectedRegionId(),
       description: `Crowdsourced report for ${this.reportCategory()} (${this.reportSpecies()})`,
       reporterId: this.authUser()?.uid || 'usr_current_device',
-      reporterRole: this.currentRole()
+      reporterRole: this.currentRole(),
+      photoBase64: this.reportPhotoBase64() || undefined
     };
 
     if (this.reportCategory() === 'ROADKILL') {
@@ -1050,6 +1326,8 @@ export class ShieldStateService {
       };
       this.roadkills.update((list) => [newRk, ...list]);
     }
+
+    this.reportPhotoBase64.set(null);
 
     if (this.isOfflineMode()) {
       this.offlineQueue.update((q) => {
@@ -1298,6 +1576,107 @@ export class ShieldStateService {
           );
         }
       });
+  }
+
+  private sirenOscillator: OscillatorNode | null = null;
+  private sirenGain: GainNode | null = null;
+  private sirenIntervalId: any = null;
+
+  private async triggerTactileHaptics(style: 'warning' | 'danger' = 'warning') {
+    try {
+      const hud = this.hudPresentation();
+      const targetTier: AlertTier = style === 'danger' ? 'TIER_3_DANGER' : 'TIER_2_WARNING';
+
+      // 1. Mobile Phone Haptics
+      if (style === 'danger') {
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([400, 150, 400]);
+        }
+      } else {
+        await Haptics.impact({ style: ImpactStyle.Medium });
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate(200);
+        }
+      }
+
+      // 2. Wear OS Wrist Haptics (Instant trigger across all connected watches)
+      WearSync.sendImmediateAlert({
+        tier: targetTier,
+        distanceMeters: hud.closestDistanceMeters,
+        message: `${targetTier}: Wildlife incursion proximity alert`
+      }).catch(() => {});
+    } catch {
+      // Ignore vibration error on unsupported platforms
+    }
+  }
+
+  private startSirenAudio() {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!this.audioCtx) {
+        this.audioCtx = new AudioCtx();
+      }
+      const ctx = this.audioCtx!;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      this.stopSirenAudio();
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+
+      this.sirenOscillator = osc;
+      this.sirenGain = gain;
+
+      let high = false;
+      const sweep = () => {
+        if (!this.sirenOscillator) return;
+        const targetFreq = high ? 650 : 1250;
+        high = !high;
+        this.sirenOscillator.frequency.cancelScheduledValues(ctx.currentTime);
+        this.sirenOscillator.frequency.linearRampToValueAtTime(targetFreq, ctx.currentTime + 0.35);
+        this.triggerTactileHaptics('danger');
+      };
+
+      sweep();
+      this.sirenIntervalId = setInterval(sweep, 380);
+    } catch {
+      // Audio autoplay restrictions or unsupported
+    }
+  }
+
+  private stopSirenAudio() {
+    if (this.sirenIntervalId) {
+      clearInterval(this.sirenIntervalId);
+      this.sirenIntervalId = null;
+    }
+    if (this.sirenOscillator) {
+      try {
+        this.sirenOscillator.stop();
+        this.sirenOscillator.disconnect();
+      } catch {}
+      this.sirenOscillator = null;
+    }
+    if (this.sirenGain) {
+      try {
+        this.sirenGain.disconnect();
+      } catch {}
+      this.sirenGain = null;
+    }
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(0);
+    }
   }
 
   private playTacticalBeep() {

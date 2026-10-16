@@ -28,6 +28,8 @@ export class AuthValidator {
   }
 }
 
+const DEFAULT_FIREBASE_API_KEY = 'AIzaSyDUaFvULclzZTv7FMgjXoUGWiWLBhn15Yo';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -35,9 +37,19 @@ export class AuthService {
   readonly currentUser = signal<AuthUser | null>(null);
 
   private getApiKey(): string {
-    if (typeof window === 'undefined') return '';
-    const cfg = (window as any).__COEXIST_CONFIG__;
-    return cfg?.firebaseApiKey || cfg?.googleMapsApiKey || '';
+    if (typeof window === 'undefined') return DEFAULT_FIREBASE_API_KEY;
+    const w = window as any;
+    const cfg = w.__COEXIST_CONFIG__;
+    const candidate =
+      w.COEXIST_FIREBASE_API_KEY ||
+      cfg?.firebaseApiKey ||
+      w.GOOGLE_MAPS_API_KEY ||
+      cfg?.googleMapsApiKey ||
+      '';
+    if (candidate && typeof candidate === 'string' && !candidate.startsWith('__') && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+    return DEFAULT_FIREBASE_API_KEY;
   }
 
   async restoreSession(): Promise<AuthUser | null> {

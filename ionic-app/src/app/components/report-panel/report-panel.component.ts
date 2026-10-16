@@ -226,25 +226,43 @@ interface CategoryOption {
                 </div>
               </div>
 
+              <!-- Hidden native file/camera input -->
+              <input
+                #fileInput
+                type="file"
+                accept="image/*"
+                capture="environment"
+                class="hidden"
+                (change)="onPhotoSelected($event)" />
+
               <!-- Visual Camera Preview Slot -->
               <div class="p-3 rounded-xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3">
-                  <div class="w-12 h-12 rounded-xl bg-sky-950/60 border border-sky-700/50 flex items-center justify-center text-2xl">
-                    📷
-                  </div>
-                  <div>
-                    <div class="text-xs font-bold text-white">1 Field Evidence Photo Attached</div>
-                    <div class="text-[11px] font-mono text-slate-400 mt-0.5">
+                <div class="flex items-center gap-3 min-w-0">
+                  @if (photoPreviewUrl()) {
+                    <img
+                      [src]="photoPreviewUrl()"
+                      alt="Field Evidence Preview"
+                      class="w-14 h-14 rounded-xl object-cover border border-sky-500/60 shadow" />
+                  } @else {
+                    <div class="w-12 h-12 rounded-xl bg-sky-950/60 border border-sky-700/50 flex items-center justify-center text-2xl flex-shrink-0">
+                      📷
+                    </div>
+                  }
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">
+                      {{ photoPreviewUrl() ? 'Evidence Photo Attached' : 'Attach Field Photo' }}
+                    </div>
+                    <div class="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
                       📍 {{ state.userLocation().latitude.toFixed(4) }}, {{ state.userLocation().longitude.toFixed(4) }}
                     </div>
                   </div>
                 </div>
-                <div class="flex flex-col sm:flex-row gap-1.5">
+                <div class="flex flex-col sm:flex-row gap-1.5 flex-shrink-0">
                   <button
                     type="button"
-                    (click)="state.showToast('📸 Camera reopened — New field evidence photo captured.')"
-                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200 whitespace-nowrap">
-                    📸 Retake
+                    (click)="fileInput.click()"
+                    class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-[11px] font-bold text-white shadow whitespace-nowrap">
+                    {{ photoPreviewUrl() ? '📸 Retake' : '📷 Camera / Gallery' }}
                   </button>
                   <button
                     type="button"
@@ -534,7 +552,9 @@ interface CategoryOption {
 
                 <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
                   <div class="text-[10px] text-slate-400">Field Evidence</div>
-                  <div class="font-bold text-white mt-0.5">📷 1 Photo (EXIF)</div>
+                  <div class="font-bold text-white mt-0.5 truncate">
+                    {{ photoPreviewUrl() ? '📷 1 Photo (EXIF)' : '⚠️ No Photo' }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -743,8 +763,52 @@ export class ReportPanelComponent {
     }
   }
 
+  readonly photoPreviewUrl = signal<string | null>(null);
+
+  onPhotoSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1024;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          this.photoPreviewUrl.set(compressed);
+          this.state.reportPhotoBase64.set(compressed);
+          this.state.showToast('📸 Field photo captured & EXIF location locked!');
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
   submitAndReturn() {
     this.state.submitIncidentReport();
+    this.photoPreviewUrl.set(null);
     this.currentStep.set(1);
     if (!this.state.isOfflineMode()) {
       this.state.activeLeftTab.set('HUD');

@@ -12,9 +12,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Optional runtime configuration file -->
+  <script src="config.js"></script>
   <script>
     window.COEXIST_FIREBASE_API_KEY = window.COEXIST_FIREBASE_API_KEY || "__COEXIST_FIREBASE_API_KEY__";
     window.GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || "__GOOGLE_MAPS_API_KEY__";
+    if (!window.COEXIST_FIREBASE_API_KEY || window.COEXIST_FIREBASE_API_KEY.startsWith('__')) {
+      window.COEXIST_FIREBASE_API_KEY = "AIzaSyDUaFvULclzZTv7FMgjXoUGWiWLBhn15Yo";
+    }
   </script>
   <!-- Google Maps JavaScript API (injected at build/deploy time via scripts/render_ionic_config.js) -->
   <script src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_API_KEY__&libraries=geometry,drawing,places"></script>

@@ -19,6 +19,7 @@ if (!targetFile) {
 
 let mapsKey = (process.env.GOOGLE_MAPS_API_KEY || '').trim();
 let firebaseKey = (process.env.COEXIST_FIREBASE_API_KEY || '').trim();
+let backendUrl = (process.env.COEXIST_BACKEND_URL || '').trim();
 
 const envPaths = [
   path.resolve(cwd, 'ionic-app/.env'),
@@ -44,19 +45,32 @@ for (const p of envPaths) {
         if (!firebaseKey && keyName === 'COEXIST_FIREBASE_API_KEY') {
           firebaseKey = keyVal;
         }
+        if (!backendUrl && keyName === 'COEXIST_BACKEND_URL') {
+          backendUrl = keyVal;
+        }
       }
     }
   }
 }
 
-if (mapsKey) {
-  if (process.env.GITHUB_ACTIONS === 'true') {
-    console.log(`::add-mask::${mapsKey}`);
-  }
-  console.log(`Injecting provided GOOGLE_MAPS_API_KEY into ${targetFile}...`);
-} else {
-  console.warn('::warning::GOOGLE_MAPS_API_KEY is empty or not set. Replacing placeholder with empty string.');
+const DEFAULT_FIREBASE_KEY = 'AIzaSyDUaFvULclzZTv7FMgjXoUGWiWLBhn15Yo';
+const DEFAULT_MAPS_KEY = 'AIzaSyBEhSnPw0oqxK_KZ0K4s8pZSBvVO5COg8o';
+
+if (!firebaseKey) {
+  console.log('Notice: COEXIST_FIREBASE_API_KEY not provided in environment; using project default key.');
+  firebaseKey = DEFAULT_FIREBASE_KEY;
 }
+
+if (!mapsKey) {
+  console.log('Notice: GOOGLE_MAPS_API_KEY not provided in environment; using default key.');
+  mapsKey = DEFAULT_MAPS_KEY;
+}
+
+if (process.env.GITHUB_ACTIONS === 'true') {
+  if (mapsKey) console.log(`::add-mask::${mapsKey}`);
+  if (firebaseKey) console.log(`::add-mask::${firebaseKey}`);
+}
+console.log(`Injecting configuration into ${targetFile}...`);
 
 let content = fs.readFileSync(targetFile, 'utf8');
 content = content.replace(/__GOOGLE_MAPS_API_KEY__/g, mapsKey);
@@ -65,7 +79,7 @@ fs.writeFileSync(targetFile, content, 'utf8');
 
 const distDir = path.dirname(targetFile);
 const configJsPath = path.join(distDir, 'config.js');
-const configJsContent = `// Generated at build/deploy time (scripts/render_ionic_config.js)\nwindow.COEXIST_FIREBASE_API_KEY = ${JSON.stringify(firebaseKey)};\nwindow.GOOGLE_MAPS_API_KEY = ${JSON.stringify(mapsKey)};\n`;
+const configJsContent = `// Generated at build/deploy time (scripts/render_ionic_config.js)\nwindow.COEXIST_FIREBASE_API_KEY = ${JSON.stringify(firebaseKey)};\nwindow.GOOGLE_MAPS_API_KEY = ${JSON.stringify(mapsKey)};\nwindow.COEXIST_BACKEND_URL = ${JSON.stringify(backendUrl)};\n`;
 fs.writeFileSync(configJsPath, configJsContent, 'utf8');
 
 console.log(`Successfully rendered configuration in ${targetFile} and ${configJsPath}`);
