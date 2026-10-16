@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
@@ -102,8 +101,8 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 		t.Errorf("expected ID 'wildlife-custom-01', got: %s", createdWildlife.ID)
 	}
 
-	// Wait briefly for async persistence goroutine to finish
-	time.Sleep(50 * time.Millisecond)
+	// Wait deterministically for async persistence goroutine to finish
+	store.WaitForPersistence()
 
 	// Verify custom wildlife exists in docs
 	found := false
@@ -159,7 +158,7 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 		t.Errorf("expected ID 'weather-custom-station-01', got: %s", createdWeather.ID)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	store.WaitForPersistence()
 
 	// Verify new store restored environmental and weather as well
 	restartedStore := NewStore()
@@ -174,7 +173,7 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 
 	// 5. Test Delete persistence
 	store.DeleteWildlife("wildlife-custom-01")
-	time.Sleep(50 * time.Millisecond)
+	store.WaitForPersistence()
 
 	postDeleteStore := NewStore()
 	_ = p.RestoreOrSeed(ctx, postDeleteStore)

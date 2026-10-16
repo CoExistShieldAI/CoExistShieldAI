@@ -64,6 +64,13 @@ func (c *LRUGeocodeCache) Set(key, placeName string) {
 	c.items[key] = elem
 }
 
+func (c *LRUGeocodeCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = make(map[string]*list.Element)
+	c.evictList.Init()
+}
+
 var (
 	geocodingHTTPClient = &http.Client{Timeout: 2500 * time.Millisecond}
 	globalGeocodeCache  = NewLRUGeocodeCache(1000)

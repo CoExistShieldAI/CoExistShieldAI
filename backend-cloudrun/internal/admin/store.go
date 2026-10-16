@@ -23,6 +23,12 @@ type Store struct {
 	userCount       int
 	isRecalculating bool
 	persistence     *FirestorePersistence
+	persistWg       sync.WaitGroup
+}
+
+// WaitForPersistence blocks until all background Firestore persistence operations complete.
+func (s *Store) WaitForPersistence() {
+	s.persistWg.Wait()
 }
 
 func NewStore() *Store {
@@ -61,7 +67,9 @@ func (s *Store) persistGeofence(g AdminGeofence) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.SaveGeofence(ctx, g)
@@ -74,7 +82,9 @@ func (s *Store) persistDeleteGeofence(id string) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.DeleteGeofence(ctx, id)
@@ -87,7 +97,9 @@ func (s *Store) persistWildlife(w AdminWildlifeIncident) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.SaveWildlife(ctx, w)
@@ -100,7 +112,9 @@ func (s *Store) persistDeleteWildlife(id string) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.DeleteWildlife(ctx, id)
@@ -113,7 +127,9 @@ func (s *Store) persistRoadkill(rk AdminRoadkillRecord) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.SaveRoadkill(ctx, rk)
@@ -126,7 +142,9 @@ func (s *Store) persistDeleteRoadkill(id string) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.DeleteRoadkill(ctx, id)
@@ -139,7 +157,9 @@ func (s *Store) persistEnvironmental(env AdminEnvironmentalData) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.SaveEnvironmental(ctx, env)
@@ -152,7 +172,9 @@ func (s *Store) persistDeleteEnvironmental(id string) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.DeleteEnvironmental(ctx, id)
@@ -165,7 +187,9 @@ func (s *Store) persistWeather(w AdminWeatherData) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.SaveWeather(ctx, w)
@@ -178,7 +202,9 @@ func (s *Store) persistDeleteWeather(id string) {
 	p := s.persistence
 	s.mu.RUnlock()
 	if p != nil {
+		s.persistWg.Add(1)
 		go func() {
+			defer s.persistWg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = p.DeleteWeather(ctx, id)

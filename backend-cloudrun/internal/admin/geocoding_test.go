@@ -139,6 +139,7 @@ func TestReverseGeocode_ExternalAPISuccessAndLRUCache(t *testing.T) {
 
 	t.Setenv("GEOCODING_BASE_URL", ts.URL)
 	t.Setenv("GEOCODING_API_KEY", "test-key-123")
+	globalGeocodeCache.Clear()
 
 	lat, lng := 48.8584, 2.2945
 	result1 := ReverseGeocode(lat, lng)

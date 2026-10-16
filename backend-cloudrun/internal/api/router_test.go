@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1767,13 +1768,47 @@ func TestGetActiveGeofences_LimitAndSort(t *testing.T) {
 	}
 }
 
+type safeSSEWriter struct {
+	mu     sync.Mutex
+	header http.Header
+	buf    bytes.Buffer
+}
+
+func newSafeSSEWriter() *safeSSEWriter {
+	return &safeSSEWriter{
+		header: make(http.Header),
+	}
+}
+
+func (s *safeSSEWriter) Header() http.Header {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.header
+}
+
+func (s *safeSSEWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *safeSSEWriter) WriteHeader(statusCode int) {}
+
+func (s *safeSSEWriter) Flush() {}
+
+func (s *safeSSEWriter) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
 func TestGeofenceEvents_SSE(t *testing.T) {
 	router := setupTestServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/api/v1/geofences/events", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
+	w := newSafeSSEWriter()
 
 	done := make(chan struct{})
 	go func() {
@@ -1797,7 +1832,7 @@ func TestGeofenceEvents_SSE(t *testing.T) {
 	cancel()
 	<-done
 
-	body := w.Body.String()
+	body := w.String()
 	if !strings.Contains(body, "CONNECTED") {
 		t.Errorf("Expected SSE stream to contain CONNECTED event, got: %s", body)
 	}
