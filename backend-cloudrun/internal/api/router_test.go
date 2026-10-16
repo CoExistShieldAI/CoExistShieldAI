@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1244,6 +1245,7 @@ func TestGetIncidentsEndpoint(t *testing.T) {
 func TestSubmitIncidentEndpoint(t *testing.T) {
 	router := setupTestServer()
 
+	// Test 1: Incident submitted without photo evidence should be UNVERIFIED with Confidence 0.0
 	newIncident := model.IncidentDto{
 		Category: "WILDLIFE_SIGHTING",
 		Species:  "BEAR",
@@ -1278,11 +1280,45 @@ func TestSubmitIncidentEndpoint(t *testing.T) {
 	if created.GeminiTriageResult == nil {
 		t.Fatalf("expected Gemini triage result attached")
 	}
-	if created.GeminiTriageResult.ModelUsed != "gemini-3.8-flash" {
-		t.Errorf("expected gemini-3.8-flash, got %s", created.GeminiTriageResult.ModelUsed)
+	if created.VerificationStatus != "UNVERIFIED" {
+		t.Errorf("expected UNVERIFIED without photo, got %s", created.VerificationStatus)
 	}
-	if created.GeminiTriageResult.Confidence < 0.90 {
-		t.Errorf("expected confidence >= 0.90, got %f", created.GeminiTriageResult.Confidence)
+	if created.GeminiTriageResult.Confidence != 0.0 {
+		t.Errorf("expected confidence == 0.0 without photo, got %f", created.GeminiTriageResult.Confidence)
+	}
+
+	// Test 2: Incident submitted with photo evidence triggers Gemini triage and verification
+	photoIncident := model.IncidentDto{
+		Category:    "WILDLIFE_SIGHTING",
+		Species:     "BEAR",
+		PhotoBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+		Location: model.GeoLocationDto{
+			Latitude:  39.7050,
+			Longitude: 141.1510,
+		},
+		Region:       "JAPAN",
+		Description:  "Photo of adult Asian black bear on hillside.",
+		ReporterId:   "usr_test_102",
+		ReporterRole: "CITIZEN",
+	}
+	photoBytes, _ := json.Marshal(photoIncident)
+	pReq := httptest.NewRequest("POST", "/api/v1/incidents", bytes.NewReader(photoBytes))
+	pReq.Header.Set("Content-Type", "application/json")
+	pW := httptest.NewRecorder()
+	router.ServeHTTP(pW, pReq)
+
+	if pW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created for photo incident, got %d", pW.Code)
+	}
+	var photoCreated model.IncidentDto
+	if err := json.Unmarshal(pW.Body.Bytes(), &photoCreated); err != nil {
+		t.Fatalf("failed to decode photo incident: %v", err)
+	}
+	if photoCreated.GeminiTriageResult.Confidence < 0.70 {
+		t.Errorf("expected verified confidence >= 0.70 with photo, got %f", photoCreated.GeminiTriageResult.Confidence)
+	}
+	if photoCreated.VerificationStatus != "VERIFIED" {
+		t.Errorf("expected VERIFIED status with photo triage, got %s", photoCreated.VerificationStatus)
 	}
 }
 
@@ -1732,15 +1768,51 @@ func TestGetActiveGeofences_LimitAndSort(t *testing.T) {
 	}
 }
 
+type safeSSEWriter struct {
+	mu     sync.Mutex
+	header http.Header
+	buf    bytes.Buffer
+}
+
+func newSafeSSEWriter() *safeSSEWriter {
+	return &safeSSEWriter{
+		header: make(http.Header),
+	}
+}
+
+func (s *safeSSEWriter) Header() http.Header {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.header
+}
+
+func (s *safeSSEWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *safeSSEWriter) WriteHeader(statusCode int) {}
+
+func (s *safeSSEWriter) Flush() {}
+
+func (s *safeSSEWriter) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
 func TestGeofenceEvents_SSE(t *testing.T) {
 	router := setupTestServer()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := httptest.NewRequest("GET", "/api/v1/geofences/events", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
+	w := newSafeSSEWriter()
 
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		router.ServeHTTP(w, req)
 	}()
 
@@ -1758,8 +1830,9 @@ func TestGeofenceEvents_SSE(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	cancel()
+	<-done
 
-	body := w.Body.String()
+	body := w.String()
 	if !strings.Contains(body, "CONNECTED") {
 		t.Errorf("Expected SSE stream to contain CONNECTED event, got: %s", body)
 	}

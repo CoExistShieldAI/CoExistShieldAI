@@ -143,7 +143,86 @@ func NewRouter(
 				}()
 			}
 		})
+
+		// Real-time synchronization: Wire emergency broadcasts to Geofence EventHub (SSE push to all clients)
+		r.adminHandler.SetBroadcastListener(func(req admin.EmergencyBroadcastRequest, broadcastID string, recipients int) {
+			tier := "TIER_2_WARNING"
+			if strings.EqualFold(req.Priority, "URGENT") {
+				tier = "TIER_3_DANGER"
+			}
+			r.geofenceEngine.GetEventHub().Broadcast(model.GeofenceEvent{
+				Type:       "EMERGENCY_BROADCAST",
+				Action:     "broadcast",
+				GeofenceID: req.GeofenceID,
+				Tier:       tier,
+				Message:    fmt.Sprintf("[%s] %s: %s", req.Priority, req.Title, req.Body),
+				Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			})
+			log.Printf("[Emergency Broadcast] Broadcast %s dispatched (tier: %s, estimated recipients: %d)", broadcastID, tier, recipients)
+		})
 	}
+
+	// Real-time dynamic GIS attractants provider: binds live Kaki, Carcasses, and Crops to BigQuery GIS
+	if r.bigqueryReplicator != nil {
+			r.bigqueryReplicator.SetAttractantProvider(func() (kaki []ml.AttractantFeaturePoint, carcasses []ml.AttractantFeaturePoint, crops []ml.AttractantFeaturePoint) {
+				// 1. Dynamic Kaki persimmon trees
+				if r.complianceEngine != nil {
+					if resp, err := r.complianceEngine.GetPriorityKakiLayer("03201"); err == nil && resp != nil {
+						for _, t := range resp.PriorityTrees {
+							if t.ManagementStatus != "FELLED" {
+								kaki = append(kaki, ml.AttractantFeaturePoint{
+									Type:      "KAKI",
+									Latitude:  t.Latitude,
+									Longitude: t.Longitude,
+									Weight:    t.HazardScore,
+								})
+							}
+						}
+					}
+				}
+
+				// 2. Dynamic Carcasses from roadkill records
+				r.mu.RLock()
+				for _, rk := range r.roadkills {
+					if !strings.EqualFold(rk.ClearanceStatus, "CLEARED") && rk.Location.Latitude != 0 {
+						carcasses = append(carcasses, ml.AttractantFeaturePoint{
+							Type:      "CARCASS",
+							Latitude:  rk.Location.Latitude,
+							Longitude: rk.Location.Longitude,
+							Weight:    rk.AttractantThreatScore,
+						})
+					}
+				}
+				r.mu.RUnlock()
+
+				// 3. Dynamic Elephant crops & Tiger kill-sites
+				if r.elephantEngine != nil {
+					for _, p := range r.elephantEngine.GetRegisteredPlots() {
+						if p.GrowthStage != "HARVESTED_CLEARED" {
+							crops = append(crops, ml.AttractantFeaturePoint{
+								Type:      "CROP",
+								Latitude:  p.Latitude,
+								Longitude: p.Longitude,
+								Weight:    p.ActiveRiskScore,
+							})
+						}
+					}
+				}
+				if r.tigerEngine != nil {
+					for _, enc := range r.tigerEngine.GetEnclosures() {
+						if enc.IsActiveKillSite {
+							carcasses = append(carcasses, ml.AttractantFeaturePoint{
+								Type:      "CARCASS",
+								Latitude:  enc.Latitude,
+								Longitude: enc.Longitude,
+								Weight:    enc.ActiveThreatScore,
+							})
+						}
+					}
+				}
+				return kaki, carcasses, crops
+			})
+		}
 
 
 	// Seed data is ONLY loaded in development / demo mode or test runs (never in bare production)
@@ -176,6 +255,307 @@ func (r *Router) InitAdminPersistence(projectID string) {
 			fmt.Printf("[Router] Admin persistence successfully synchronized with Firestore for project %s\n", projectID)
 		}
 	}
+}
+
+// InitDomainPersistence wires Elephant, Tiger, and Compliance domain engines to Firestore
+func (r *Router) InitDomainPersistence(projectID string) {
+	firestoreRepo := repository.NewFirestoreRepository(projectID)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// 1. Elephant Crop Plots
+	if r.elephantEngine != nil {
+		if rawPlots, err := firestoreRepo.ListCropPlots(ctx); err == nil && len(rawPlots) > 0 {
+			plots := make([]elephant.ElephantCropPlot, 0, len(rawPlots))
+			for _, m := range rawPlots {
+				p := elephant.ElephantCropPlot{
+					ID:                    fmt.Sprint(m["id"]),
+					Name:                  fmt.Sprint(m["name"]),
+					Province:              fmt.Sprint(m["province"]),
+					ParkBoundary:          fmt.Sprint(m["parkBoundary"]),
+					CropType:              fmt.Sprint(m["cropType"]),
+					GrowthStage:           fmt.Sprint(m["growthStage"]),
+					Latitude:              toFloat(m["latitude"]),
+					Longitude:             toFloat(m["longitude"]),
+					AreaHectares:          toFloat(m["areaHectares"]),
+					DistanceToForestEdgeM: toFloat(m["distanceToForestEdgeM"]),
+					AromaVolatilityIndex:  toFloat(m["aromaVolatilityIndex"]),
+					MaturityScore:         toFloat(m["maturityScore"]),
+					ActiveRiskScore:       toFloat(m["activeRiskScore"]),
+					ScentBufferMeters:     toFloat(m["scentBufferMeters"]),
+					UpdatedAt:             fmt.Sprint(m["updatedAt"]),
+				}
+				plots = append(plots, p)
+			}
+			r.elephantEngine.LoadPlots(plots)
+			log.Printf("[DomainPersistence] Loaded %d elephant crop plots from Firestore", len(plots))
+		}
+		r.elephantEngine.SetPersistenceListener(func(plot elephant.ElephantCropPlot) {
+			pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer pCancel()
+			if err := firestoreRepo.SaveCropPlot(pCtx, plot.ID, plot.Name, plot.Province, plot.ParkBoundary, plot.CropType, plot.GrowthStage, plot.UpdatedAt, plot.Latitude, plot.Longitude, plot.AreaHectares, plot.DistanceToForestEdgeM, plot.AromaVolatilityIndex, plot.MaturityScore, plot.ActiveRiskScore, plot.ScentBufferMeters); err != nil {
+				log.Printf("[DomainPersistence] Failed to persist crop plot %s: %v", plot.ID, err)
+			}
+		})
+	}
+
+	// 2. Tiger Livestock Enclosures
+	if r.tigerEngine != nil {
+		if rawEncs, err := firestoreRepo.ListLivestockEnclosures(ctx); err == nil && len(rawEncs) > 0 {
+			encs := make([]tiger.LivestockEnclosure, 0, len(rawEncs))
+			for _, m := range rawEncs {
+				enc := tiger.LivestockEnclosure{
+					ID:                    fmt.Sprint(m["id"]),
+					Name:                  fmt.Sprint(m["name"]),
+					Province:              fmt.Sprint(m["province"]),
+					Village:               fmt.Sprint(m["village"]),
+					LivestockType:         fmt.Sprint(m["livestockType"]),
+					HeadCount:             toInt(m["headCount"]),
+					HasNightCorral:        toBool(m["hasNightCorral"]),
+					IsActiveKillSite:      toBool(m["isActiveKillSite"]),
+					Latitude:              toFloat(m["latitude"]),
+					Longitude:             toFloat(m["longitude"]),
+					DistanceToForestEdgeM: toFloat(m["distanceToForestEdgeM"]),
+					HoursSinceKill:        toFloat(m["hoursSinceKill"]),
+					ReturnProbability:     toFloat(m["returnProbability"]),
+					ActiveThreatScore:     toFloat(m["activeThreatScore"]),
+					ScentBufferMeters:     toFloat(m["scentBufferMeters"]),
+					ForensicNotes:         fmt.Sprint(m["forensicNotes"]),
+					UpdatedAt:             fmt.Sprint(m["updatedAt"]),
+				}
+				encs = append(encs, enc)
+			}
+			r.tigerEngine.LoadEnclosures(encs)
+			log.Printf("[DomainPersistence] Loaded %d tiger livestock enclosures from Firestore", len(encs))
+		}
+		r.tigerEngine.SetPersistenceListener(func(enc tiger.LivestockEnclosure) {
+			pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer pCancel()
+			if err := firestoreRepo.SaveLivestockEnclosure(pCtx, enc.ID, enc.Name, enc.Province, enc.Village, enc.LivestockType, enc.ForensicNotes, enc.UpdatedAt, enc.HeadCount, enc.HasNightCorral, enc.IsActiveKillSite, enc.Latitude, enc.Longitude, enc.DistanceToForestEdgeM, enc.HoursSinceKill, enc.ReturnProbability, enc.ActiveThreatScore, enc.ScentBufferMeters); err != nil {
+				log.Printf("[DomainPersistence] Failed to persist livestock enclosure %s: %v", enc.ID, err)
+			}
+		})
+	}
+
+	// 3. Municipal Kaki Trees & Felling Logs
+	if r.complianceEngine != nil {
+		if rawTrees, err := firestoreRepo.ListMunicipalKakiTrees(ctx); err == nil && len(rawTrees) > 0 {
+			trees := make([]compliance.MunicipalPriorityKakiTree, 0, len(rawTrees))
+			for _, m := range rawTrees {
+				tree := compliance.MunicipalPriorityKakiTree{
+					TreeID:                         fmt.Sprint(m["treeId"]),
+					Address:                        fmt.Sprint(m["address"]),
+					Latitude:                       toFloat(m["latitude"]),
+					Longitude:                      toFloat(m["longitude"]),
+					HazardScore:                    toFloat(m["hazardScore"]),
+					IsTop5Percent:                  toBool(m["isTop5Percent"]),
+					DistanceToSchoolRouteMeters:    toInt(m["distanceToSchoolRouteMeters"]),
+					EstimatedBearAttractantRadiusM: toInt(m["estimatedBearAttractantRadiusM"]),
+					OwnerConsentStatus:             fmt.Sprint(m["ownerConsentStatus"]),
+					PermitID:                       fmt.Sprint(m["permitId"]),
+					ManagementStatus:               fmt.Sprint(m["managementStatus"]),
+					RecommendedClearanceOrder:      toInt(m["recommendedClearanceOrder"]),
+					AssignedSquad:                  fmt.Sprint(m["assignedSquad"]),
+					FruitLoad:                      fmt.Sprint(m["fruitLoad"]),
+				}
+				trees = append(trees, tree)
+			}
+			r.complianceEngine.LoadTrees(trees)
+			log.Printf("[DomainPersistence] Loaded %d municipal kaki trees from Firestore", len(trees))
+		}
+		r.complianceEngine.SetPersistenceListener(func(tree compliance.MunicipalPriorityKakiTree, logEntry *compliance.FellingAuditLog) {
+			pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer pCancel()
+			if err := firestoreRepo.SaveMunicipalKakiTree(pCtx, tree.TreeID, tree.Address, tree.OwnerConsentStatus, tree.PermitID, tree.ManagementStatus, tree.AssignedSquad, tree.FruitLoad, tree.Latitude, tree.Longitude, tree.HazardScore, tree.IsTop5Percent, tree.DistanceToSchoolRouteMeters, tree.EstimatedBearAttractantRadiusM, tree.RecommendedClearanceOrder); err != nil {
+				log.Printf("[DomainPersistence] Failed to persist kaki tree %s: %v", tree.TreeID, err)
+			}
+			if logEntry != nil {
+				if err := firestoreRepo.SaveFellingAuditLog(pCtx, logEntry.LogID, logEntry.TreeID, logEntry.PermitID, logEntry.OfficerID, logEntry.Action, logEntry.SchoolDistanceM, logEntry.RiskDropPct, logEntry.BiomassKg); err != nil {
+					log.Printf("[DomainPersistence] Failed to persist felling audit log %s: %v", logEntry.LogID, err)
+				}
+			}
+		})
+	}
+	log.Printf("[DomainPersistence] Firestore listeners wired for elephant, tiger, and compliance engines (project: %s)", projectID)
+}
+
+// InitMLPersistence hydrates the continuous retraining ML pipeline from Firestore / GCS and registers persistence hooks.
+func (r *Router) InitMLPersistence(projectID string) {
+	if r.mlPipeline == nil {
+		return
+	}
+	firestoreRepo := repository.NewFirestoreRepository(projectID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Restore latest promoted model checkpoint
+	if modelBytes, err := firestoreRepo.GetLatestMLModel(ctx); err == nil && len(modelBytes) > 0 {
+		if err := r.mlPipeline.LoadModelFromJSON(modelBytes); err == nil {
+			active := r.mlPipeline.ActiveModel()
+			log.Printf("[MLPersistence] Loaded active model checkpoint %s (AUC: %.3f) from Firestore", active.Version, active.Metrics.AucRoc)
+		} else {
+			log.Printf("[MLPersistence] Warning: Failed to parse Firestore model JSON: %v", err)
+		}
+	} else {
+		log.Printf("[MLPersistence] No promoted model in Firestore yet; using baseline model (%s)", r.mlPipeline.ActiveModel().Version)
+	}
+
+	// 2. Restore historical retraining results
+	if rawHistory, err := firestoreRepo.ListMLRetrainHistory(ctx); err == nil && len(rawHistory) > 0 {
+		history := make([]ml.RetrainResult, 0, len(rawHistory))
+		for _, raw := range rawHistory {
+			var res ml.RetrainResult
+			if err := json.Unmarshal([]byte(raw), &res); err == nil {
+				history = append(history, res)
+			}
+		}
+		if len(history) > 0 {
+			r.mlPipeline.LoadHistory(history)
+			log.Printf("[MLPersistence] Loaded %d retraining history records from Firestore", len(history))
+		}
+	}
+
+	// 3. Restore persisted training samples
+	if rawSamples, err := firestoreRepo.ListMLTrainingSamples(ctx); err == nil && len(rawSamples) > 0 {
+		samples := make([]ml.TrainingSample, 0, len(rawSamples))
+		for _, raw := range rawSamples {
+			var s ml.TrainingSample
+			if err := json.Unmarshal([]byte(raw), &s); err == nil {
+				samples = append(samples, s)
+			}
+		}
+		if len(samples) > 0 {
+			total := r.mlPipeline.LoadSamples(samples)
+			log.Printf("[MLPersistence] Restored %d training samples from Firestore (total in store: %d)", len(samples), total)
+		}
+	}
+
+	// 4. Register listener for new training samples
+	r.mlPipeline.SetSampleListener(func(sample ml.TrainingSample) {
+		pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer pCancel()
+		sampleBytes, err := json.Marshal(sample)
+		if err != nil {
+			return
+		}
+		sampleID := fmt.Sprintf("sample-%d", time.Now().UnixNano())
+		if err := firestoreRepo.SaveMLTrainingSample(pCtx, sampleBytes, sampleID); err != nil {
+			log.Printf("[MLPersistence] Failed to persist training sample: %v", err)
+		}
+	})
+
+	// 5. Register listener for promoted models and retraining results
+	modelsBucket := os.Getenv("ML_MODELS_BUCKET")
+	if modelsBucket == "" {
+		modelsBucket = os.Getenv("GCS_MEDIA_BUCKET")
+	}
+
+	r.mlPipeline.SetPersistenceListener(func(active ml.IncursionModel, result ml.RetrainResult) {
+		pCtx, pCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer pCancel()
+
+		// Serialize result and save to history
+		if resBytes, err := json.Marshal(result); err == nil {
+			if err := firestoreRepo.SaveMLRetrainResult(pCtx, resBytes, result.RunID, result.ActiveModelVersion, result.Trigger, result.PromotedToProd, result.TrainedAt.Format(time.RFC3339)); err != nil {
+				log.Printf("[MLPersistence] Failed to persist retrain result %s: %v", result.RunID, err)
+			}
+		}
+
+		// If candidate was promoted, archive model checkpoint
+		if result.PromotedToProd {
+			modelBytes, err := json.MarshalIndent(result.CandidateModel, "", "  ")
+			if err != nil {
+				log.Printf("[MLPersistence] Failed to marshal promoted model %s: %v", result.CandidateModel.Version, err)
+				return
+			}
+
+			// Archive to Firestore
+			if err := firestoreRepo.SaveMLModelCheckpoint(pCtx, modelBytes, result.CandidateModel.Version, result.CandidateModel.TrainedAt.Format(time.RFC3339), result.CandidateModel.Metrics.AucRoc, result.CandidateModel.Metrics.PrecisionTop20, result.CandidateModel.TrainingSampleSize); err != nil {
+				log.Printf("[MLPersistence] Failed to save promoted model checkpoint to Firestore: %v", err)
+			} else {
+				log.Printf("[MLPersistence] Successfully archived promoted model checkpoint %s to Firestore", result.CandidateModel.Version)
+			}
+
+			// Archive to Google Cloud Storage if bucket configured
+			if modelsBucket != "" {
+				versionObj := fmt.Sprintf("models/incursion_%s.json", result.CandidateModel.Version)
+				latestObj := "models/incursion_latest.json"
+				if u, err := admin.UploadToGCS(modelsBucket, versionObj, "application/json", modelBytes); err == nil {
+					log.Printf("[MLPersistence] Uploaded model checkpoint to GCS: %s", u)
+				} else {
+					log.Printf("[MLPersistence] Failed to upload model to GCS (%s): %v", versionObj, err)
+				}
+				_, _ = admin.UploadToGCS(modelsBucket, latestObj, "application/json", modelBytes)
+			}
+		}
+	})
+	log.Printf("[MLPersistence] Firestore & GCS persistence listeners wired for continuous retraining pipeline (project: %s)", projectID)
+}
+
+func toFloat(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	default:
+		return 0.0
+	}
+}
+
+func toInt(v interface{}) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	default:
+		return 0
+	}
+}
+
+func toBool(v interface{}) bool {
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return false
+}
+
+func computeRoadkillThreatScore(species string, decay string) float64 {
+	decayBonus := 0.25
+	switch strings.ToUpper(decay) {
+	case "BLOATED":
+		decayBonus = 0.45 // Peak olfactory plume
+	case "DECOMPOSING":
+		decayBonus = 0.35
+	case "FRESH":
+		decayBonus = 0.25
+	case "SKELETAL":
+		decayBonus = 0.10
+	}
+
+	speciesLure := 0.20
+	upperSpecies := strings.ToUpper(species)
+	if strings.Contains(upperSpecies, "BOAR") || strings.Contains(upperSpecies, "DEER") {
+		speciesLure = 0.45 // High trophic value lure for apex carnivores
+	} else if strings.Contains(upperSpecies, "BEAR") || strings.Contains(upperSpecies, "TIGER") {
+		speciesLure = 0.35
+	}
+
+	total := decayBonus + speciesLure
+	if total > 0.98 {
+		total = 0.98
+	}
+	if total < 0.15 {
+		total = 0.15
+	}
+	return math.Round(total*100.0) / 100.0
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -1409,23 +1789,82 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 	if dto.Region == "" {
 		dto.Region = "JAPAN"
 	}
-	if dto.VerificationStatus == "" {
-		dto.VerificationStatus = "VERIFIED"
-	}
-
-	// Instant Gemini 3.8 Flash triage validation if not already populated
+	// Genuine Gemini 3.8 Flash triage validation if not already populated
 	if dto.GeminiTriageResult == nil {
-		dto.GeminiTriageResult = &model.GeminiTriageResultDto{
-			DetectedLabel:   fmt.Sprintf("%s (%s)", dto.Species, dto.Category),
-			CommonName:      dto.Species,
-			Confidence:      0.94,
-			ForensicTags:    []string{"crowdsourced_report", strings.ToLower(dto.Category), strings.ToLower(dto.Species)},
-			Notes:           "Forensic triage verified by Gemini 3.8 Flash multimodal engine.",
-			ModelUsed:       gemini.GeminiModelVersion,
-			InferenceTimeMs: 142,
+		var imageBase64 string
+		if dto.PhotoBase64 != "" {
+			imageBase64 = dto.PhotoBase64
+		} else if len(dto.PhotoUrls) > 0 {
+			// e.g. base64 embedded in first photo url or reference
+			imageBase64 = dto.PhotoUrls[0]
+		}
+
+		if imageBase64 != "" && r.geminiClient != nil {
+			triageReq := model.ForensicTriageRequest{
+				ImageBase64:  imageBase64,
+				CategoryHint: dto.Category,
+				Latitude:     dto.Location.Latitude,
+				Longitude:    dto.Location.Longitude,
+			}
+			triageResp, err := r.geminiClient.TriageFieldPhoto(req.Context(), triageReq)
+			if err == nil && triageResp != nil {
+				decay := ""
+				fruitLoad := ""
+				traceType := ""
+				traumaType := ""
+				if triageResp.Attributes != nil {
+					if triageResp.Attributes.DecayState != nil {
+						decay = *triageResp.Attributes.DecayState
+					}
+					fruitLoad = triageResp.Attributes.FruitLoadLevel
+					if triageResp.Attributes.TraceType != nil {
+						traceType = *triageResp.Attributes.TraceType
+					}
+					if triageResp.Attributes.TraumaType != nil {
+						traumaType = *triageResp.Attributes.TraumaType
+					}
+				}
+				dto.GeminiTriageResult = &model.GeminiTriageResultDto{
+					DetectedLabel:  triageResp.DetectedSpecies,
+					CommonName:     triageResp.CommonName,
+					Confidence:     triageResp.Confidence,
+					ForensicTags:   triageResp.SuggestedTags,
+					DecayState:     decay,
+					FruitLoadLevel: fruitLoad,
+					TraceType:      traceType,
+					TraumaType:     traumaType,
+					Notes:          triageResp.Notes,
+					ModelUsed:      gemini.GeminiModelVersion,
+				}
+				if triageResp.Confidence >= 0.70 {
+					dto.VerificationStatus = "VERIFIED"
+				} else {
+					dto.VerificationStatus = "UNVERIFIED"
+				}
+			}
+		}
+
+		// Fallback for reports without photo evidence or when vision model unavailable:
+		// Mark as UNVERIFIED with Confidence 0.0 rather than fabricating high confidence.
+		if dto.GeminiTriageResult == nil {
+			dto.VerificationStatus = "UNVERIFIED"
+			dto.GeminiTriageResult = &model.GeminiTriageResultDto{
+				DetectedLabel:   fmt.Sprintf("%s (%s)", dto.Species, dto.Category),
+				CommonName:      dto.Species,
+				Confidence:      0.0,
+				ForensicTags:    []string{"unverified_crowdsource", strings.ToLower(dto.Category), strings.ToLower(dto.Species)},
+				Notes:           "Pending multimodal vision triage: no verifiable field photo evidence submitted.",
+				ModelUsed:       gemini.GeminiModelVersion,
+				InferenceTimeMs: 0,
+			}
+		}
+	} else if dto.VerificationStatus == "" {
+		if dto.GeminiTriageResult.Confidence >= 0.70 {
+			dto.VerificationStatus = "VERIFIED"
+		} else {
+			dto.VerificationStatus = "UNVERIFIED"
 		}
 	}
-
 
 	if r.incidentRepo != nil {
 		_ = r.incidentRepo.SaveIncident(req.Context(), dto)
@@ -1438,13 +1877,14 @@ func (r *Router) handleSubmitIncident(w http.ResponseWriter, req *http.Request) 
 		if dto.GeminiTriageResult != nil && dto.GeminiTriageResult.DecayState != "" {
 			decay = dto.GeminiTriageResult.DecayState
 		}
+		threatScore := computeRoadkillThreatScore(dto.Species, decay)
 		rkRecord := model.RoadkillRecordDto{
 			Id:                    fmt.Sprintf("rk_%d", time.Now().UnixNano()%100000),
 			IncidentId:            dto.Id,
 			Species:               dto.Species,
 			Location:              dto.Location,
 			DecayState:            decay,
-			AttractantThreatScore: 0.88,
+			AttractantThreatScore: threatScore,
 			ClearanceStatus:       "REPORTED",
 			PhotoUrls:             dto.PhotoUrls,
 			ReportedAt:            dto.Timestamp,

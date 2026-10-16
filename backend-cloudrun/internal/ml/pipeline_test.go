@@ -216,3 +216,49 @@ func TestFeatureExtractionAndNegativeSampling(t *testing.T) {
 		}
 	}
 }
+
+func TestContinuousRetrainingPersistenceHooks(t *testing.T) {
+	pipeline := NewRetrainingPipeline()
+	pipeline.LoadSamples(GenerateSeedTrainingDataset())
+
+	sampleHookInvoked := false
+	pipeline.SetSampleListener(func(sample TrainingSample) {
+		sampleHookInvoked = true
+	})
+
+	persistHookInvoked := false
+	var persistedVersion string
+	pipeline.SetPersistenceListener(func(active IncursionModel, result RetrainResult) {
+		persistHookInvoked = true
+		persistedVersion = active.Version
+	})
+
+	// Ingest sample and check sample listener
+	testSample := TrainingSample{
+		Features:    FeatureVector{H3Index: "882f5b4d93fffff", DistNearestPersimmonM: 50.0},
+		IsIncursion: 1,
+	}
+	pipeline.IngestIncidentSample(testSample)
+	if !sampleHookInvoked {
+		t.Errorf("expected sample listener to be invoked on IngestIncidentSample")
+	}
+
+	// Trigger retrain with force promote to verify persistence hook
+	result, err := pipeline.Retrain(context.Background(), "admin_manual", true)
+	if err != nil {
+		t.Fatalf("retrain failed: %v", err)
+	}
+	if !persistHookInvoked {
+		t.Errorf("expected persistence listener to be invoked on Retrain")
+	}
+	if persistedVersion != result.CandidateModel.Version {
+		t.Errorf("expected persisted model version %s, got %s", result.CandidateModel.Version, persistedVersion)
+	}
+
+	// Verify history load
+	historyList := []RetrainResult{*result}
+	pipeline.LoadHistory(historyList)
+	if len(pipeline.RetrainingHistory()) != 1 {
+		t.Errorf("expected 1 history record loaded, got %d", len(pipeline.RetrainingHistory()))
+	}
+}

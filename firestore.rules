@@ -471,6 +471,50 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ===============================================================
+    // Admin datasets: admin_wildlife, admin_geofences, admin_roadkill,
+    // admin_environmental, admin_weather.
+    // Restricted to OFFICIAL and ADMIN roles (geofences readable by authed users).
+    // ===============================================================
+    match /admin_wildlife/{id} {
+      allow read, write: if isSignedIn() && (isAdmin() || isOfficial());
+    }
+
+    match /admin_geofences/{id} {
+      allow read: if isAuthed();
+      allow write: if isSignedIn() && (isAdmin() || isOfficial());
+    }
+
+    match /admin_roadkill/{id} {
+      allow read, write: if isSignedIn() && (isAdmin() || isOfficial());
+    }
+
+    match /admin_environmental/{id} {
+      allow read, write: if isSignedIn() && (isAdmin() || isOfficial());
+    }
+
+    match /admin_weather/{id} {
+      allow read, write: if isSignedIn() && (isAdmin() || isOfficial());
+    }
+
+    // ===============================================================
+    // ML Continuous Retraining Checkpoints & Samples
+    // Models readable by authed users, writable by ADMIN.
+    // History & Samples restricted to ADMIN.
+    // ===============================================================
+    match /ml_models/{id} {
+      allow read: if isAuthed();
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    match /ml_training_history/{id} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
+    match /ml_training_samples/{id} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

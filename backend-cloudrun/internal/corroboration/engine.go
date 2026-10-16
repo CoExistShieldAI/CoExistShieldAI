@@ -403,44 +403,46 @@ func (e *Engine) RunIngestionCycle() int {
 		}
 	}
 
-	// 2. Ingest continuous municipal radio broadcast and agricultural harvest dynamic updates
-	cycleItems := []model.CausalStreamItem{
-		{
-			ItemId:        fmt.Sprintf("cycle-firms-%d", now.Unix()),
-			StreamType:    model.StreamSatelliteThermal,
-			Region:        "JAPAN",
-			Title:         "Controlled Agricultural Slash Burn Anomaly",
-			Description:   "Hillside agricultural burn detected near forest boundary, driving wildlife downhill.",
-			Latitude:      39.7080,
-			Longitude:     141.1560,
-			RadiusMeters:  1800,
-			Confidence:    0.84,
-			TargetSpecies: "BEAR",
-			Timestamp:     nowStr,
-			ExpiresAt:     exp24h,
-		},
-		{
-			ItemId:        fmt.Sprintf("cycle-nlp-%d", now.Unix()),
-			StreamType:    model.StreamSocialNLP,
-			Region:        "JAPAN",
-			Title:         "Municipal Radio Broadcast NLP Incident",
-			Description:   "Automated Gemini 3.8 Flash extraction from Matsugaeda municipal audio broadcast.",
-			Latitude:      39.7030,
-			Longitude:     141.1535,
-			RadiusMeters:  1000,
-			Confidence:    0.95,
-			TargetSpecies: "BEAR",
-			Timestamp:     nowStr,
-			ExpiresAt:     exp24h,
-			Metadata: map[string]interface{}{
-				"model": GeminiModelVersion(),
+	// 2. Ingest continuous municipal radio broadcast and agricultural harvest dynamic updates (only in seed/demo mode)
+	if os.Getenv("ENABLE_SEED_DATA") == "true" || os.Getenv("DEV_MODE") == "true" || os.Getenv("DEMO_MODE") == "true" {
+		cycleItems := []model.CausalStreamItem{
+			{
+				ItemId:        fmt.Sprintf("cycle-firms-%d", now.Unix()),
+				StreamType:    model.StreamSatelliteThermal,
+				Region:        "JAPAN",
+				Title:         "Controlled Agricultural Slash Burn Anomaly",
+				Description:   "Hillside agricultural burn detected near forest boundary, driving wildlife downhill.",
+				Latitude:      39.7080,
+				Longitude:     141.1560,
+				RadiusMeters:  1800,
+				Confidence:    0.84,
+				TargetSpecies: "BEAR",
+				Timestamp:     nowStr,
+				ExpiresAt:     exp24h,
 			},
-		},
-	}
+			{
+				ItemId:        fmt.Sprintf("cycle-nlp-%d", now.Unix()),
+				StreamType:    model.StreamSocialNLP,
+				Region:        "JAPAN",
+				Title:         "Municipal Radio Broadcast NLP Incident",
+				Description:   "Automated Gemini 3.8 Flash extraction from Matsugaeda municipal audio broadcast.",
+				Latitude:      39.7030,
+				Longitude:     141.1535,
+				RadiusMeters:  1000,
+				Confidence:    0.95,
+				TargetSpecies: "BEAR",
+				Timestamp:     nowStr,
+				ExpiresAt:     exp24h,
+				Metadata: map[string]interface{}{
+					"model": GeminiModelVersion(),
+				},
+			},
+		}
 
-	for _, item := range cycleItems {
-		e.IngestStreamItem(item)
-		ingestedCount++
+		for _, item := range cycleItems {
+			e.IngestStreamItem(item)
+			ingestedCount++
+		}
 	}
 
 	return ingestedCount

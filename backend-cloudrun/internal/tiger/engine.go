@@ -61,11 +61,15 @@ type TigerDepredationAlert struct {
 	IssuedAt                    string   `json:"issuedAt"`
 }
 
+// EnclosurePersistenceListener is called whenever an enclosure or depredation event is modified.
+type EnclosurePersistenceListener func(enc LivestockEnclosure)
+
 // Engine coordinates tiger predatory ambush modeling, carcass caching temporal decay, and alert broadcasting.
 type Engine struct {
-	mu         sync.RWMutex
-	enclosures map[string]LivestockEnclosure
-	villages   []villageLocation
+	mu                  sync.RWMutex
+	enclosures          map[string]LivestockEnclosure
+	villages            []villageLocation
+	persistenceListener EnclosurePersistenceListener
 }
 
 type villageLocation struct {
@@ -88,7 +92,7 @@ func NewEngine() *Engine {
 	return e
 }
 
-// LoadFixtureData populates baseline test villages and pastoral enclosures.
+// LoadFixtureData populates seed villages and livestock enclosures.
 func (e *Engine) LoadFixtureData() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -96,11 +100,32 @@ func (e *Engine) LoadFixtureData() {
 	e.seedInitialEnclosuresLocked()
 }
 
+// SetPersistenceListener registers a callback invoked when an enclosure is saved/updated.
+func (e *Engine) SetPersistenceListener(l EnclosurePersistenceListener) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.persistenceListener = l
+}
+
+// LoadEnclosures bulk loads enclosures (e.g. restored from Firestore).
+func (e *Engine) LoadEnclosures(encs []LivestockEnclosure) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, enc := range encs {
+		e.enclosures[enc.ID] = enc
+	}
+}
+
 // RegisterEnclosure dynamically adds or updates a livestock pasture enclosure.
 func (e *Engine) RegisterEnclosure(enc LivestockEnclosure) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.enclosures[enc.ID] = enc
+	l := e.persistenceListener
+	e.mu.Unlock()
+
+	if l != nil {
+		l(enc)
+	}
 }
 
 func seedVillages() []villageLocation {
@@ -208,6 +233,16 @@ func (e *Engine) GetEnclosure(id string) (*LivestockEnclosure, error) {
 // ReportDepredation logs a newly verified tiger livestock kill, initiates the 72-hour return countdown,
 // deploys a dynamic Tier 3 Danger Geofence, and triggers a 3km radius alert broadcast.
 func (e *Engine) ReportDepredation(req ReportDepredationRequest, weather model.WeatherConditions) (*LivestockEnclosure, *TigerDepredationAlert, error) {
+	var (
+		l EnclosurePersistenceListener
+		computed LivestockEnclosure
+	)
+	defer func() {
+		if l != nil {
+			l(computed)
+		}
+	}()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -246,8 +281,9 @@ func (e *Engine) ReportDepredation(req ReportDepredationRequest, weather model.W
 	enc.ForensicNotes = forensicMsg
 	enc.UpdatedAt = now.Format(time.RFC3339)
 
-	computed := e.calculateEnclosureRisk(enc, weather, now)
+	computed = e.calculateEnclosureRisk(enc, weather, now)
 	e.enclosures[computed.ID] = computed
+	l = e.persistenceListener
 
 	// Identify villages within 3km radius
 	villages3km := e.findVillagesWithinRadius(computed.Latitude, computed.Longitude, 3000.0)
@@ -271,10 +307,10 @@ func (e *Engine) ReportDepredation(req ReportDepredationRequest, weather model.W
 // ClearKillSite marks a carcass removed or safely dispatched, terminating the caching hazard.
 func (e *Engine) ClearKillSite(id string) (*LivestockEnclosure, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	enc, exists := e.enclosures[id]
 	if !exists {
+		e.mu.Unlock()
 		return nil, fmt.Errorf("enclosure not found: %s", id)
 	}
 
@@ -293,6 +329,12 @@ func (e *Engine) ClearKillSite(id string) (*LivestockEnclosure, error) {
 	}
 	computed := e.calculateEnclosureRisk(enc, weather, now)
 	e.enclosures[id] = computed
+	l := e.persistenceListener
+	e.mu.Unlock()
+
+	if l != nil {
+		l(computed)
+	}
 
 	return &computed, nil
 }

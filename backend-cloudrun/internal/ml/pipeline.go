@@ -35,13 +35,15 @@ type RetrainResult struct {
 
 // RetrainingPipeline coordinates continuous training, validation gates, and model lifecycle.
 type RetrainingPipeline struct {
-	mu                 sync.RWMutex
-	activeModel        *IncursionModel
-	history            []RetrainResult
-	sampleStore        []TrainingSample
-	eventAccumulator   int
-	isRetraining       bool
-	promotionListeners []func(IncursionModel)
+	mu                  sync.RWMutex
+	activeModel         *IncursionModel
+	history             []RetrainResult
+	sampleStore         []TrainingSample
+	eventAccumulator    int
+	isRetraining        bool
+	promotionListeners  []func(IncursionModel)
+	persistenceListener func(IncursionModel, RetrainResult)
+	sampleListener       func(TrainingSample)
 }
 
 // NewRetrainingPipeline initializes a pipeline with the baseline model.
@@ -113,6 +115,36 @@ func (p *RetrainingPipeline) RegisterPromotionListener(listener func(IncursionMo
 	p.promotionListeners = append(p.promotionListeners, listener)
 }
 
+// SetPersistenceListener registers a callback invoked when a model is promoted or a retrain run completes.
+func (p *RetrainingPipeline) SetPersistenceListener(listener func(IncursionModel, RetrainResult)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.persistenceListener = listener
+}
+
+// SetSampleListener registers a callback invoked when a new training sample is ingested.
+func (p *RetrainingPipeline) SetSampleListener(listener func(TrainingSample)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.sampleListener = listener
+}
+
+// LoadHistory populates historical retrain run logs from persistent storage.
+func (p *RetrainingPipeline) LoadHistory(history []RetrainResult) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.history = history
+}
+
+// Samples returns a copy of current sample store.
+func (p *RetrainingPipeline) Samples() []TrainingSample {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	copied := make([]TrainingSample, len(p.sampleStore))
+	copy(copied, p.sampleStore)
+	return copied
+}
+
 // EventAccumulator returns the count of new verified events accumulated since the last retraining run.
 func (p *RetrainingPipeline) EventAccumulator() int {
 	p.mu.RLock()
@@ -128,7 +160,12 @@ func (p *RetrainingPipeline) IngestIncidentSample(sample TrainingSample) int {
 	p.eventAccumulator++
 	shouldTrigger := p.eventAccumulator >= 50 && !p.isRetraining
 	count := len(p.sampleStore)
+	sampleCb := p.sampleListener
 	p.mu.Unlock()
+
+	if sampleCb != nil {
+		sampleCb(sample)
+	}
 
 	if shouldTrigger {
 		go func() {
@@ -227,11 +264,17 @@ func (p *RetrainingPipeline) Retrain(ctx context.Context, trigger string, forceP
 
 	p.history = append(p.history, result)
 	p.isRetraining = false
+	persistListener := p.persistenceListener
+	activeCopy := *p.activeModel
 	p.mu.Unlock()
 
 	// Notify registered listeners outside lock synchronously
 	for _, l := range listenersToNotify {
 		l(candidateModel)
+	}
+
+	if persistListener != nil {
+		persistListener(activeCopy, result)
 	}
 
 	return &result, nil

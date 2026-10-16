@@ -69,11 +69,15 @@ func main() {
 		firestoreRepo := repository.NewFirestoreRepository(projectID)
 		router.SetRepositories(firestoreRepo, firestoreRepo)
 		router.InitAdminPersistence(projectID)
-		log.Printf("Firestore persistence enabled for project %s (including admin datasets: wildlife, env, weather, roadkill, geofences)", projectID)
+		router.InitDomainPersistence(projectID)
+		router.InitMLPersistence(projectID)
+		log.Printf("Firestore persistence enabled for project %s (including admin datasets, domain models, and ML continuous retraining checkpoints)", projectID)
 	} else if emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST"); emulatorHost != "" {
 		firestoreRepo := repository.NewFirestoreRepository("demo-coexist")
 		router.SetRepositories(firestoreRepo, firestoreRepo)
 		router.InitAdminPersistence("demo-coexist")
+		router.InitDomainPersistence("demo-coexist")
+		router.InitMLPersistence("demo-coexist")
 		log.Printf("Firestore persistence enabled via emulator at %s", emulatorHost)
 	} else {
 		log.Printf("AUTH_PROJECT_ID not set; running in open demo mode with in-memory persistence")

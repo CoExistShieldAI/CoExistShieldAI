@@ -171,6 +171,28 @@ func TestOperationsEmergencyBroadcastAndExport(t *testing.T) {
 		t.Errorf("Invalid broadcast result: %+v", bcastResult)
 	}
 
+	// Verify BroadcastListener is triggered
+	listenerFired := false
+	handler := NewHandler(nil)
+	handler.SetBroadcastListener(func(r EmergencyBroadcastRequest, bID string, rec int) {
+		listenerFired = true
+		if r.Title != bcastReq.Title || bID == "" || rec == 0 {
+			t.Errorf("BroadcastListener received unexpected args: %+v, id: %s, rec: %d", r, bID, rec)
+		}
+	})
+	mux2 := http.NewServeMux()
+	handler.RegisterRoutes(mux2)
+	ts2 := httptest.NewServer(mux2)
+	defer ts2.Close()
+
+	bcastResp2, err := http.Post(ts2.URL+"/api/v1/admin/operations/broadcast", "application/json", bytes.NewReader(body))
+	if err == nil {
+		bcastResp2.Body.Close()
+	}
+	if !listenerFired {
+		t.Errorf("Expected BroadcastListener to be fired on emergency broadcast")
+	}
+
 	// 2. GeoJSON Export
 	expResp, err := http.Get(ts.URL + "/api/v1/admin/export/geofences?format=geojson")
 	if err != nil || expResp.StatusCode != http.StatusOK {

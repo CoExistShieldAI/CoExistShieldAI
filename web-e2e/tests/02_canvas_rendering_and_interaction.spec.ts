@@ -93,7 +93,7 @@ test.describe('Canvas Rendering & User Interactions', () => {
   });
 
   test('should capture visual snapshot of the demo web application', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'load' });
     await page.waitForTimeout(2000);
 
     // Capture screenshot for visual inspection

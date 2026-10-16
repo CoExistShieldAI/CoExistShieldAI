@@ -219,4 +219,75 @@ class GeofenceManager(
             registrar.registerGeofences(toAdd)
         }
     }
+
+    /**
+     * Evaluates the graduated alert tier for a given location using both direct containment
+     * and spatial concentric buffer halos. Ensures that exiting or approaching a Tier 3 Critical zone
+     * naturally scales through Tier 2 Warning and Tier 1 Advisory stages rather than abruptly jumping to Safe.
+     *
+     * Returns Triple(AlertTier, minDistanceToBoundaryMeters, matchedZoneId)
+     */
+    fun evaluateGraduatedTier(
+        location: GeoLocation,
+        candidateZones: List<GeofenceZone> = _allCachedGeofences.value
+    ): Triple<AlertTier, Double, String?> {
+        val tierRank = mapOf(
+            AlertTier.SAFE to 0,
+            AlertTier.TIER_1_NOTICE to 1,
+            AlertTier.TIER_2_WARNING to 2,
+            AlertTier.TIER_3_DANGER to 3
+        )
+
+        var highestTier = AlertTier.SAFE
+        var minDistMeters = Double.MAX_VALUE
+        var bestZoneId: String? = null
+
+        for (zone in candidateZones) {
+            val centerDist = location.distanceToMeters(zone.centroid)
+            val effectiveBoundaryDist = kotlin.math.max(0.0, centerDist - zone.radiusMeters)
+
+            if (effectiveBoundaryDist < minDistMeters) {
+                minDistMeters = effectiveBoundaryDist
+                bestZoneId = zone.id
+            }
+
+            if (centerDist <= zone.radiusMeters) {
+                if ((tierRank[zone.tier] ?: 0) > (tierRank[highestTier] ?: 0)) {
+                    highestTier = zone.tier
+                }
+            } else {
+                // Graduated concentric buffer halo evaluation
+                when (zone.tier) {
+                    AlertTier.TIER_3_DANGER -> {
+                        val t2Threshold = kotlin.math.max(1200.0, zone.radiusMeters * 0.75)
+                        val t1Threshold = kotlin.math.max(2500.0, zone.radiusMeters * 1.60)
+                        if (effectiveBoundaryDist <= t2Threshold) {
+                            if ((tierRank[AlertTier.TIER_2_WARNING] ?: 0) > (tierRank[highestTier] ?: 0)) {
+                                highestTier = AlertTier.TIER_2_WARNING
+                            }
+                        } else if (effectiveBoundaryDist <= t1Threshold) {
+                            if ((tierRank[AlertTier.TIER_1_NOTICE] ?: 0) > (tierRank[highestTier] ?: 0)) {
+                                highestTier = AlertTier.TIER_1_NOTICE
+                            }
+                        }
+                    }
+                    AlertTier.TIER_2_WARNING -> {
+                        val t1Threshold = kotlin.math.max(1500.0, zone.radiusMeters * 0.75)
+                        if (effectiveBoundaryDist <= t1Threshold) {
+                            if ((tierRank[AlertTier.TIER_1_NOTICE] ?: 0) > (tierRank[highestTier] ?: 0)) {
+                                highestTier = AlertTier.TIER_1_NOTICE
+                            }
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+
+        if (minDistMeters == Double.MAX_VALUE) {
+            minDistMeters = 0.0
+        }
+
+        return Triple(highestTier, minDistMeters, bestZoneId)
+    }
 }

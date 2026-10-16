@@ -182,4 +182,46 @@ class GeofenceManagerTest {
         assertEquals(setOf("zone_a", "zone_new_ai"), registrar.getRegisteredZoneIds())
         assertEquals(GeofenceSyncState.SYNCED, manager.syncState.value)
     }
+
+    @Test
+    fun testGraduatedTierEvaluation() {
+        val core = GeofenceZone(
+            id = "core_danger",
+            tier = AlertTier.TIER_3_DANGER,
+            targetSpecies = listOf(WildlifeSpecies.BEAR),
+            centroid = GeoLocation(39.7020, 141.1520),
+            radiusMeters = 1000.0,
+            causalExplanation = "Morioka Bear Core Zone",
+            validFrom = "2026-10-15T00:00:00Z",
+            validUntil = "2026-10-18T00:00:00Z",
+            generatedAt = "2026-10-15T00:00:00Z"
+        )
+
+        val registrar = InMemoryNativeGeofenceRegistrar()
+        val mockHttpClient = HttpClient(MockEngine { respond("") })
+        val repo = GeofenceRepository(mockHttpClient)
+        val manager = GeofenceManager(repository = repo, registrar = registrar)
+
+        // 1. Inside core zone (at centroid)
+        val (tier1, _, id1) = manager.evaluateGraduatedTier(GeoLocation(39.7020, 141.1520), listOf(core))
+        assertEquals(AlertTier.TIER_3_DANGER, tier1)
+        assertEquals("core_danger", id1)
+
+        // 2. Just outside core: 1.5km north (~500m past 1000m boundary <= 1200m buffer)
+        val locT2 = GeoLocation(39.7020 + (1500.0 / 111320.0), 141.1520)
+        val (tier2, dist2, _) = manager.evaluateGraduatedTier(locT2, listOf(core))
+        assertEquals(AlertTier.TIER_2_WARNING, tier2, "Should graduate to TIER_2_WARNING in adjacent buffer zone")
+        assertTrue(dist2 in 400.0..600.0)
+
+        // 3. Further outside: 2.6km north (~1600m past 1000m boundary <= 2500m buffer)
+        val locT1 = GeoLocation(39.7020 + (2600.0 / 111320.0), 141.1520)
+        val (tier3, dist3, _) = manager.evaluateGraduatedTier(locT1, listOf(core))
+        assertEquals(AlertTier.TIER_1_NOTICE, tier3, "Should graduate to TIER_1_NOTICE in outer advisory buffer")
+        assertTrue(dist3 in 1500.0..1700.0)
+
+        // 4. Far away: 4.2km north (~3200m past boundary > 2500m)
+        val locSafe = GeoLocation(39.7020 + (4200.0 / 111320.0), 141.1520)
+        val (tierSafe, _, _) = manager.evaluateGraduatedTier(locSafe, listOf(core))
+        assertEquals(AlertTier.SAFE, tierSafe, "Should safely fall back to SAFE when well beyond buffers")
+    }
 }

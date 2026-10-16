@@ -157,6 +157,10 @@ func dblVal(f float64) firestoreValue {
 	return firestoreValue{DoubleValue: &f}
 }
 
+func boolVal(b bool) firestoreValue {
+	return firestoreValue{BooleanValue: &b}
+}
+
 func getStr(fields map[string]firestoreValue, key string) string {
 	if v, ok := fields[key]; ok && v.StringValue != nil {
 		return *v.StringValue
@@ -169,6 +173,13 @@ func getDbl(fields map[string]firestoreValue, key string) float64 {
 		return *v.DoubleValue
 	}
 	return 0.0
+}
+
+func getBool(fields map[string]firestoreValue, key string) bool {
+	if v, ok := fields[key]; ok && v.BooleanValue != nil {
+		return *v.BooleanValue
+	}
+	return false
 }
 
 func (f *FirestoreRepository) saveDoc(ctx context.Context, collection string, docID string, fields map[string]firestoreValue) error {
@@ -551,4 +562,266 @@ func (f *FirestoreRepository) RecordKakiAction(ctx context.Context, treeID strin
 		"updatedAt":        strVal(time.Now().UTC().Format(time.RFC3339)),
 	}
 	return f.saveDoc(ctx, "kaki_trees", treeID, fields)
+}
+
+// SaveCropPlot persists an elephant agricultural crop attractant plot to Firestore.
+func (f *FirestoreRepository) SaveCropPlot(ctx context.Context, id, name, province, parkBoundary, cropType, stage, updatedAt string, lat, lon, area, dist, aroma, maturity, risk, scentBuf float64) error {
+	fields := map[string]firestoreValue{
+		"name":                  strVal(name),
+		"province":              strVal(province),
+		"parkBoundary":          strVal(parkBoundary),
+		"cropType":              strVal(cropType),
+		"growthStage":           strVal(stage),
+		"latitude":              dblVal(lat),
+		"longitude":             dblVal(lon),
+		"areaHectares":          dblVal(area),
+		"distanceToForestEdgeM": dblVal(dist),
+		"aromaVolatilityIndex":  dblVal(aroma),
+		"maturityScore":         dblVal(maturity),
+		"activeRiskScore":       dblVal(risk),
+		"scentBufferMeters":     dblVal(scentBuf),
+		"updatedAt":             strVal(updatedAt),
+	}
+	return f.saveDoc(ctx, "crop_attractants", id, fields)
+}
+
+// ListCropPlots retrieves all persisted elephant crop plots from Firestore.
+func (f *FirestoreRepository) ListCropPlots(ctx context.Context) ([]map[string]interface{}, error) {
+	docs, err := f.listDocs(ctx, "crop_attractants")
+	if err != nil {
+		return nil, err
+	}
+	results := make([]map[string]interface{}, 0, len(docs))
+	for _, doc := range docs {
+		id := doc.Name[strings.LastIndex(doc.Name, "/")+1:]
+		m := map[string]interface{}{
+			"id":                    id,
+			"name":                  getStr(doc.Fields, "name"),
+			"province":              getStr(doc.Fields, "province"),
+			"parkBoundary":          getStr(doc.Fields, "parkBoundary"),
+			"cropType":              getStr(doc.Fields, "cropType"),
+			"growthStage":           getStr(doc.Fields, "growthStage"),
+			"latitude":              getDbl(doc.Fields, "latitude"),
+			"longitude":             getDbl(doc.Fields, "longitude"),
+			"areaHectares":          getDbl(doc.Fields, "areaHectares"),
+			"distanceToForestEdgeM": getDbl(doc.Fields, "distanceToForestEdgeM"),
+			"aromaVolatilityIndex":  getDbl(doc.Fields, "aromaVolatilityIndex"),
+			"maturityScore":         getDbl(doc.Fields, "maturityScore"),
+			"activeRiskScore":       getDbl(doc.Fields, "activeRiskScore"),
+			"scentBufferMeters":     getDbl(doc.Fields, "scentBufferMeters"),
+			"updatedAt":             getStr(doc.Fields, "updatedAt"),
+		}
+		results = append(results, m)
+	}
+	return results, nil
+}
+
+// SaveLivestockEnclosure persists a pastoral enclosure / tiger kill site to Firestore.
+func (f *FirestoreRepository) SaveLivestockEnclosure(ctx context.Context, id, name, province, village, livestockType, forensicNotes, updatedAt string, headCount int, hasNightCorral, isActiveKill bool, lat, lon, dist, hoursSinceKill, returnProb, threatScore, scentBuf float64) error {
+	fields := map[string]firestoreValue{
+		"name":                  strVal(name),
+		"province":              strVal(province),
+		"village":               strVal(village),
+		"livestockType":         strVal(livestockType),
+		"headCount":             dblVal(float64(headCount)),
+		"hasNightCorral":        boolVal(hasNightCorral),
+		"isActiveKillSite":      boolVal(isActiveKill),
+		"latitude":              dblVal(lat),
+		"longitude":             dblVal(lon),
+		"distanceToForestEdgeM": dblVal(dist),
+		"hoursSinceKill":        dblVal(hoursSinceKill),
+		"returnProbability":     dblVal(returnProb),
+		"activeThreatScore":     dblVal(threatScore),
+		"scentBufferMeters":     dblVal(scentBuf),
+		"forensicNotes":         strVal(forensicNotes),
+		"updatedAt":             strVal(updatedAt),
+	}
+	return f.saveDoc(ctx, "livestock_pastures", id, fields)
+}
+
+// ListLivestockEnclosures retrieves all persisted livestock pastures / kill sites from Firestore.
+func (f *FirestoreRepository) ListLivestockEnclosures(ctx context.Context) ([]map[string]interface{}, error) {
+	docs, err := f.listDocs(ctx, "livestock_pastures")
+	if err != nil {
+		return nil, err
+	}
+	results := make([]map[string]interface{}, 0, len(docs))
+	for _, doc := range docs {
+		id := doc.Name[strings.LastIndex(doc.Name, "/")+1:]
+		m := map[string]interface{}{
+			"id":                    id,
+			"name":                  getStr(doc.Fields, "name"),
+			"province":              getStr(doc.Fields, "province"),
+			"village":               getStr(doc.Fields, "village"),
+			"livestockType":         getStr(doc.Fields, "livestockType"),
+			"headCount":             int(getDbl(doc.Fields, "headCount")),
+			"hasNightCorral":        getBool(doc.Fields, "hasNightCorral"),
+			"isActiveKillSite":      getBool(doc.Fields, "isActiveKillSite"),
+			"latitude":              getDbl(doc.Fields, "latitude"),
+			"longitude":             getDbl(doc.Fields, "longitude"),
+			"distanceToForestEdgeM": getDbl(doc.Fields, "distanceToForestEdgeM"),
+			"hoursSinceKill":        getDbl(doc.Fields, "hoursSinceKill"),
+			"returnProbability":     getDbl(doc.Fields, "returnProbability"),
+			"activeThreatScore":     getDbl(doc.Fields, "activeThreatScore"),
+			"scentBufferMeters":     getDbl(doc.Fields, "scentBufferMeters"),
+			"forensicNotes":         getStr(doc.Fields, "forensicNotes"),
+			"updatedAt":             getStr(doc.Fields, "updatedAt"),
+		}
+		results = append(results, m)
+	}
+	return results, nil
+}
+
+// SaveMunicipalKakiTree persists a priority Kaki tree to Firestore.
+func (f *FirestoreRepository) SaveMunicipalKakiTree(ctx context.Context, treeID, address, consentStatus, permitID, managementStatus, assignedSquad, fruitLoad string, lat, lon, hazardScore float64, isTop5 bool, schoolDist, bearRadius, clearanceOrder int) error {
+	fields := map[string]firestoreValue{
+		"address":                        strVal(address),
+		"latitude":                       dblVal(lat),
+		"longitude":                      dblVal(lon),
+		"hazardScore":                    dblVal(hazardScore),
+		"isTop5Percent":                  boolVal(isTop5),
+		"distanceToSchoolRouteMeters":    dblVal(float64(schoolDist)),
+		"estimatedBearAttractantRadiusM": dblVal(float64(bearRadius)),
+		"ownerConsentStatus":             strVal(consentStatus),
+		"permitId":                       strVal(permitID),
+		"managementStatus":               strVal(managementStatus),
+		"recommendedClearanceOrder":      dblVal(float64(clearanceOrder)),
+		"assignedSquad":                  strVal(assignedSquad),
+		"fruitLoad":                      strVal(fruitLoad),
+		"updatedAt":                      strVal(time.Now().UTC().Format(time.RFC3339)),
+	}
+	return f.saveDoc(ctx, "kaki_trees", treeID, fields)
+}
+
+// ListMunicipalKakiTrees retrieves all registered municipal priority Kaki trees from Firestore.
+func (f *FirestoreRepository) ListMunicipalKakiTrees(ctx context.Context) ([]map[string]interface{}, error) {
+	docs, err := f.listDocs(ctx, "kaki_trees")
+	if err != nil {
+		return nil, err
+	}
+	results := make([]map[string]interface{}, 0, len(docs))
+	for _, doc := range docs {
+		id := doc.Name[strings.LastIndex(doc.Name, "/")+1:]
+		m := map[string]interface{}{
+			"treeId":                         id,
+			"address":                        getStr(doc.Fields, "address"),
+			"latitude":                       getDbl(doc.Fields, "latitude"),
+			"longitude":                      getDbl(doc.Fields, "longitude"),
+			"hazardScore":                    getDbl(doc.Fields, "hazardScore"),
+			"isTop5Percent":                  getBool(doc.Fields, "isTop5Percent"),
+			"distanceToSchoolRouteMeters":    int(getDbl(doc.Fields, "distanceToSchoolRouteMeters")),
+			"estimatedBearAttractantRadiusM": int(getDbl(doc.Fields, "estimatedBearAttractantRadiusM")),
+			"ownerConsentStatus":             getStr(doc.Fields, "ownerConsentStatus"),
+			"permitId":                       getStr(doc.Fields, "permitId"),
+			"managementStatus":               getStr(doc.Fields, "managementStatus"),
+			"recommendedClearanceOrder":      int(getDbl(doc.Fields, "recommendedClearanceOrder")),
+			"assignedSquad":                  getStr(doc.Fields, "assignedSquad"),
+			"fruitLoad":                      getStr(doc.Fields, "fruitLoad"),
+		}
+		results = append(results, m)
+	}
+	return results, nil
+}
+
+// SaveFellingAuditLog records an official tree felling action log to Firestore.
+func (f *FirestoreRepository) SaveFellingAuditLog(ctx context.Context, logID, treeID, permitID, officerID, action string, schoolDist int, riskDrop, biomass float64) error {
+	fields := map[string]firestoreValue{
+		"treeId":          strVal(treeID),
+		"permitId":        strVal(permitID),
+		"officerId":       strVal(officerID),
+		"action":          strVal(action),
+		"schoolDistanceM": dblVal(float64(schoolDist)),
+		"riskDropPct":     dblVal(riskDrop),
+		"biomassKg":       dblVal(biomass),
+		"timestamp":       strVal(time.Now().UTC().Format(time.RFC3339)),
+	}
+	return f.saveDoc(ctx, "felling_audit_logs", logID, fields)
+}
+
+// SaveMLModelCheckpoint archives a versioned model checkpoint and updates the latest pointer in Firestore.
+func (f *FirestoreRepository) SaveMLModelCheckpoint(ctx context.Context, modelJSON []byte, version, trainedAt string, aucRoc, precTop20 float64, sampleSize int) error {
+	fields := map[string]firestoreValue{
+		"version":        strVal(version),
+		"trainedAt":      strVal(trainedAt),
+		"aucRoc":         dblVal(aucRoc),
+		"precisionTop20": dblVal(precTop20),
+		"sampleSize":     dblVal(float64(sampleSize)),
+		"modelJSON":      strVal(string(modelJSON)),
+		"updatedAt":      strVal(time.Now().UTC().Format(time.RFC3339)),
+	}
+	// 1. Save versioned document
+	if err := f.saveDoc(ctx, "ml_models", version, fields); err != nil {
+		return err
+	}
+	// 2. Update 'latest' pointer
+	return f.saveDoc(ctx, "ml_models", "latest", fields)
+}
+
+// GetLatestMLModel fetches the most recently promoted ML model checkpoint JSON from Firestore.
+func (f *FirestoreRepository) GetLatestMLModel(ctx context.Context) ([]byte, error) {
+	doc, err := f.getDoc(ctx, "ml_models", "latest")
+	if err != nil {
+		return nil, err
+	}
+	raw := getStr(doc.Fields, "modelJSON")
+	if raw == "" {
+		return nil, fmt.Errorf("empty modelJSON in ml_models/latest")
+	}
+	return []byte(raw), nil
+}
+
+// SaveMLRetrainResult logs an autonomous retraining run to Firestore.
+func (f *FirestoreRepository) SaveMLRetrainResult(ctx context.Context, resultJSON []byte, runID, version, trigger string, promoted bool, trainedAt string) error {
+	fields := map[string]firestoreValue{
+		"runId":      strVal(runID),
+		"version":    strVal(version),
+		"trigger":    strVal(trigger),
+		"promoted":   boolVal(promoted),
+		"trainedAt":  strVal(trainedAt),
+		"resultJSON": strVal(string(resultJSON)),
+		"updatedAt":  strVal(time.Now().UTC().Format(time.RFC3339)),
+	}
+	return f.saveDoc(ctx, "ml_training_history", runID, fields)
+}
+
+// ListMLRetrainHistory retrieves past retraining execution logs from Firestore.
+func (f *FirestoreRepository) ListMLRetrainHistory(ctx context.Context) ([]string, error) {
+	docs, err := f.listDocs(ctx, "ml_training_history")
+	if err != nil {
+		return nil, err
+	}
+	results := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		raw := getStr(doc.Fields, "resultJSON")
+		if raw != "" {
+			results = append(results, raw)
+		}
+	}
+	return results, nil
+}
+
+// SaveMLTrainingSample persists an individual training sample to Firestore.
+func (f *FirestoreRepository) SaveMLTrainingSample(ctx context.Context, sampleJSON []byte, sampleID string) error {
+	fields := map[string]firestoreValue{
+		"sampleId":   strVal(sampleID),
+		"sampleJSON": strVal(string(sampleJSON)),
+		"createdAt":  strVal(time.Now().UTC().Format(time.RFC3339)),
+	}
+	return f.saveDoc(ctx, "ml_training_samples", sampleID, fields)
+}
+
+// ListMLTrainingSamples loads training samples from Firestore.
+func (f *FirestoreRepository) ListMLTrainingSamples(ctx context.Context) ([]string, error) {
+	docs, err := f.listDocs(ctx, "ml_training_samples")
+	if err != nil {
+		return nil, err
+	}
+	samples := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		raw := getStr(doc.Fields, "sampleJSON")
+		if raw != "" {
+			samples = append(samples, raw)
+		}
+	}
+	return samples, nil
 }
