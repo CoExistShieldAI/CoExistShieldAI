@@ -16,6 +16,13 @@ import { AdminApiService } from '../../services/admin-api.service';
         </div>
         <span class="text-xs text-slate-500 hidden md:inline">Covering Japan, Thailand, Indonesia, India & Nepal</span>
 
+        @if (api.isDemoMode() || api.isOfflineFallback()) {
+          <div class="px-2.5 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-xs font-semibold text-amber-300 flex items-center gap-1.5 shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>{{ api.isDemoMode() ? 'DEMO MODE ACTIVE' : 'OFFLINE SEED FALLBACK' }}</span>
+          </div>
+        }
+
         <!-- AI Engine Status Banner / Notification Toast -->
         @if (feedbackToast(); as toast) {
           <div

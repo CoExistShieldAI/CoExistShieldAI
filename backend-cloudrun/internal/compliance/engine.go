@@ -118,13 +118,36 @@ type MunicipalKakiActionResponse struct {
 	ProcessedAt              string                    `json:"processedAt"`
 }
 
+// KakiPersistenceListener is called whenever a tree is registered or modified.
+type KakiPersistenceListener func(tree MunicipalPriorityKakiTree, log *FellingAuditLog)
+
 // Engine coordinates RSPO ESG reporting, Municipal GCF crowdfunding metrics, and priority Kaki felling permits.
 type Engine struct {
-	mu           sync.RWMutex
-	trees        map[string]MunicipalPriorityKakiTree
-	fellingLogs  []FellingAuditLog
-	gcfCompleted int
-	plantations  map[string]RspoAuditPackage
+	mu                  sync.RWMutex
+	trees               map[string]MunicipalPriorityKakiTree
+	fellingLogs         []FellingAuditLog
+	gcfCompleted        int
+	plantations         map[string]RspoAuditPackage
+	persistenceListener KakiPersistenceListener
+}
+
+// SetPersistenceListener registers a callback invoked when trees are added or updated.
+func (e *Engine) SetPersistenceListener(listener KakiPersistenceListener) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.persistenceListener = listener
+}
+
+// LoadTrees populates existing trees from persistent storage.
+func (e *Engine) LoadTrees(trees []MunicipalPriorityKakiTree) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, t := range trees {
+		e.trees[t.TreeID] = t
+		if t.ManagementStatus == "FELLED" {
+			e.gcfCompleted++
+		}
+	}
 }
 
 // NewEngine initializes the compliance and municipal decision-support engine.
@@ -154,8 +177,13 @@ func (e *Engine) LoadFixtureData() {
 // RegisterKakiTree dynamically registers a priority persimmon tree.
 func (e *Engine) RegisterKakiTree(tree MunicipalPriorityKakiTree) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.trees[tree.TreeID] = tree
+	listener := e.persistenceListener
+	e.mu.Unlock()
+
+	if listener != nil {
+		listener(tree, nil)
+	}
 }
 
 func seedPlantationData() map[string]RspoAuditPackage {
@@ -397,6 +425,17 @@ func (e *Engine) GetPriorityKakiLayer(municipalityCode string) (*PriorityKakiLay
 
 // LogMunicipalAction processes an official tree pruning or felling operation with strict role-based access control.
 func (e *Engine) LogMunicipalAction(req MunicipalKakiActionRequest) (*MunicipalKakiActionResponse, error) {
+	var (
+		listener KakiPersistenceListener
+		savedTree MunicipalPriorityKakiTree
+		savedLog *FellingAuditLog
+	)
+	defer func() {
+		if listener != nil {
+			listener(savedTree, savedLog)
+		}
+	}()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -462,6 +501,10 @@ func (e *Engine) LogMunicipalAction(req MunicipalKakiActionRequest) (*MunicipalK
 
 	targetTrees := 420
 	gcfReductionPct := math.Round(math.Min(95.0, (float64(e.gcfCompleted)/float64(targetTrees))*85.0)*10.0) / 10.0
+
+	listener = e.persistenceListener
+	savedTree = tree
+	savedLog = &auditLog
 
 	return &MunicipalKakiActionResponse{
 		AuditLogID:               logID,

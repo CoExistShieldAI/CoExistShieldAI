@@ -92,6 +92,21 @@ import { EmergencyBroadcastRequest, EmergencyBroadcastResponse } from '../../mod
               </div>
             </div>
           }
+
+          @if (broadcastError(); as err) {
+            <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/50 text-xs space-y-1.5 animate-fade-in">
+              <div class="text-rose-400 font-bold flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span>Emergency Broadcast Dispatch Failed!</span>
+              </div>
+              <div class="text-slate-200">
+                {{ err }}
+              </div>
+              <div class="text-[11px] text-rose-300 font-medium">
+                CRITICAL WARNING: Sirens and push notifications were NOT delivered to field personnel or local communities.
+              </div>
+            </div>
+          }
         </div>
 
         <!-- Feature 5: GIS & CSV Data Export -->
@@ -173,6 +188,7 @@ export class OperationsComponent implements OnInit {
   };
   isBroadcasting = signal<boolean>(false);
   lastBroadcastResult = signal<EmergencyBroadcastResponse | null>(null);
+  broadcastError = signal<string | null>(null);
 
   exportDataset = 'geofences';
   exportFormat: 'geojson' | 'csv' = 'geojson';
@@ -183,10 +199,17 @@ export class OperationsComponent implements OnInit {
 
   sendBroadcast() {
     this.isBroadcasting.set(true);
+    this.lastBroadcastResult.set(null);
+    this.broadcastError.set(null);
     this.api.sendEmergencyBroadcast(this.broadcastReq).subscribe({
       next: (res) => {
         this.isBroadcasting.set(false);
         this.lastBroadcastResult.set(res);
+      },
+      error: (err) => {
+        this.isBroadcasting.set(false);
+        const detail = err?.error?.message || err?.message || 'Server connection error';
+        this.broadcastError.set(`Broadcast failed (${err?.status || '500'}): ${detail}`);
       }
     });
   }

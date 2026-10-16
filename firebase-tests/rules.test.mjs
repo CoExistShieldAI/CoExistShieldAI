@@ -220,3 +220,23 @@ test('incident_memories + default deny', async () => {
   await assertFails(getDoc(doc(admin(), 'other/x')));
   await assertFails(getDoc(doc(unauth(), 'other/x')));
 });
+
+test('admin datasets (admin_wildlife, admin_geofences, admin_roadkill, admin_environmental, admin_weather)', async () => {
+  await seed('admin_wildlife/w1', { species: 'BEAR' });
+  await seed('admin_geofences/g1', { name: 'Buffer' });
+
+  // Citizen cannot read/write admin_wildlife
+  await assertFails(getDoc(doc(citizen(), 'admin_wildlife/w1')));
+  await assertFails(setDoc(doc(citizen(), 'admin_wildlife/w2'), { species: 'BEAR' }));
+
+  // Official and Admin can read & write admin_wildlife
+  await assertSucceeds(getDoc(doc(official(), 'admin_wildlife/w1')));
+  await assertSucceeds(setDoc(doc(official(), 'admin_wildlife/w2'), { species: 'ELEPHANT' }));
+  await assertSucceeds(getDoc(doc(admin(), 'admin_wildlife/w1')));
+  await assertSucceeds(setDoc(doc(admin(), 'admin_wildlife/w3'), { species: 'TIGER' }));
+
+  // Authed citizen can read active geofences, but cannot write
+  await assertSucceeds(getDoc(doc(citizen(), 'admin_geofences/g1')));
+  await assertFails(setDoc(doc(citizen(), 'admin_geofences/g2'), { name: 'Illegal' }));
+  await assertSucceeds(setDoc(doc(official(), 'admin_geofences/g2'), { name: 'Official Fence' }));
+});

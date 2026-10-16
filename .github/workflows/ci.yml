@@ -143,6 +143,8 @@ jobs:
           cache-dependency-path: web-admin/package-lock.json
 
       - name: Install Dependencies and Build Web Admin
+        env:
+          GOOGLE_MAPS_API_KEY: "AIzaSyMockKeyForVerificationTest123"
         run: |
           cd web-admin
           npm ci

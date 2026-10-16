@@ -749,38 +749,50 @@ func (e *Engine) EvaluateLocationTier(lat, lon float64) (string, float64, string
 	highestTier := "SAFE"
 	minDistMeters := math.MaxFloat64
 	bestZoneId := ""
+	bestRadius := math.MaxFloat64
 
 	for _, zone := range e.activeZones {
 		distKm := haversineDistanceKm(lat, lon, zone.Centroid.Latitude, zone.Centroid.Longitude)
 		distMeters := distKm * 1000.0
 		effectiveBoundaryDist := math.Max(0, distMeters-zone.RadiusMeters)
 
-		if effectiveBoundaryDist < minDistMeters {
-			minDistMeters = effectiveBoundaryDist
-			bestZoneId = zone.Id
-		}
-
 		// Direct containment
 		if distMeters <= zone.RadiusMeters {
-			if tierRank[zone.Tier] > tierRank[highestTier] {
+			if tierRank[zone.Tier] > tierRank[highestTier] || (tierRank[zone.Tier] == tierRank[highestTier] && zone.RadiusMeters < bestRadius) {
 				highestTier = zone.Tier
+				bestZoneId = zone.Id
+				bestRadius = zone.RadiusMeters
+				minDistMeters = 0
 			}
-		} else {
-			// Proximity-based buffer halo fallback
+		} else if highestTier == "SAFE" {
+			if effectiveBoundaryDist < minDistMeters {
+				minDistMeters = effectiveBoundaryDist
+				bestZoneId = zone.Id
+			}
+		}
+
+		// Proximity-based buffer halo fallback
+		if distMeters > zone.RadiusMeters {
 			if zone.Tier == "TIER_3_DANGER" {
 				if effectiveBoundaryDist <= math.Max(1200.0, zone.RadiusMeters*0.75) {
 					if tierRank["TIER_2_WARNING"] > tierRank[highestTier] {
 						highestTier = "TIER_2_WARNING"
+						bestZoneId = zone.Id
+						minDistMeters = effectiveBoundaryDist
 					}
 				} else if effectiveBoundaryDist <= math.Max(2500.0, zone.RadiusMeters*1.60) {
 					if tierRank["TIER_1_NOTICE"] > tierRank[highestTier] {
 						highestTier = "TIER_1_NOTICE"
+						bestZoneId = zone.Id
+						minDistMeters = effectiveBoundaryDist
 					}
 				}
 			} else if zone.Tier == "TIER_2_WARNING" {
 				if effectiveBoundaryDist <= math.Max(1500.0, zone.RadiusMeters*0.75) {
 					if tierRank["TIER_1_NOTICE"] > tierRank[highestTier] {
 						highestTier = "TIER_1_NOTICE"
+						bestZoneId = zone.Id
+						minDistMeters = effectiveBoundaryDist
 					}
 				}
 			}

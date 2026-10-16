@@ -250,3 +250,46 @@ func TestDynamicModelPromotionListener(t *testing.T) {
 		t.Errorf("expected promoted model version %s, got %s", result.CandidateModel.Version, promotedModel.Version)
 	}
 }
+
+func TestBigQueryGISDynamicAttractantProvider(t *testing.T) {
+	pipeline := NewRetrainingPipeline()
+	replicator := NewBigQueryGISReplicator(pipeline)
+
+	// Set dynamic provider with custom locations
+	replicator.SetAttractantProvider(func() ([]AttractantFeaturePoint, []AttractantFeaturePoint, []AttractantFeaturePoint) {
+		kaki := []AttractantFeaturePoint{
+			{Type: "KAKI", Latitude: 35.6895, Longitude: 139.6917, Weight: 0.95}, // Tokyo Shinjuku
+		}
+		carcasses := []AttractantFeaturePoint{
+			{Type: "CARCASS", Latitude: 35.6900, Longitude: 139.6920, Weight: 0.85},
+		}
+		crops := []AttractantFeaturePoint{
+			{Type: "CROP", Latitude: 35.6890, Longitude: 139.6910, Weight: 0.90},
+		}
+		return kaki, carcasses, crops
+	})
+
+	event := IncidentStreamingEvent{
+		EventID:           "test_dynamic_01",
+		IncidentID:        "inc_dynamic_test",
+		Species:           "BEAR",
+		Latitude:          35.6895,
+		Longitude:         139.6917,
+		Timestamp:         time.Now().UTC(),
+		IsIncursion:       1,
+		VerificationState: "VERIFIED",
+	}
+
+	sample, err := replicator.ReplicateIncidentEvent(event)
+	if err != nil {
+		t.Fatalf("failed to replicate event with dynamic attractants: %v", err)
+	}
+
+	// Distance to dynamic kaki at same point should be very close to 0m
+	if sample.Features.DistNearestPersimmonM > 10.0 {
+		t.Errorf("expected dynamic nearest persimmon distance < 10m, got %.1f", sample.Features.DistNearestPersimmonM)
+	}
+	if sample.Features.DistNearestCarcassM > 150.0 {
+		t.Errorf("expected dynamic nearest carcass distance < 150m, got %.1f", sample.Features.DistNearestCarcassM)
+	}
+}

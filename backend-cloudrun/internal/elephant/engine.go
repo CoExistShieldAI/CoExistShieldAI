@@ -41,10 +41,14 @@ type ElephantCropPlot struct {
 	UpdatedAt             string                         `json:"updatedAt"`
 }
 
+// PlotPersistenceListener is called whenever a crop plot is created or modified.
+type PlotPersistenceListener func(plot ElephantCropPlot)
+
 // Engine calculates dynamic Asian elephant crop-raiding probabilities and scent plume buffers.
 type Engine struct {
-	mu    sync.RWMutex
-	plots map[string]ElephantCropPlot
+	mu                  sync.RWMutex
+	plots               map[string]ElephantCropPlot
+	persistenceListener PlotPersistenceListener
 }
 
 // NewEngine initializes the Thailand Elephant HEC Engine.
@@ -59,16 +63,39 @@ func NewEngine() *Engine {
 	return e
 }
 
-// LoadFixturePlots populates realistic baseline agricultural estates.
+// LoadFixturePlots populates seed crop plots.
 func (e *Engine) LoadFixturePlots() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.seedInitialPlots()
+}
+
+// SetPersistenceListener registers a callback invoked when a plot is saved/updated.
+func (e *Engine) SetPersistenceListener(l PlotPersistenceListener) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.persistenceListener = l
+}
+
+// LoadPlots bulk loads plots (e.g. restored from Firestore).
+func (e *Engine) LoadPlots(plots []ElephantCropPlot) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, p := range plots {
+		e.plots[p.ID] = p
+	}
 }
 
 // RegisterPlot dynamically adds or updates an agricultural crop plot.
 func (e *Engine) RegisterPlot(plot ElephantCropPlot) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.plots[plot.ID] = plot
+	l := e.persistenceListener
+	e.mu.Unlock()
+
+	if l != nil {
+		l(plot)
+	}
 }
 
 func (e *Engine) seedInitialPlots() {
@@ -197,6 +224,16 @@ func (e *Engine) GetPlot(id string) (*ElephantCropPlot, error) {
 
 // UpdateHarvestStage updates the crop maturity stage (submitted by farmer or ranger) and recalculates risk.
 func (e *Engine) UpdateHarvestStage(id string, stage string, weather *model.WeatherConditions) (*ElephantCropPlot, error) {
+	var (
+		l PlotPersistenceListener
+		updated ElephantCropPlot
+	)
+	defer func() {
+		if l != nil {
+			l(updated)
+		}
+	}()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -219,8 +256,10 @@ func (e *Engine) UpdateHarvestStage(id string, stage string, weather *model.Weat
 		w = *weather
 	}
 
-	updated := e.calculatePlotRisk(plot, w)
+	updated = e.calculatePlotRisk(plot, w)
 	e.plots[id] = updated
+	l = e.persistenceListener
+
 	return &updated, nil
 }
 

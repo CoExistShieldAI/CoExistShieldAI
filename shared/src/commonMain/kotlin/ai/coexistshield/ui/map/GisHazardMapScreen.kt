@@ -1212,12 +1212,29 @@ private fun DrawScope.drawGeofencePolygons(
     if (!isLayerActive) return
 
     if (geofences.isNotEmpty()) {
-        geofences.forEach { gf ->
+        // Sort so outermost buffer zones (Tier 1 Notice) render first (base layer),
+        // and innermost core danger zones (Tier 3 Danger) render on top.
+        val sortedGeofences = geofences.sortedBy { gf ->
+            when (gf.tier) {
+                AlertTier.TIER_1_NOTICE -> 1
+                AlertTier.TIER_2_WARNING -> 2
+                AlertTier.TIER_3_DANGER -> 3
+                AlertTier.SAFE -> 0
+            }
+        }
+
+        sortedGeofences.forEach { gf ->
             val zoneColor = when (gf.tier) {
                 AlertTier.TIER_3_DANGER -> TierDanger
                 AlertTier.TIER_2_WARNING -> TierWarning
                 AlertTier.TIER_1_NOTICE -> TierNotice
                 AlertTier.SAFE -> TierSafe
+            }
+            val fillAlpha = when (gf.tier) {
+                AlertTier.TIER_3_DANGER -> 0.28f
+                AlertTier.TIER_2_WARNING -> 0.18f
+                AlertTier.TIER_1_NOTICE -> 0.10f
+                AlertTier.SAFE -> 0.05f
             }
 
             if (gf.coordinates.size >= 3) {
@@ -1232,15 +1249,17 @@ private fun DrawScope.drawGeofencePolygons(
                     }
                     close()
                 }
-                drawPath(path, color = zoneColor.copy(alpha = 0.22f), style = Fill)
+                drawPath(path, color = zoneColor.copy(alpha = fillAlpha), style = Fill)
                 drawPath(
                     path,
                     color = zoneColor,
                     style = Stroke(
-                        width = (2.5f * zoom).coerceIn(1.5f, 4.0f),
-                        pathEffect = if (gf.tier == AlertTier.TIER_2_WARNING) {
-                            PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
-                        } else null
+                        width = if (gf.tier == AlertTier.TIER_3_DANGER) (2.5f * zoom).coerceIn(2.0f, 4.5f) else (1.8f * zoom).coerceIn(1.2f, 3.0f),
+                        pathEffect = when (gf.tier) {
+                            AlertTier.TIER_2_WARNING -> PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                            AlertTier.TIER_1_NOTICE -> PathEffect.dashPathEffect(floatArrayOf(16f, 12f), 0f)
+                            else -> null
+                        }
                     )
                 )
             } else if (gf.centroid.latitude != 0.0 || gf.centroid.longitude != 0.0) {
@@ -1251,7 +1270,7 @@ private fun DrawScope.drawGeofencePolygons(
                 )
                 val rPx = kotlin.math.hypot(edgePos.x - centerPos.x, edgePos.y - centerPos.y).coerceAtLeast(12f)
                 drawCircle(
-                    color = zoneColor.copy(alpha = 0.20f),
+                    color = zoneColor.copy(alpha = fillAlpha),
                     radius = rPx,
                     center = centerPos,
                     style = Fill
@@ -1261,8 +1280,12 @@ private fun DrawScope.drawGeofencePolygons(
                     radius = rPx,
                     center = centerPos,
                     style = Stroke(
-                        width = (2.5f * zoom).coerceIn(1.5f, 4.0f),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                        width = if (gf.tier == AlertTier.TIER_3_DANGER) (2.5f * zoom).coerceIn(2.0f, 4.5f) else (1.8f * zoom).coerceIn(1.2f, 3.0f),
+                        pathEffect = when (gf.tier) {
+                            AlertTier.TIER_2_WARNING -> PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                            AlertTier.TIER_1_NOTICE -> PathEffect.dashPathEffect(floatArrayOf(14f, 10f), 0f)
+                            else -> null
+                        }
                     )
                 )
             }

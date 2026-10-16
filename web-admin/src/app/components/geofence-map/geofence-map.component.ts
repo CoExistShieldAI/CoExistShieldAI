@@ -721,7 +721,7 @@ export class GeofenceMapComponent implements OnInit {
   }
 
   visibleGeofences(): AdminGeofence[] {
-    return this.api.geofences().filter(g => {
+    const filtered = this.api.geofences().filter(g => {
       if (g.source === 'ai' && !this.showAiGeofences) return false;
       if (g.source === 'manual' && !this.showManualGeofences) return false;
 
@@ -739,6 +739,13 @@ export class GeofenceMapComponent implements OnInit {
       }
       return true;
     });
+
+    const tierOrder: Record<string, number> = {
+      'TIER_1_CAUTION': 1,
+      'TIER_2_ALERT': 2,
+      'TIER_3_CRITICAL': 3
+    };
+    return filtered.sort((a, b) => (tierOrder[a.threat_level] || 0) - (tierOrder[b.threat_level] || 0));
   }
 
   filteredWildlife(): AdminWildlifeIncident[] {
@@ -1115,15 +1122,22 @@ export class GeofenceMapComponent implements OnInit {
 
   getPolygonOptions(geo: AdminGeofence): google.maps.PolygonOptions {
     const isManual = geo.source === 'manual';
+    const isBuffer = geo.id.includes('-tier2-buffer') || geo.id.includes('-tier1-buffer');
     let fillColor = '#facc15';
     let strokeColor = '#eab308';
+    let zIndex = 10;
+    let fillOpacity = isBuffer ? 0.10 : 0.16;
 
     if (geo.threat_level === 'TIER_3_CRITICAL') {
       fillColor = '#ef4444';
       strokeColor = '#dc2626';
+      zIndex = 30;
+      fillOpacity = 0.32;
     } else if (geo.threat_level === 'TIER_2_ALERT') {
       fillColor = '#f97316';
       strokeColor = '#ea580c';
+      zIndex = 20;
+      fillOpacity = isBuffer ? 0.16 : 0.22;
     }
 
     if (isManual) {
@@ -1132,25 +1146,33 @@ export class GeofenceMapComponent implements OnInit {
 
     return {
       fillColor,
-      fillOpacity: 0.35,
+      fillOpacity,
       strokeColor,
-      strokeOpacity: 0.9,
-      strokeWeight: isManual ? 3 : 2,
+      strokeOpacity: isBuffer ? 0.70 : 0.90,
+      strokeWeight: isManual ? 3 : (isBuffer ? 1.5 : 2.5),
+      zIndex,
       clickable: true
     };
   }
 
   getCircleOptions(geo: AdminGeofence): google.maps.CircleOptions {
     const isManual = geo.source === 'manual';
+    const isBuffer = geo.id.includes('-tier2-buffer') || geo.id.includes('-tier1-buffer');
     let fillColor = '#facc15';
     let strokeColor = '#eab308';
+    let zIndex = 10;
+    let fillOpacity = isBuffer ? 0.10 : 0.16;
 
     if (geo.threat_level === 'TIER_3_CRITICAL') {
       fillColor = '#ef4444';
       strokeColor = '#dc2626';
+      zIndex = 30;
+      fillOpacity = 0.32;
     } else if (geo.threat_level === 'TIER_2_ALERT') {
       fillColor = '#f97316';
       strokeColor = '#ea580c';
+      zIndex = 20;
+      fillOpacity = isBuffer ? 0.16 : 0.22;
     }
 
     if (isManual) {
@@ -1159,10 +1181,11 @@ export class GeofenceMapComponent implements OnInit {
 
     return {
       fillColor,
-      fillOpacity: 0.35,
+      fillOpacity,
       strokeColor,
-      strokeOpacity: 0.9,
-      strokeWeight: isManual ? 3 : 2,
+      strokeOpacity: isBuffer ? 0.70 : 0.90,
+      strokeWeight: isManual ? 3 : (isBuffer ? 1.5 : 2.5),
+      zIndex,
       clickable: true
     };
   }

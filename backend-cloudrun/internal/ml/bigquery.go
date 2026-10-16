@@ -235,21 +235,61 @@ type AttractantFeaturePoint struct {
 	Weight    float64 `json:"weight"`
 }
 
+// AttractantProvider is a callback providing real-time dynamic attractants from database stores.
+type AttractantProvider func() (kaki []AttractantFeaturePoint, carcasses []AttractantFeaturePoint, crops []AttractantFeaturePoint)
+
 // BigQueryGISReplicator performs real-time streaming replication from Firestore to BigQuery GIS
 // and spatio-temporal feature enrichment (Issue #20 & #41).
 type BigQueryGISReplicator struct {
-	mu              sync.RWMutex
-	pipeline        *RetrainingPipeline
-	projectID       string
-	datasetID       string
-	tableID         string
-	httpClient      *http.Client
-	totalReplicated int
-	lastSync        time.Time
-	stagedSamples   []TrainingSample
-	knownKakiTrees  []AttractantFeaturePoint
-	knownCarcasses  []AttractantFeaturePoint
-	knownCrops      []AttractantFeaturePoint
+	mu                 sync.RWMutex
+	pipeline           *RetrainingPipeline
+	projectID          string
+	datasetID          string
+	tableID            string
+	httpClient         *http.Client
+	totalReplicated    int
+	lastSync           time.Time
+	stagedSamples      []TrainingSample
+	knownKakiTrees     []AttractantFeaturePoint
+	knownCarcasses     []AttractantFeaturePoint
+	knownCrops         []AttractantFeaturePoint
+	attractantProvider AttractantProvider
+}
+
+// SetAttractantProvider registers a dynamic callback to query live Firestore/Admin stores.
+func (r *BigQueryGISReplicator) SetAttractantProvider(p AttractantProvider) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.attractantProvider = p
+}
+
+// UpdateAttractants explicitly updates the in-memory spatial index of attractants.
+func (r *BigQueryGISReplicator) UpdateAttractants(kaki []AttractantFeaturePoint, carcasses []AttractantFeaturePoint, crops []AttractantFeaturePoint) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(kaki) > 0 {
+		r.knownKakiTrees = kaki
+	}
+	if len(carcasses) > 0 {
+		r.knownCarcasses = carcasses
+	}
+	if len(crops) > 0 {
+		r.knownCrops = crops
+	}
+}
+
+// AddAttractantPoint appends an individual dynamically registered attractant.
+func (r *BigQueryGISReplicator) AddAttractantPoint(point AttractantFeaturePoint) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	switch strings.ToUpper(point.Type) {
+	case "KAKI":
+		r.knownKakiTrees = append(r.knownKakiTrees, point)
+	case "CARCASS", "ROADKILL":
+		r.knownCarcasses = append(r.knownCarcasses, point)
+	case "CROP":
+		r.knownCrops = append(r.knownCrops, point)
+	}
 }
 
 // NewBigQueryGISReplicator creates a replicator tied to the retraining pipeline with seeded GIS attractants.
@@ -311,9 +351,26 @@ func (r *BigQueryGISReplicator) ReplicateIncidentEvent(event IncidentStreamingEv
 		event.Timestamp = time.Now().UTC()
 	}
 
+	kaki := r.knownKakiTrees
+	carcasses := r.knownCarcasses
+	crops := r.knownCrops
+	if r.attractantProvider != nil {
+		if dynKaki, dynCarcasses, dynCrops := r.attractantProvider(); len(dynKaki) > 0 || len(dynCarcasses) > 0 || len(dynCrops) > 0 {
+			if len(dynKaki) > 0 {
+				kaki = dynKaki
+			}
+			if len(dynCarcasses) > 0 {
+				carcasses = dynCarcasses
+			}
+			if len(dynCrops) > 0 {
+				crops = dynCrops
+			}
+		}
+	}
+
 	// Spatio-temporal GIS joins and environmental feature enrichment
 	features := ExtractFeatureVector(event.Latitude, event.Longitude, event.Timestamp,
-		r.knownKakiTrees, r.knownCarcasses, r.knownCrops)
+		kaki, carcasses, crops)
 
 	sample := TrainingSample{
 		Features:    features,

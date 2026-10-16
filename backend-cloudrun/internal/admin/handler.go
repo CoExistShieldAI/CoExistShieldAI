@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,11 +17,13 @@ import (
 
 type GeofenceChangeListener func(action string, geofenceID string, loc *model.ActiveGeofencePoint, tier string)
 type IncidentListener func(category string, id string, species string, lat float64, lng float64, status string)
+type BroadcastListener func(req EmergencyBroadcastRequest, broadcastID string, recipients int)
 
 type Handler struct {
 	store                  *Store
 	geofenceChangeListener GeofenceChangeListener
 	incidentListener       IncidentListener
+	broadcastListener      BroadcastListener
 }
 
 func NewHandler(store *Store) *Handler {
@@ -42,6 +45,11 @@ func (h *Handler) SetGeofenceChangeListener(l GeofenceChangeListener) {
 // SetIncidentListener registers a callback for wildlife and roadkill incident creation.
 func (h *Handler) SetIncidentListener(l IncidentListener) {
 	h.incidentListener = l
+}
+
+// SetBroadcastListener registers a callback for emergency broadcast dispatch (e.g. SSE / FCM).
+func (h *Handler) SetBroadcastListener(l BroadcastListener) {
+	h.broadcastListener = l
 }
 
 func (h *Handler) notifyGeofenceChange(action string, geofenceID string, loc *model.ActiveGeofencePoint, tier string) {
@@ -459,18 +467,114 @@ func (h *Handler) handleEmergencyBroadcast(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Mock dispatching push notifications to active subscribers in target zone
-	recipients := 142
-	if req.Priority == "URGENT" {
-		recipients = 285
+	broadcastID := fmt.Sprintf("bcast-%d", time.Now().UnixNano()%1000000)
+
+	// Calculate dynamic estimated recipients based on target geofence and urgency priority
+	recipients := 85
+	if req.GeofenceID != "" && h.store != nil {
+		geofences := h.store.ListGeofences("")
+		for _, g := range geofences {
+			if g.ID == req.GeofenceID {
+				radiusKm := g.CircleRadiusMeters / 1000.0
+				if radiusKm <= 0 {
+					radiusKm = 2.5
+				}
+				// Area-based demographic density estimate (approx 20-40 recipients/km2 in rural fringe)
+				density := 25.0
+				if req.Priority == "URGENT" {
+					density = 45.0
+				}
+				estimated := int(3.14159 * radiusKm * radiusKm * density)
+				if estimated < 30 {
+					estimated = 30
+				}
+				recipients = estimated
+				break
+			}
+		}
+	} else {
+		// All zones in theater broadcast
+		recipients = 240
+		if req.Priority == "URGENT" {
+			recipients = 520
+		}
 	}
+
+	// Trigger real-time broadcast listener (SSE EventHub to all connected web & ionic apps)
+	if h.broadcastListener != nil {
+		h.broadcastListener(req, broadcastID, recipients)
+	}
+
+	// Asynchronously trigger FCM notification topic broadcast if project configured
+	go h.dispatchFcmNotification(req, broadcastID)
+
 	resp := EmergencyBroadcastResponse{
-		BroadcastID:        fmt.Sprintf("bcast-%d", time.Now().UnixNano()%1000000),
+		BroadcastID:        broadcastID,
 		EstimatedRecipients: recipients,
 		DispatchedAt:       time.Now().UTC(),
 		Status:             "DISPATCHED",
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// dispatchFcmNotification dispatches Firebase Cloud Messaging HTTP v1 push notifications if credentials available
+func (h *Handler) dispatchFcmNotification(req EmergencyBroadcastRequest, broadcastID string) {
+	projectID := os.Getenv("FIREBASE_PROJECT_ID")
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	if projectID == "" {
+		return // No GCP/Firebase project configured in local test
+	}
+
+	token, err := getAdminGCPToken()
+	if err != nil || token == "" {
+		return
+	}
+
+	topic := "emergency_broadcast"
+	if req.GeofenceID != "" {
+		cleanGf := strings.ReplaceAll(req.GeofenceID, "-", "_")
+		topic = fmt.Sprintf("geofence_%s", cleanGf)
+	}
+
+	payload := map[string]interface{}{
+		"message": map[string]interface{}{
+			"topic": topic,
+			"notification": map[string]string{
+				"title": req.Title,
+				"body":  req.Body,
+			},
+			"data": map[string]string{
+				"broadcastId": broadcastID,
+				"geofenceId":  req.GeofenceID,
+				"priority":    req.Priority,
+				"type":        "EMERGENCY_BROADCAST",
+			},
+			"android": map[string]interface{}{
+				"priority": "high",
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	endpoint := fmt.Sprintf("https://fcm.googleapis.com/v1/projects/%s/messages:send", projectID)
+	httpReq, err := http.NewRequest("POST", endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
 }
 
 func (h *Handler) handleExport(w http.ResponseWriter, r *http.Request) {

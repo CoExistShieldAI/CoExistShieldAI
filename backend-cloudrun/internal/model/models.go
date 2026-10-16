@@ -395,6 +395,7 @@ type IncidentDto struct {
 	Region             string                 `json:"region"`
 	Description        string                 `json:"description,omitempty"`
 	PhotoUrls          []string               `json:"photoUrls,omitempty"`
+	PhotoBase64        string                 `json:"photoBase64,omitempty"`
 	GeminiTriageResult *GeminiTriageResultDto `json:"geminiTriageResult,omitempty"`
 	ReporterId         string                 `json:"reporterId"`
 	ReporterRole       string                 `json:"reporterRole"`

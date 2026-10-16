@@ -119,11 +119,22 @@ func TestScheduledIngestionCycle(t *testing.T) {
 	geminiClient := gemini.NewClient()
 	engine := NewEngine(geminiClient)
 
+	// 1. In production mode (no seed/demo flags), RunIngestionCycle must NOT inject synthetic ghost incidents
+	t.Setenv("ENABLE_SEED_DATA", "")
+	t.Setenv("DEV_MODE", "")
+	t.Setenv("DEMO_MODE", "")
+	prodIngested := engine.RunIngestionCycle()
+	if prodIngested != 0 {
+		t.Errorf("expected 0 synthetic ghost items in production mode, got %d", prodIngested)
+	}
+
+	// 2. In demo/seed mode, simulated items are injected
+	t.Setenv("ENABLE_SEED_DATA", "true")
 	initialCount := len(engine.GetActiveStreamItems("", ""))
 	ingested := engine.RunIngestionCycle()
 
 	if ingested <= 0 {
-		t.Errorf("expected positive number of ingested items in cycle, got %d", ingested)
+		t.Errorf("expected positive number of ingested items in cycle under seed mode, got %d", ingested)
 	}
 
 	newCount := len(engine.GetActiveStreamItems("", ""))

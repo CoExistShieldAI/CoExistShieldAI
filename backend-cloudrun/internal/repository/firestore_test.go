@@ -142,4 +142,37 @@ func TestFirestoreRepositoryCRUDWithMockServer(t *testing.T) {
 	if updatedRk.ClearanceStatus != "CLEARED" {
 		t.Errorf("expected status CLEARED, got %s", updatedRk.ClearanceStatus)
 	}
+
+	// 5. ML Model Checkpoint and History Persistence
+	mockModelJSON := []byte(`{"version":"v2026.10.16.1200","bias":-0.45,"metrics":{"aucRoc":0.885,"precisionTop20":0.82}}`)
+	if err := repo.SaveMLModelCheckpoint(ctx, mockModelJSON, "v2026.10.16.1200", "2026-10-16T12:00:00Z", 0.885, 0.82, 120); err != nil {
+		t.Fatalf("failed to save ML model checkpoint: %v", err)
+	}
+
+	latestModelBytes, err := repo.GetLatestMLModel(ctx)
+	if err != nil {
+		t.Fatalf("failed to get latest ML model: %v", err)
+	}
+	if !strings.Contains(string(latestModelBytes), "v2026.10.16.1200") {
+		t.Errorf("expected latest model to contain version v2026.10.16.1200, got: %s", string(latestModelBytes))
+	}
+
+	// 6. ML Retraining History and Samples
+	mockResultJSON := []byte(`{"runId":"run-999","activeModelVersion":"v2026.10.16.1200","promotedToProd":true}`)
+	if err := repo.SaveMLRetrainResult(ctx, mockResultJSON, "run-999", "v2026.10.16.1200", "cron_scheduled", true, "2026-10-16T12:00:00Z"); err != nil {
+		t.Fatalf("failed to save ML retrain result: %v", err)
+	}
+	history, err := repo.ListMLRetrainHistory(ctx)
+	if err != nil || len(history) != 1 {
+		t.Fatalf("expected 1 history record, got %d (err: %v)", len(history), err)
+	}
+
+	mockSampleJSON := []byte(`{"isIncursion":1,"features":{"h3Index":"882f5b4d93fffff"}}`)
+	if err := repo.SaveMLTrainingSample(ctx, mockSampleJSON, "sample-001"); err != nil {
+		t.Fatalf("failed to save ML training sample: %v", err)
+	}
+	samples, err := repo.ListMLTrainingSamples(ctx)
+	if err != nil || len(samples) != 1 {
+		t.Fatalf("expected 1 sample, got %d (err: %v)", len(samples), err)
+	}
 }

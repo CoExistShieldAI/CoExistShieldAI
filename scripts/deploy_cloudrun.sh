@@ -25,14 +25,34 @@ echo "=========================================================="
 
 cd "$(dirname "$0")/../backend-cloudrun"
 
-# Check if Secret Manager has GEMINI_API_KEY
-SECRET_FLAG=""
+# Check Secret Manager for optional API secrets
+SECRETS=()
 if gcloud secrets describe GEMINI_API_KEY --project="${PROJECT_ID}" &>/dev/null; then
   echo "✓ Detected Secret Manager secret 'GEMINI_API_KEY'. Mounting into container."
-  SECRET_FLAG="--set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest"
+  SECRETS+=("GEMINI_API_KEY=GEMINI_API_KEY:latest")
 else
   echo "⚠ Secret 'GEMINI_API_KEY' not found in Secret Manager; fallback heuristic AI will activate if key is omitted."
 fi
+
+if gcloud secrets describe GOOGLE_MAPS_API_KEY --project="${PROJECT_ID}" &>/dev/null; then
+  echo "✓ Detected Secret Manager secret 'GOOGLE_MAPS_API_KEY'. Mounting into container."
+  SECRETS+=("GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest")
+elif gcloud secrets describe GEOCODING_API_KEY --project="${PROJECT_ID}" &>/dev/null; then
+  echo "✓ Detected Secret Manager secret 'GEOCODING_API_KEY'. Mounting into container."
+  SECRETS+=("GEOCODING_API_KEY=GEOCODING_API_KEY:latest")
+fi
+
+if gcloud secrets describe FIRMS_MAP_KEY --project="${PROJECT_ID}" &>/dev/null; then
+  echo "✓ Detected Secret Manager secret 'FIRMS_MAP_KEY'. Mounting into container."
+  SECRETS+=("FIRMS_MAP_KEY=FIRMS_MAP_KEY:latest")
+fi
+
+SECRET_FLAG=""
+if [[ ${#SECRETS[@]} -gt 0 ]]; then
+  SECRET_FLAG="--set-secrets=$(IFS=,; echo "${SECRETS[*]}")"
+fi
+
+MEDIA_BUCKET="${GCS_MEDIA_BUCKET:-corald-coexistshield-media}"
 
 # 1. Deploy Cloud Run Service (Microservice APIs & Ingestion Pipelines)
 echo "--> Deploying Cloud Run Service: ${SERVICE_NAME}..."
@@ -48,7 +68,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --memory 512Mi \
   --timeout 300 \
   --quiet \
-  --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID}" \
+  --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID},GCS_MEDIA_BUCKET=${MEDIA_BUCKET}" \
   ${SECRET_FLAG}
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -71,7 +91,7 @@ gcloud run jobs deploy "${JOB_NAME}" \
   --memory 512Mi \
   --max-retries 1 \
   --quiet \
-  --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID}" \
+  --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID},GCS_MEDIA_BUCKET=${MEDIA_BUCKET}" \
   ${SECRET_FLAG} || echo "⚠ Job deploy completed with warning"
 
 

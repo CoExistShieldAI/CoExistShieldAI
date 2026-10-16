@@ -18,10 +18,12 @@ import {
 })
 export class AdminApiService {
   private http = inject(HttpClient);
-  // Dynamic baseUrl: points to Cloud Run in production, localhost in local development
+  // Dynamic baseUrl: points to Cloud Run in production, localhost in local development, or configured window.COEXIST_BACKEND_URL
   private baseUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:8080/api/v1/admin'
-    : 'https://coexistshield-backend-400266593079.asia-southeast1.run.app/api/v1/admin';
+    : ((typeof window !== 'undefined' && (window as any).COEXIST_BACKEND_URL)
+        ? `${(window as any).COEXIST_BACKEND_URL}/api/v1/admin`
+        : 'https://coexistshield-backend-400266593079.asia-southeast1.run.app/api/v1/admin');
 
   // Reactive state signals
   readonly stats = signal<DashboardStats | null>(null);
@@ -31,12 +33,18 @@ export class AdminApiService {
   readonly environmental = signal<AdminEnvironmentalData[]>([]);
   readonly weather = signal<AdminWeatherData[]>([]);
   readonly isRecalculating = signal<boolean>(false);
+  readonly isOfflineFallback = signal<boolean>(false);
+  readonly isDemoMode = signal<boolean>(typeof window !== 'undefined' && (localStorage.getItem('DEMO_MODE') === 'true' || window.location.search.includes('demo=true')));
 
   // --- Dashboard ---
   getStats(): Observable<DashboardStats> {
     return this.http.get<DashboardStats>(`${this.baseUrl}/dashboard/stats`).pipe(
-      tap(data => this.stats.set(data)),
+      tap(data => {
+        this.stats.set(data);
+        this.isOfflineFallback.set(false);
+      }),
       catchError(() => {
+        this.isOfflineFallback.set(true);
         const fallback: DashboardStats = {
           total_geofences: 6,
           ai_geofences: 5,
@@ -65,8 +73,12 @@ export class AdminApiService {
   getGeofences(source?: string): Observable<AdminGeofence[]> {
     const url = source ? `${this.baseUrl}/geofences?source=${source}` : `${this.baseUrl}/geofences`;
     return this.http.get<AdminGeofence[]>(url).pipe(
-      tap(data => this.geofences.set(data)),
+      tap(data => {
+        this.geofences.set(data);
+        this.isOfflineFallback.set(false);
+      }),
       catchError(() => {
+        this.isOfflineFallback.set(true);
         // Fallback seed
         const fallback: AdminGeofence[] = [
           {
@@ -166,24 +178,6 @@ export class AdminApiService {
     return this.http.post<AdminGeofence>(`${this.baseUrl}/geofences`, geofence).pipe(
       tap(created => {
         this.geofences.update(list => [created, ...list]);
-      }),
-      catchError(() => {
-        const mock: AdminGeofence = {
-          id: `geo-manual-${Date.now()}`,
-          name: geofence.name || 'Manual Geofence',
-          source: 'manual',
-          is_persistent: true,
-          geometry_type: geofence.geometry_type || 'circle',
-          circle_center: geofence.circle_center || null,
-          circle_radius_meters: geofence.circle_radius_meters || 1000,
-          coordinates: geofence.coordinates || [],
-          threat_level: geofence.threat_level || 'TIER_2_ALERT',
-          target_species: geofence.target_species || 'Other',
-          created_at: new Date().toISOString(),
-          reason: geofence.reason || 'Manual override'
-        };
-        this.geofences.update(list => [mock, ...list]);
-        return of(mock);
       })
     );
   }
@@ -192,10 +186,6 @@ export class AdminApiService {
     return this.http.delete(`${this.baseUrl}/geofences/${id}`).pipe(
       tap(() => {
         this.geofences.update(list => list.filter(g => g.id !== id));
-      }),
-      catchError(() => {
-        this.geofences.update(list => list.filter(g => g.id !== id));
-        return of({ status: 'deleted', id });
       })
     );
   }
@@ -204,10 +194,6 @@ export class AdminApiService {
     return this.http.delete(`${this.baseUrl}/geofences/manual/all`).pipe(
       tap(() => {
         this.geofences.update(list => list.filter(g => g.source !== 'manual'));
-      }),
-      catchError(() => {
-        this.geofences.update(list => list.filter(g => g.source !== 'manual'));
-        return of({ status: 'success', purged_count: 1 });
       })
     );
   }
@@ -286,8 +272,12 @@ export class AdminApiService {
   // --- Wildlife Incidents ---
   getWildlife(): Observable<AdminWildlifeIncident[]> {
     return this.http.get<AdminWildlifeIncident[]>(`${this.baseUrl}/incidents/wildlife`).pipe(
-      tap(data => this.wildlife.set(data)),
+      tap(data => {
+        this.wildlife.set(data);
+        this.isOfflineFallback.set(false);
+      }),
       catchError(() => {
+        this.isOfflineFallback.set(true);
         const fallback: AdminWildlifeIncident[] = [
           {
             id: 'wildlife-001',
@@ -460,20 +450,6 @@ export class AdminApiService {
     return this.http.post<AdminWildlifeIncident>(`${this.baseUrl}/incidents/wildlife`, item).pipe(
       tap(created => {
         this.wildlife.update(list => [created, ...list]);
-      }),
-      catchError(() => {
-        const mock: AdminWildlifeIncident = {
-          id: `wildlife-${Date.now()}`,
-          species: item.species || 'Unknown',
-          location: item.location || { lat: 12.8, lng: 99.6 },
-          threat_level: item.threat_level || 'TIER_2_ALERT',
-          status: item.status || 'UNVERIFIED',
-          reporter: item.reporter || 'Admin Desktop User',
-          description: item.description || '',
-          reported_at: new Date().toISOString()
-        };
-        this.wildlife.update(list => [mock, ...list]);
-        return of(mock);
       })
     );
   }
@@ -482,10 +458,6 @@ export class AdminApiService {
     return this.http.delete(`${this.baseUrl}/incidents/wildlife/${id}`).pipe(
       tap(() => {
         this.wildlife.update(list => list.filter(w => w.id !== id));
-      }),
-      catchError(() => {
-        this.wildlife.update(list => list.filter(w => w.id !== id));
-        return of({ status: 'deleted', id });
       })
     );
   }
@@ -496,12 +468,6 @@ export class AdminApiService {
         this.wildlife.update(list =>
           list.map(w => w.id === id ? { ...w, status: status as any } : w)
         );
-      }),
-      catchError(() => {
-        this.wildlife.update(list =>
-          list.map(w => w.id === id ? { ...w, status: status as any } : w)
-        );
-        return of({ id, status });
       })
     );
   }
@@ -509,8 +475,12 @@ export class AdminApiService {
   // --- Roadkill Records ---
   getRoadkills(includeExcluded: boolean = true): Observable<AdminRoadkillRecord[]> {
     return this.http.get<AdminRoadkillRecord[]>(`${this.baseUrl}/incidents/roadkill?include_excluded=${includeExcluded}`).pipe(
-      tap(data => this.roadkills.set(data)),
+      tap(data => {
+        this.roadkills.set(data);
+        this.isOfflineFallback.set(false);
+      }),
       catchError(() => {
+        this.isOfflineFallback.set(true);
         const fallback: AdminRoadkillRecord[] = [
           {
             id: 'rk-2026-001',
@@ -703,22 +673,6 @@ export class AdminApiService {
     return this.http.post<AdminRoadkillRecord>(`${this.baseUrl}/incidents/roadkill`, record).pipe(
       tap(created => {
         this.roadkills.update(list => [created, ...list]);
-      }),
-      catchError(() => {
-        const mock: AdminRoadkillRecord = {
-          id: `rk-${Date.now()}`,
-          species: record.species || 'Unknown',
-          estimated_weight_kg: record.estimated_weight_kg || 20,
-          decay_stage: record.decay_stage || 'FRESH',
-          location: record.location || { lat: 12.85, lng: 99.65 },
-          photo_url: record.photo_url || '',
-          reliability_score: record.reliability_score || 0.90,
-          is_excluded: record.is_excluded || false,
-          status: record.status || 'PENDING_REMOVAL',
-          reported_at: new Date().toISOString()
-        };
-        this.roadkills.update(list => [mock, ...list]);
-        return of(mock);
       })
     );
   }
@@ -729,12 +683,6 @@ export class AdminApiService {
         this.roadkills.update(list =>
           list.map(rk => rk.id === id ? { ...rk, is_excluded: isExcluded } : rk)
         );
-      }),
-      catchError(() => {
-        this.roadkills.update(list =>
-          list.map(rk => rk.id === id ? { ...rk, is_excluded: isExcluded } : rk)
-        );
-        return of({ id, is_excluded: isExcluded });
       })
     );
   }
@@ -745,12 +693,6 @@ export class AdminApiService {
         this.roadkills.update(list =>
           list.map(rk => rk.id === id ? { ...rk, status: 'DISPOSED' } : rk)
         );
-      }),
-      catchError(() => {
-        this.roadkills.update(list =>
-          list.map(rk => rk.id === id ? { ...rk, status: 'DISPOSED' } : rk)
-        );
-        return of({ id, status: 'DISPOSED' });
       })
     );
   }
@@ -758,8 +700,12 @@ export class AdminApiService {
   // --- Environmental ---
   getEnvironmental(): Observable<AdminEnvironmentalData[]> {
     return this.http.get<AdminEnvironmentalData[]>(`${this.baseUrl}/environmental`).pipe(
-      tap(data => this.environmental.set(data)),
+      tap(data => {
+        this.environmental.set(data);
+        this.isOfflineFallback.set(false);
+      }),
       catchError(() => {
+        this.isOfflineFallback.set(true);
         const fallback: AdminEnvironmentalData[] = [
           {
             id: 'env-crop-01',
@@ -876,22 +822,6 @@ export class AdminApiService {
     return this.http.post<AdminEnvironmentalData>(`${this.baseUrl}/environmental`, item).pipe(
       tap(created => {
         this.environmental.update(list => [created, ...list]);
-      }),
-      catchError(() => {
-        const mock: AdminEnvironmentalData = {
-          id: `env-${Date.now()}`,
-          category: item.category || 'CROP_PHENOLOGY',
-          name: item.name || 'New Attractant Zone',
-          location_desc: item.location_desc || '',
-          geometry_type: item.geometry_type || 'circle',
-          circle_center: item.circle_center || { lat: 12.8, lng: 99.6 },
-          radius_meters: item.radius_meters || 2000,
-          risk_weight: item.risk_weight || 0.75,
-          active_season: item.active_season || 'Year-round',
-          last_updated: new Date().toISOString()
-        };
-        this.environmental.update(list => [mock, ...list]);
-        return of(mock);
       })
     );
   }
@@ -900,10 +830,6 @@ export class AdminApiService {
     return this.http.delete(`${this.baseUrl}/environmental/${id}`).pipe(
       tap(() => {
         this.environmental.update(list => list.filter(e => e.id !== id));
-      }),
-      catchError(() => {
-        this.environmental.update(list => list.filter(e => e.id !== id));
-        return of({ status: 'deleted', id });
       })
     );
   }
@@ -912,8 +838,12 @@ export class AdminApiService {
   getWeather(region?: string): Observable<AdminWeatherData[]> {
     const url = region ? `${this.baseUrl}/weather?region=${encodeURIComponent(region)}` : `${this.baseUrl}/weather`;
     return this.http.get<AdminWeatherData[]>(url).pipe(
-      tap(data => this.weather.set(data)),
+      tap(data => {
+        this.weather.set(data);
+        this.isOfflineFallback.set(false);
+      }),
       catchError(() => {
+        this.isOfflineFallback.set(true);
         const fallback: AdminWeatherData[] = [
           {
             id: 'weather-thai-01',
@@ -1675,28 +1605,6 @@ export class AdminApiService {
     return this.http.post<AdminWeatherData>(`${this.baseUrl}/weather`, item).pipe(
       tap(created => {
         this.weather.update(list => [created, ...list]);
-      }),
-      catchError(() => {
-        const mock: AdminWeatherData = {
-          id: `weather-${Date.now()}`,
-          station_name: item.station_name || 'New Observation Station',
-          region: item.region || 'Regional Met-Grid',
-          latitude: item.latitude || 0,
-          longitude: item.longitude || 0,
-          temperature_celsius: item.temperature_celsius ?? 22.0,
-          humidity_pct: item.humidity_pct ?? 70.0,
-          wind_speed_kmh: item.wind_speed_kmh ?? 10.0,
-          wind_direction_deg: item.wind_direction_deg ?? 90.0,
-          precipitation_mm_h: item.precipitation_mm_h ?? 0.0,
-          moon_illumination: item.moon_illumination ?? 0.5,
-          moon_phase: item.moon_phase || 'FIRST_QUARTER',
-          is_flooded_river_risk: (item.precipitation_mm_h ?? 0) >= 25.0,
-          weather_condition: item.weather_condition || 'CLEAR',
-          notes: item.notes || '',
-          last_updated: new Date().toISOString()
-        };
-        this.weather.update(list => [mock, ...list]);
-        return of(mock);
       })
     );
   }
@@ -1705,22 +1613,6 @@ export class AdminApiService {
     return this.http.put<AdminWeatherData>(`${this.baseUrl}/weather/${id}`, item).pipe(
       tap(updated => {
         this.weather.update(list => list.map(w => w.id === id ? updated : w));
-      }),
-      catchError(() => {
-        let updatedItem: AdminWeatherData | null = null;
-        this.weather.update(list => list.map(w => {
-          if (w.id === id) {
-            updatedItem = {
-              ...w,
-              ...item,
-              is_flooded_river_risk: (item.precipitation_mm_h ?? w.precipitation_mm_h) >= 25.0,
-              last_updated: new Date().toISOString()
-            };
-            return updatedItem;
-          }
-          return w;
-        }));
-        return of(updatedItem!);
       })
     );
   }
@@ -1729,40 +1621,20 @@ export class AdminApiService {
     return this.http.delete(`${this.baseUrl}/weather/${id}`).pipe(
       tap(() => {
         this.weather.update(list => list.filter(w => w.id !== id));
-      }),
-      catchError(() => {
-        this.weather.update(list => list.filter(w => w.id !== id));
-        return of({ status: 'deleted', id });
       })
     );
   }
 
   // --- Operations ---
   sendEmergencyBroadcast(req: EmergencyBroadcastRequest): Observable<EmergencyBroadcastResponse> {
-    return this.http.post<EmergencyBroadcastResponse>(`${this.baseUrl}/operations/broadcast`, req).pipe(
-      catchError(() => {
-        const mock: EmergencyBroadcastResponse = {
-          broadcast_id: `bcast-${Date.now()}`,
-          estimated_recipients: req.priority === 'URGENT' ? 320 : 145,
-          dispatched_at: new Date().toISOString(),
-          status: 'DISPATCHED'
-        };
-        return of(mock);
-      })
-    );
+    return this.http.post<EmergencyBroadcastResponse>(`${this.baseUrl}/operations/broadcast`, req);
   }
 
   // --- Media Upload ---
   uploadImages(files: File[]): Observable<UploadResponse> {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f, f.name));
-    return this.http.post<UploadResponse>(`${this.baseUrl}/upload`, formData).pipe(
-      catchError(err => {
-        console.error('Upload failed, providing fallback image URLs:', err);
-        const mockUrls = files.map((f, i) => `https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_${Date.now()}_${i}_${f.name}`);
-        return of({ urls: mockUrls });
-      })
-    );
+    return this.http.post<UploadResponse>(`${this.baseUrl}/upload`, formData);
   }
 
   getExportUrl(dataset: string, format: 'geojson' | 'csv'): string {

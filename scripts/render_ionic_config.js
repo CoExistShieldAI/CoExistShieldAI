@@ -73,8 +73,18 @@ if (process.env.GITHUB_ACTIONS === 'true') {
 console.log(`Injecting configuration into ${targetFile}...`);
 
 let content = fs.readFileSync(targetFile, 'utf8');
-content = content.replace(/__GOOGLE_MAPS_API_KEY__/g, mapsKey);
-content = content.replace(/__COEXIST_FIREBASE_API_KEY__/g, firebaseKey);
+if (content.includes('__GOOGLE_MAPS_API_KEY__')) {
+  content = content.replace(/__GOOGLE_MAPS_API_KEY__/g, mapsKey);
+} else {
+  content = content.replace(/maps\.googleapis\.com\/maps\/api\/js\?key=[^&"']*/g, `maps.googleapis.com/maps/api/js?key=${mapsKey}`);
+  content = content.replace(/window\.GOOGLE_MAPS_API_KEY\s*=\s*(?:'[^']*'|"[^"]*"|`[^`]*`|__GOOGLE_MAPS_API_KEY__)/g, `window.GOOGLE_MAPS_API_KEY = ${JSON.stringify(mapsKey)}`);
+}
+
+if (content.includes('__COEXIST_FIREBASE_API_KEY__')) {
+  content = content.replace(/__COEXIST_FIREBASE_API_KEY__/g, firebaseKey);
+} else {
+  content = content.replace(/window\.COEXIST_FIREBASE_API_KEY\s*=\s*(?:'[^']*'|"[^"]*"|`[^`]*`|__COEXIST_FIREBASE_API_KEY__)/g, `window.COEXIST_FIREBASE_API_KEY = ${JSON.stringify(firebaseKey)}`);
+}
 fs.writeFileSync(targetFile, content, 'utf8');
 
 const distDir = path.dirname(targetFile);
