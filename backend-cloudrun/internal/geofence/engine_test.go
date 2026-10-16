@@ -325,7 +325,8 @@ func TestGraduatedConcentricBufferZones(t *testing.T) {
 		t.Errorf("expected tier 1 radius ~2600m (2.60x), got %f", tier1.RadiusMeters)
 	}
 
-	// Register core and buffers into engine
+	// Clear existing default seeded zones to isolate test_core_zone
+	engine.activeZones = make(map[string]model.ActiveGeofenceZone)
 	engine.registerZoneWithGraduatedBuffers(core)
 
 	// Test EvaluateLocationTier:
