@@ -1775,7 +1775,9 @@ func TestGeofenceEvents_SSE(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/geofences/events", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		router.ServeHTTP(w, req)
 	}()
 
@@ -1793,6 +1795,7 @@ func TestGeofenceEvents_SSE(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	cancel()
+	<-done
 
 	body := w.Body.String()
 	if !strings.Contains(body, "CONNECTED") {

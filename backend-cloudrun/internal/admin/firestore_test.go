@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 	// In-memory mock Firestore server
+	var mu sync.RWMutex
 	docs := make(map[string]map[string]fsValue)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -21,14 +23,20 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 			// List documents in collection
 			col := path[strings.LastIndex(path, "/")+1:]
 			var list []fsDocument
+			mu.RLock()
 			for docPath, fields := range docs {
 				if strings.Contains(docPath, "/"+col+"/") {
+					fieldsCopy := make(map[string]fsValue, len(fields))
+					for k, v := range fields {
+						fieldsCopy[k] = v
+					}
 					list = append(list, fsDocument{
 						Name:   docPath,
-						Fields: fields,
+						Fields: fieldsCopy,
 					})
 				}
 			}
+			mu.RUnlock()
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(fsListResponse{Documents: list})
 
@@ -39,11 +47,15 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			mu.Lock()
 			docs[path] = doc.Fields
+			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 
 		case http.MethodDelete:
+			mu.Lock()
 			delete(docs, path)
+			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 
 		default:
@@ -68,7 +80,10 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 	}
 
 	// Verify that docs were seeded into mock Firestore
-	if len(docs) == 0 {
+	mu.RLock()
+	docsCount := len(docs)
+	mu.RUnlock()
+	if docsCount == 0 {
 		t.Fatalf("expected seeded docs in Firestore, got 0")
 	}
 
@@ -92,6 +107,7 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 
 	// Verify custom wildlife exists in docs
 	found := false
+	mu.RLock()
 	for path, fields := range docs {
 		if strings.Contains(path, "wildlife-custom-01") {
 			found = true
@@ -101,6 +117,7 @@ func TestFirestorePersistence_RestoreOrSeed(t *testing.T) {
 			break
 		}
 	}
+	mu.RUnlock()
 	if !found {
 		t.Errorf("expected wildlife-custom-01 in Firestore docs, not found")
 	}
