@@ -82,6 +82,23 @@ import { AlertTier, UserRole } from './models/shield.model';
                   <span class="whitespace-nowrap">{{ foldable.postureBadge().label }}</span>
                 </button>
               </div>
+
+              <!-- Map View Mode Quick Toggle (Split View vs Wide Map) -->
+              <div class="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] font-bold text-slate-400 mr-1">VIEW:</span>
+                <button
+                  type="button"
+                  (click)="foldable.toggleMapMaximize()"
+                  class="px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-1"
+                  [ngClass]="
+                    foldable.isMapMaximized()
+                      ? 'bg-sky-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:text-white'
+                  "
+                  title="Toggle between 2-Screen Split and Full Wide Map">
+                  <span>{{ foldable.isMapMaximized() ? '⛶ Full Map' : '◧ Dual Split' }}</span>
+                </button>
+              </div>
             }
           </div>
 
@@ -129,13 +146,12 @@ import { AlertTier, UserRole } from './models/shield.model';
         <main
           class="flex-1 min-h-0 overflow-hidden relative"
           [ngClass]="{
-            'flex flex-row': foldable.isBookMode(),
-            'flex flex-col': foldable.isTabletopMode(),
-            'flex flex-col lg:flex-row': !foldable.isDualScreen()
+            'flex flex-row': foldable.isBookMode() || (!foldable.isTabletopMode() && !foldable.isMapMaximized()),
+            'flex flex-col': foldable.isTabletopMode() && !foldable.isMapMaximized()
           }">
 
-          <!-- When in TABLETOP mode: Top segment is the GIS Map -->
-          @if (foldable.isTabletopMode()) {
+          <!-- When in TABLETOP mode (and not maximized): Top segment is the GIS Map -->
+          @if (foldable.isTabletopMode() && !foldable.isMapMaximized()) {
             <section class="h-1/2 w-full min-h-0 relative overflow-hidden flex-shrink-0">
               <app-gis-map-panel class="block w-full h-full"></app-gis-map-panel>
             </section>
@@ -147,78 +163,89 @@ import { AlertTier, UserRole } from './models/shield.model';
             </div>
           }
 
-          <!-- LEFT PANE (or Tabletop Lower Segment): HUD / Report / Console -->
-          <section
-            class="min-h-0 flex flex-col border-r border-slate-800 bg-slate-950 z-10 overflow-hidden"
-            [ngClass]="{
-              'w-1/2 flex-1 h-full': foldable.isBookMode(),
-              'w-full flex-1 h-1/2': foldable.isTabletopMode(),
-              'w-full flex-1 lg:flex-initial lg:w-[440px] xl:w-[470px] lg:flex-shrink-0 h-full': !foldable.isDualScreen(),
-              'hidden lg:flex': !foldable.isDualScreen() && state.mobileActiveView() === 'MAP',
-              'flex': foldable.isDualScreen() || state.mobileActiveView() !== 'MAP'
-            }">
-            <!-- Desktop / Dual-Screen Left-Pane Mode Switcher -->
-            <div
-              class="items-center gap-1 p-2 bg-slate-900/80 border-b border-slate-800 flex-shrink-0"
-              [ngClass]="foldable.isDualScreen() ? 'flex' : 'hidden lg:flex'">
-              <button
-                type="button"
-                (click)="state.activeLeftTab.set('HUD')"
-                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                [ngClass]="
-                  state.activeLeftTab() === 'HUD'
-                    ? 'bg-sky-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                ">
-                <span>🛡️</span>
-                <span>Alert HUD</span>
-              </button>
-              <button
-                type="button"
-                (click)="state.activeLeftTab.set('REPORT')"
-                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                [ngClass]="
-                  state.activeLeftTab() === 'REPORT'
-                    ? 'bg-sky-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                ">
-                <span>📸</span>
-                <span>Field Report</span>
-              </button>
-              @if (state.currentRole() !== 'CITIZEN') {
+          <!-- LEFT PANE (or Tabletop Lower Segment): HUD / Report / Console (Hidden if Map is Maximized) -->
+          @if (!foldable.isMapMaximized()) {
+            <section
+              class="min-h-0 flex flex-col border-r border-slate-800 bg-slate-950 z-10 overflow-hidden"
+              [ngClass]="{
+                'w-1/2 flex-1 h-full': foldable.isBookMode(),
+                'w-full flex-1 h-1/2': foldable.isTabletopMode(),
+                'w-full flex-1 lg:flex-initial lg:w-[440px] xl:w-[470px] lg:flex-shrink-0 h-full': !foldable.isDualScreen(),
+                'hidden lg:flex': !foldable.isDualScreen() && state.mobileActiveView() === 'MAP',
+                'flex': foldable.isDualScreen() || state.mobileActiveView() !== 'MAP'
+              }">
+              <!-- Desktop / Dual-Screen Left-Pane Mode Switcher -->
+              <div
+                class="items-center gap-1 p-2 bg-slate-900/80 border-b border-slate-800 flex-shrink-0"
+                [ngClass]="foldable.isDualScreen() ? 'flex' : 'hidden lg:flex'">
                 <button
                   type="button"
-                  (click)="state.activeLeftTab.set('CONSOLE')"
-                  class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                  (click)="state.activeLeftTab.set('HUD')"
+                  class="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                   [ngClass]="
-                    state.activeLeftTab() === 'CONSOLE'
+                    state.activeLeftTab() === 'HUD'
                       ? 'bg-sky-600 text-white shadow'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   ">
-                  <span>⚙️</span>
-                  <span>Console</span>
+                  <span>🛡️</span>
+                  <span>Alert HUD</span>
                 </button>
-              }
-            </div>
+                <button
+                  type="button"
+                  (click)="state.activeLeftTab.set('REPORT')"
+                  class="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                  [ngClass]="
+                    state.activeLeftTab() === 'REPORT'
+                      ? 'bg-sky-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  ">
+                  <span>📸</span>
+                  <span>Field Report</span>
+                </button>
+                @if (state.currentRole() !== 'CITIZEN') {
+                  <button
+                    type="button"
+                    (click)="state.activeLeftTab.set('CONSOLE')"
+                    class="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                    [ngClass]="
+                      state.activeLeftTab() === 'CONSOLE'
+                        ? 'bg-sky-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    ">
+                    <span>⚙️</span>
+                    <span>Console</span>
+                  </button>
+                }
+                <!-- Wide Map Expansion Button on Left Pane -->
+                <button
+                  type="button"
+                  (click)="foldable.setMapMaximized(true)"
+                  title="Expand Map to Full Width (広域マップ全画面表示)"
+                  class="py-1.5 px-2 rounded-lg text-xs font-bold text-sky-400 hover:text-white hover:bg-slate-800 flex items-center gap-1 border border-slate-700/60 transition-all flex-shrink-0">
+                  <span>⛶</span>
+                  <span class="hidden sm:inline">Wide Map</span>
+                </button>
+              </div>
 
-            <!-- Active Left Panel Content -->
-            <div class="flex-1 min-h-0 overflow-hidden">
-              @switch (state.activeLeftTab()) {
-                @case ('HUD') {
-                  <app-hud-panel></app-hud-panel>
+              <!-- Active Left Panel Content -->
+              <div class="flex-1 min-h-0 overflow-hidden">
+                @switch (state.activeLeftTab()) {
+                  @case ('HUD') {
+                    <app-hud-panel></app-hud-panel>
+                  }
+                  @case ('REPORT') {
+                    <app-report-panel></app-report-panel>
+                  }
+                  @case ('CONSOLE') {
+                    <app-console-panel></app-console-panel>
+                  }
                 }
-                @case ('REPORT') {
-                  <app-report-panel></app-report-panel>
-                }
-                @case ('CONSOLE') {
-                  <app-console-panel></app-console-panel>
-                }
-              }
-            </div>
-          </section>
+              </div>
+            </section>
+          }
 
-          <!-- Book Mode Vertical Hinge Seam -->
-          @if (foldable.isBookMode()) {
+          <!-- Book Mode Vertical Hinge Seam (Hidden if Map is Maximized) -->
+          @if (foldable.isBookMode() && !foldable.isMapMaximized()) {
             <div class="foldable-hinge-seam-v flex items-center justify-center">
               <span class="text-[8px] text-sky-400/90 -rotate-90 select-none tracking-widest font-mono uppercase whitespace-nowrap">
                 HINGE SEAM
@@ -226,22 +253,23 @@ import { AlertTier, UserRole } from './models/shield.model';
             </div>
           }
 
-          <!-- RIGHT PANE (Standard or Book Mode): Full Interactive Google Maps GIS Canvas -->
-          @if (!foldable.isTabletopMode()) {
+          <!-- RIGHT PANE (Standard, Book Mode, or Maximized Wide Map): Full Interactive Google Maps GIS Canvas -->
+          @if (!foldable.isTabletopMode() || foldable.isMapMaximized()) {
             <section
               class="flex-1 h-full min-h-0 relative overflow-hidden"
               [ngClass]="{
-                'w-1/2 block': foldable.isBookMode(),
-                'hidden lg:block': !foldable.isBookMode() && state.mobileActiveView() !== 'MAP',
-                'block': !foldable.isBookMode() && state.mobileActiveView() === 'MAP'
+                'w-full block': foldable.isMapMaximized(),
+                'w-1/2 block': !foldable.isMapMaximized() && foldable.isBookMode(),
+                'hidden lg:block': !foldable.isMapMaximized() && !foldable.isBookMode() && state.mobileActiveView() !== 'MAP',
+                'block': !foldable.isMapMaximized() && !foldable.isBookMode() && state.mobileActiveView() === 'MAP'
               }">
               <app-gis-map-panel class="block w-full h-full"></app-gis-map-panel>
             </section>
           }
         </main>
 
-        <!-- 3. Mobile Bottom Tab Bar (Visible on single screens < lg, or in Tabletop mode lower controls) -->
-        @if (!foldable.isBookMode()) {
+        <!-- 3. Mobile Bottom Tab Bar (Visible on single screens < lg when map is not maximized) -->
+        @if (!foldable.isBookMode() && !foldable.isMapMaximized()) {
           <nav
             style="padding-bottom: max(0.375rem, env(safe-area-inset-bottom));"
             class="bg-slate-900/95 backdrop-blur border-t border-slate-700 px-2 pt-1.5 flex items-center justify-around z-40 flex-shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.6)]"

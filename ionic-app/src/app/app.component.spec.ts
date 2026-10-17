@@ -106,6 +106,24 @@ describe('AppComponent (CoExist Shield Ionic + Capacitor)', () => {
     fixture.detectChanges();
     expect(app.foldable.isDualScreen()).toBeFalse();
   });
+
+  it('should toggle wide map view on foldable or desktop displays', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+
+    app.foldable.setSimulationMode('BOOK');
+    fixture.detectChanges();
+    expect(app.foldable.isMapMaximized()).toBeFalse();
+
+    app.foldable.toggleMapMaximize();
+    fixture.detectChanges();
+    expect(app.foldable.isMapMaximized()).toBeTrue();
+
+    app.foldable.setMapMaximized(false);
+    fixture.detectChanges();
+    expect(app.foldable.isMapMaximized()).toBeFalse();
+  });
 });
+
 
 

@@ -65,4 +65,18 @@ describe('FoldableDeviceService', () => {
   it('should evaluate hardware posture gracefully without crashing', () => {
     expect(() => service.evaluateHardwarePosture()).not.toThrow();
   });
+
+  it('should toggle map maximization between dual split and full wide map', () => {
+    expect(service.isMapMaximized()).toBeFalse();
+
+    service.toggleMapMaximize();
+    expect(service.isMapMaximized()).toBeTrue();
+
+    service.toggleMapMaximize();
+    expect(service.isMapMaximized()).toBeFalse();
+
+    service.setMapMaximized(true);
+    expect(service.isMapMaximized()).toBeTrue();
+  });
 });
+
