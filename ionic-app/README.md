@@ -13,9 +13,10 @@ This directory contains the **Angular + Ionic + Capacitor** implementation of th
 1. **Responsive Split-Pane Layout & Foldable Support ([`app.component.ts`](src/app/app.component.ts), [`foldable-device.service.ts`](src/app/services/foldable-device.service.ts))**
    - **Foldable Devices (Pixel Fold, Galaxy Z Fold, Surface Duo)**:
      - **Book Mode (Horizontal Dual-Screen / Spanned)**: Seamless side-by-side split respecting the center hinge seam (`--fold-hinge-width`, `env(viewport-segment-*)`). Left screen hosts Alert HUD / Field Report / Console, right screen hosts the GIS Map Canvas without bottom tabs.
+     - **Toggleable Wide Map View (⛶ Wide Map / ◧ Split View)**: Users can toggle between 2-screen Split View (Left: HUD/Report/Console, Right: Map) and Full-Width Wide Map View via the `Wide Map` button on the Left Pane, floating map controls, or demo toolbar.
      - **Tabletop Mode (Vertical Half-Opened / Laptop)**: Top screen displays full interactive GIS Map & Tactical Radar; bottom screen hosts Controls, D-Pad GPS steering, and Report Form.
      - **Cover Screen / Single Screen**: Standard mobile view with bottom tab navigation.
-     - **Demo Simulator**: `📱 FOLD` button in the header demo bar allows evaluators to simulate and toggle postures (Auto / Book / Tabletop / Phone) instantly without physical foldable hardware.
+     - **Demo Simulator**: `📱 FOLD` and `VIEW` buttons in the header demo bar allow evaluators to simulate and toggle postures (Auto / Book / Tabletop / Phone) and view modes (Split / Wide Map) instantly without physical foldable hardware.
    - **Desktop / Tablet Landscape (`lg+`)**: Left pane (`440px–470px`) continuously displays the Tactical HUD, Forensic Incident Report, or Official Decision-Support Console, while the right pane renders the full-screen interactive Google Maps (`@angular/google-maps`) canvas.
    - **Mobile Portrait (`< lg`)**: Native-style bottom navigation bar (`Alert HUD`, `GIS Map`, `Report`, `Console`) with safe-area support.
 

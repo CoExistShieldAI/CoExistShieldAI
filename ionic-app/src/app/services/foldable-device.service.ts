@@ -25,6 +25,9 @@ export class FoldableDeviceService {
   // Detected physical viewport segments if supported by browser/device
   readonly detectedSegments = signal<ViewportSegment[]>([]);
 
+  // Maximize map view toggle (allows expanding map to 100% width or returning to dual split)
+  readonly isMapMaximized = signal<boolean>(false);
+
   // Computed effective posture considering manual simulation override
   readonly activePosture = computed<FoldPosture>(() => {
     const sim = this.simulationMode();
@@ -143,21 +146,17 @@ export class FoldableDeviceService {
       return;
     }
 
-    // 3. Fallback heuristic: Detect wide aspect ratio foldables like unfolded Pixel Fold or Surface Duo
+    // 3. Fallback heuristic: Detect wide aspect ratio foldables like unfolded Pixel Fold, Galaxy Z Fold, or Surface Duo
     const width = window.innerWidth;
     const height = window.innerHeight;
     const aspect = width / (height || 1);
 
-    // Unfolded Pixel Fold has inner display around 6:5 aspect ratio (aspect ~ 1.2 or 0.83 in portrait)
-    // Surface Duo dual-portrait is ~ 1.35 aspect ratio with width > 1000px
-    if (width >= 800 && width <= 1400 && aspect >= 0.85 && aspect <= 1.4) {
-      // If window is wide with squarish aspect ratio characteristic of an unfolded book device
-      // (only if not a regular desktop; checked on touch/mobile platforms)
-      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      if (isTouch) {
-        this.detectedPosture.set('book');
-        return;
-      }
+    // Unfolded Pixel Fold has inner display around 6:5 aspect ratio (~701x841 or ~841x701, aspect ~0.83 to 1.2)
+    // Galaxy Z Fold inner display is ~768x920 or ~920x768 (aspect ~0.83 to 1.2)
+    // Surface Duo dual-portrait is ~ 1114x720 (aspect ~ 1.54)
+    if (width >= 640 && width <= 1400 && aspect >= 0.72 && aspect <= 1.6) {
+      this.detectedPosture.set('book');
+      return;
     }
 
     this.detectedPosture.set('single');
@@ -168,6 +167,20 @@ export class FoldableDeviceService {
     if (visualViewport && Array.isArray(visualViewport.segments)) {
       this.detectedSegments.set(visualViewport.segments);
     }
+  }
+
+  /**
+   * Toggles map maximization between split view and full wide map.
+   */
+  toggleMapMaximize() {
+    this.isMapMaximized.update((v) => !v);
+  }
+
+  /**
+   * Explicitly sets map maximization state.
+   */
+  setMapMaximized(maximized: boolean) {
+    this.isMapMaximized.set(maximized);
   }
 
   /**

@@ -2,6 +2,7 @@ import { Component, inject, signal, computed, OnInit, HostListener } from '@angu
 import { CommonModule } from '@angular/common';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { MAP_REGIONS, ShieldStateService } from '../../services/shield-state.service';
+import { FoldableDeviceService } from '../../services/foldable-device.service';
 import {
   AlertTier,
   AttractantMarkerItem,
@@ -104,6 +105,23 @@ interface RenderedAttractantOverlay {
               📡 Live GPS
             </button>
           </div>
+
+          <!-- Wide Map / Split View Toggle (Foldable & Desktop) -->
+          <div class="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur border border-slate-800 p-1 rounded-xl shadow-xl">
+            <button
+              type="button"
+              (click)="foldable.toggleMapMaximize()"
+              class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all"
+              [ngClass]="
+                foldable.isMapMaximized()
+                  ? 'bg-sky-600 text-white shadow ring-1 ring-sky-400'
+                  : 'bg-slate-900 text-sky-400 hover:text-white'
+              "
+              [title]="foldable.isMapMaximized() ? 'Switch to Dual Screen Split View (左右2画面表示に戻す)' : 'Expand Map to Full Width (マップ全画面・広域表示)'">
+              <span>{{ foldable.isMapMaximized() ? '◧' : '⛶' }}</span>
+              <span>{{ foldable.isMapMaximized() ? 'Split View (◧)' : 'Wide Map (⛶)' }}</span>
+            </button>
+          </div>
         </div>
 
         <!-- Row 2: Layer Filter Chips -->
@@ -149,6 +167,20 @@ interface RenderedAttractantOverlay {
           </div>
         }
       </div>
+
+      <!-- Floating Restore Split View Pill when Map is Maximized -->
+      @if (foldable.isMapMaximized()) {
+        <div class="absolute top-28 left-4 z-30 pointer-events-auto">
+          <button
+            type="button"
+            (click)="foldable.setMapMaximized(false)"
+            class="px-3.5 py-2 rounded-xl bg-sky-600/95 hover:bg-sky-500 text-white text-xs font-bold shadow-2xl flex items-center gap-2 border border-sky-400 transition-all hover:scale-105 backdrop-blur">
+            <span>◧</span>
+            <span>Restore Split View (左右2画面に戻す)</span>
+          </button>
+        </div>
+      }
+
 
       <!-- Main Google Map Canvas -->
       <div class="flex-1 w-full h-full min-h-[420px] relative overflow-hidden">
@@ -453,6 +485,7 @@ interface RenderedAttractantOverlay {
 })
 export class GisMapPanelComponent implements OnInit {
   state = inject(ShieldStateService);
+  foldable = inject(FoldableDeviceService);
 
   readonly regions = Object.values(MAP_REGIONS);
 
