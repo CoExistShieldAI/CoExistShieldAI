@@ -86,5 +86,26 @@ describe('AppComponent (CoExist Shield Ionic + Capacitor)', () => {
     await app.state.stepSimulatedLocation('WEST', 100);
     expect(app.state.userLocation().longitude).toBeCloseTo(initialLoc.longitude, 5);
   });
+
+  it('should support foldable mode toggling (Pixel Fold / Surface Duo)', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    expect(app.foldable).toBeTruthy();
+
+    app.foldable.setSimulationMode('BOOK');
+    fixture.detectChanges();
+    expect(app.foldable.isBookMode()).toBeTrue();
+    expect(app.foldable.isDualScreen()).toBeTrue();
+
+    app.foldable.setSimulationMode('TABLETOP');
+    fixture.detectChanges();
+    expect(app.foldable.isTabletopMode()).toBeTrue();
+    expect(app.foldable.isDualScreen()).toBeTrue();
+
+    app.foldable.setSimulationMode('SINGLE');
+    fixture.detectChanges();
+    expect(app.foldable.isDualScreen()).toBeFalse();
+  });
 });
+
 
