@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ShieldStateService } from './services/shield-state.service';
+import { FoldableDeviceService } from './services/foldable-device.service';
 import { HudPanelComponent } from './components/hud-panel/hud-panel.component';
 import { GisMapPanelComponent } from './components/gis-map-panel/gis-map-panel.component';
 import { ReportPanelComponent } from './components/report-panel/report-panel.component';
@@ -67,6 +68,20 @@ import { AlertTier, UserRole } from './models/shield.model';
                   </button>
                 }
               </div>
+
+              <!-- Foldable Posture Simulator (Pixel Fold / Surface Duo) -->
+              <div class="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] font-bold text-slate-400 mr-1">📱 FOLD:</span>
+                <button
+                  type="button"
+                  (click)="foldable.cycleSimulationMode()"
+                  title="Cycle Fold Posture: Auto / Pixel Fold Book / Tabletop / Phone"
+                  class="px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-1 border"
+                  [ngClass]="foldable.postureBadge().cssClass">
+                  <span>{{ foldable.postureBadge().icon }}</span>
+                  <span class="whitespace-nowrap">{{ foldable.postureBadge().label }}</span>
+                </button>
+              </div>
             }
           </div>
 
@@ -110,17 +125,42 @@ import { AlertTier, UserRole } from './models/shield.model';
         </header>
 
         <!-- 2. Main Responsive Workspace -->
-        <!-- Wide Screen (lg+): Left Pane (HUD / Report / Console) + Right Pane (Google Maps) -->
-        <main class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
-          <!-- LEFT PANE: HUD / Report / Console (Always visible on lg+, visible on mobile when not on MAP tab) -->
+        <!-- Adapts based on Foldable posture (Book Mode: side-by-side with vertical hinge; Tabletop Mode: top/bottom with horizontal crease; Single/Standard: responsive lg+ split or mobile tabs) -->
+        <main
+          class="flex-1 min-h-0 overflow-hidden relative"
+          [ngClass]="{
+            'flex flex-row': foldable.isBookMode(),
+            'flex flex-col': foldable.isTabletopMode(),
+            'flex flex-col lg:flex-row': !foldable.isDualScreen()
+          }">
+
+          <!-- When in TABLETOP mode: Top segment is the GIS Map -->
+          @if (foldable.isTabletopMode()) {
+            <section class="h-1/2 w-full min-h-0 relative overflow-hidden flex-shrink-0">
+              <app-gis-map-panel class="block w-full h-full"></app-gis-map-panel>
+            </section>
+            <!-- Tabletop Hinge Crease -->
+            <div class="foldable-hinge-seam-h flex items-center justify-center">
+              <span class="text-[8px] text-amber-400/90 font-mono tracking-widest uppercase">
+                ▲ UPPER SCREEN (GIS MAP) • FOLD CREASE • CONTROLS (LOWER) ▼
+              </span>
+            </div>
+          }
+
+          <!-- LEFT PANE (or Tabletop Lower Segment): HUD / Report / Console -->
           <section
-            class="w-full flex-1 lg:flex-initial lg:w-[440px] xl:w-[470px] lg:flex-shrink-0 h-full min-h-0 flex flex-col border-r border-slate-800 bg-slate-950 z-10 overflow-hidden"
+            class="min-h-0 flex flex-col border-r border-slate-800 bg-slate-950 z-10 overflow-hidden"
             [ngClass]="{
-              'hidden lg:flex': state.mobileActiveView() === 'MAP',
-              'flex': state.mobileActiveView() !== 'MAP'
+              'w-1/2 flex-1 h-full': foldable.isBookMode(),
+              'w-full flex-1 h-1/2': foldable.isTabletopMode(),
+              'w-full flex-1 lg:flex-initial lg:w-[440px] xl:w-[470px] lg:flex-shrink-0 h-full': !foldable.isDualScreen(),
+              'hidden lg:flex': !foldable.isDualScreen() && state.mobileActiveView() === 'MAP',
+              'flex': foldable.isDualScreen() || state.mobileActiveView() !== 'MAP'
             }">
-            <!-- Desktop Left-Pane Mode Switcher -->
-            <div class="hidden lg:flex items-center gap-1 p-2 bg-slate-900/80 border-b border-slate-800 flex-shrink-0">
+            <!-- Desktop / Dual-Screen Left-Pane Mode Switcher -->
+            <div
+              class="items-center gap-1 p-2 bg-slate-900/80 border-b border-slate-800 flex-shrink-0"
+              [ngClass]="foldable.isDualScreen() ? 'flex' : 'hidden lg:flex'">
               <button
                 type="button"
                 (click)="state.activeLeftTab.set('HUD')"
@@ -177,75 +217,93 @@ import { AlertTier, UserRole } from './models/shield.model';
             </div>
           </section>
 
-          <!-- RIGHT PANE: Full Interactive Google Maps GIS Canvas -->
-          <section
-            class="flex-1 h-full min-h-0 relative overflow-hidden"
-            [ngClass]="{
-              'hidden lg:block': state.mobileActiveView() !== 'MAP',
-              'block': state.mobileActiveView() === 'MAP'
-            }">
-            <app-gis-map-panel class="block w-full h-full"></app-gis-map-panel>
-          </section>
+          <!-- Book Mode Vertical Hinge Seam -->
+          @if (foldable.isBookMode()) {
+            <div class="foldable-hinge-seam-v flex items-center justify-center">
+              <span class="text-[8px] text-sky-400/90 -rotate-90 select-none tracking-widest font-mono uppercase whitespace-nowrap">
+                HINGE SEAM
+              </span>
+            </div>
+          }
+
+          <!-- RIGHT PANE (Standard or Book Mode): Full Interactive Google Maps GIS Canvas -->
+          @if (!foldable.isTabletopMode()) {
+            <section
+              class="flex-1 h-full min-h-0 relative overflow-hidden"
+              [ngClass]="{
+                'w-1/2 block': foldable.isBookMode(),
+                'hidden lg:block': !foldable.isBookMode() && state.mobileActiveView() !== 'MAP',
+                'block': !foldable.isBookMode() && state.mobileActiveView() === 'MAP'
+              }">
+              <app-gis-map-panel class="block w-full h-full"></app-gis-map-panel>
+            </section>
+          }
         </main>
 
-        <!-- 3. Mobile Bottom Tab Bar (Visible only on screens < lg) -->
-        <nav
-          style="padding-bottom: max(0.375rem, env(safe-area-inset-bottom));"
-          class="lg:hidden bg-slate-900/95 backdrop-blur border-t border-slate-700 px-2 pt-1.5 flex items-center justify-around z-40 flex-shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.6)]">
-          <button
-            type="button"
-            (click)="state.activeLeftTab.set('HUD'); state.mobileActiveView.set('SPLIT_OR_HUD')"
-            class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
-            [ngClass]="
-              state.mobileActiveView() !== 'MAP' && state.activeLeftTab() === 'HUD'
-                ? 'text-sky-400 bg-sky-950/50'
-                : 'text-slate-400'
-            ">
-            <span class="text-base leading-none">🛡️</span>
-            <span class="mt-0.5">Alert HUD</span>
-          </button>
-
-          <button
-            type="button"
-            (click)="state.mobileActiveView.set('MAP')"
-            class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
-            [ngClass]="
-              state.mobileActiveView() === 'MAP'
-                ? 'text-sky-400 bg-sky-950/50'
-                : 'text-slate-400'
-            ">
-            <span class="text-base leading-none">🗺️</span>
-            <span class="mt-0.5">GIS Map</span>
-          </button>
-
-          <button
-            type="button"
-            (click)="state.activeLeftTab.set('REPORT'); state.mobileActiveView.set('REPORT')"
-            class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
-            [ngClass]="
-              state.mobileActiveView() !== 'MAP' && state.activeLeftTab() === 'REPORT'
-                ? 'text-sky-400 bg-sky-950/50'
-                : 'text-slate-400'
-            ">
-            <span class="text-base leading-none">📸</span>
-            <span class="mt-0.5">Report</span>
-          </button>
-
-          @if (state.currentRole() !== 'CITIZEN') {
+        <!-- 3. Mobile Bottom Tab Bar (Visible on single screens < lg, or in Tabletop mode lower controls) -->
+        @if (!foldable.isBookMode()) {
+          <nav
+            style="padding-bottom: max(0.375rem, env(safe-area-inset-bottom));"
+            class="bg-slate-900/95 backdrop-blur border-t border-slate-700 px-2 pt-1.5 flex items-center justify-around z-40 flex-shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.6)]"
+            [ngClass]="{
+              'lg:hidden': !foldable.isTabletopMode(),
+              'flex': foldable.isTabletopMode()
+            }">
             <button
               type="button"
-              (click)="state.activeLeftTab.set('CONSOLE'); state.mobileActiveView.set('CONSOLE')"
+              (click)="state.activeLeftTab.set('HUD'); state.mobileActiveView.set('SPLIT_OR_HUD')"
               class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
               [ngClass]="
-                state.mobileActiveView() !== 'MAP' && state.activeLeftTab() === 'CONSOLE'
+                (foldable.isTabletopMode() || state.mobileActiveView() !== 'MAP') && state.activeLeftTab() === 'HUD'
                   ? 'text-sky-400 bg-sky-950/50'
                   : 'text-slate-400'
               ">
-              <span class="text-base leading-none">⚙️</span>
-              <span class="mt-0.5">Console</span>
+              <span class="text-base leading-none">🛡️</span>
+              <span class="mt-0.5">Alert HUD</span>
             </button>
-          }
-        </nav>
+
+            <button
+              type="button"
+              (click)="foldable.isTabletopMode() ? state.showToast('GIS Map active on upper screen') : state.mobileActiveView.set('MAP')"
+              class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
+              [ngClass]="
+                !foldable.isTabletopMode() && state.mobileActiveView() === 'MAP'
+                  ? 'text-sky-400 bg-sky-950/50'
+                  : 'text-slate-400'
+              ">
+              <span class="text-base leading-none">🗺️</span>
+              <span class="mt-0.5">{{ foldable.isTabletopMode() ? 'Map (Top)' : 'GIS Map' }}</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="state.activeLeftTab.set('REPORT'); state.mobileActiveView.set('REPORT')"
+              class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
+              [ngClass]="
+                (foldable.isTabletopMode() || state.mobileActiveView() !== 'MAP') && state.activeLeftTab() === 'REPORT'
+                  ? 'text-sky-400 bg-sky-950/50'
+                  : 'text-slate-400'
+              ">
+              <span class="text-base leading-none">📸</span>
+              <span class="mt-0.5">Report</span>
+            </button>
+
+            @if (state.currentRole() !== 'CITIZEN') {
+              <button
+                type="button"
+                (click)="state.activeLeftTab.set('CONSOLE'); state.mobileActiveView.set('CONSOLE')"
+                class="flex-1 flex flex-col items-center py-1 px-2 rounded-xl text-[11px] font-bold transition-colors"
+                [ngClass]="
+                  (foldable.isTabletopMode() || state.mobileActiveView() !== 'MAP') && state.activeLeftTab() === 'CONSOLE'
+                    ? 'text-sky-400 bg-sky-950/50'
+                    : 'text-slate-400'
+                ">
+                <span class="text-base leading-none">⚙️</span>
+                <span class="mt-0.5">Console</span>
+              </button>
+            }
+          </nav>
+        }
 
         <!-- 4. Firebase Auth Modal -->
         @if (state.showAuthModal()) {
@@ -269,6 +327,7 @@ import { AlertTier, UserRole } from './models/shield.model';
 })
 export class AppComponent {
   state = inject(ShieldStateService);
+  foldable = inject(FoldableDeviceService);
 
   readonly roles: UserRole[] = ['CITIZEN', 'OFFICIAL', 'ADMIN'];
 

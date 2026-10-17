@@ -87,3 +87,48 @@ google-map {
 .animate-radar-spin {
   animation: radarSpin 14s linear infinite;
 }
+
+/* Foldable & Viewport Segments API Support (Pixel Fold / Surface Duo) */
+:root {
+  --fold-hinge-width: 0px;
+  --fold-hinge-height: 0px;
+  --fold-segment-1-width: 50%;
+  --fold-segment-2-width: 50%;
+  --fold-segment-1-height: 50%;
+  --fold-segment-2-height: 50%;
+}
+
+@media (horizontal-viewport-segments: 2) {
+  :root {
+    --fold-hinge-width: calc(env(viewport-segment-left 1 0, 50%) - env(viewport-segment-right 0 0, 50%));
+    --fold-segment-1-width: env(viewport-segment-width 0 0, 50%);
+    --fold-segment-2-width: env(viewport-segment-width 1 0, 50%);
+  }
+}
+
+@media (vertical-viewport-segments: 2) {
+  :root {
+    --fold-hinge-height: calc(env(viewport-segment-top 0 1, 50%) - env(viewport-segment-bottom 0 0, 50%));
+    --fold-segment-1-height: env(viewport-segment-height 0 0, 50%);
+    --fold-segment-2-height: env(viewport-segment-height 0 1, 50%);
+  }
+}
+
+.foldable-hinge-seam-v {
+  position: relative;
+  width: max(4px, var(--fold-hinge-width));
+  background: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(56, 189, 248, 0.25), rgba(15, 23, 42, 0.95));
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+  flex-shrink: 0;
+  z-index: 25;
+}
+
+.foldable-hinge-seam-h {
+  position: relative;
+  height: max(4px, var(--fold-hinge-height));
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(56, 189, 248, 0.25), rgba(15, 23, 42, 0.95));
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+  flex-shrink: 0;
+  z-index: 25;
+}
+
