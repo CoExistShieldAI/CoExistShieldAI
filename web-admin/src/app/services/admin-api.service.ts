@@ -171,6 +171,19 @@ export class AdminApiService {
             reason: 'Maha paddy harvest maturity coupling with elephant herd migration across Batticaloa railway line; extreme night clash risk'
           },
           {
+            id: 'geo-ai-srilanka-07',
+            name: 'Udawalawe-Sevenagala Sugar Basin Defense Buffer',
+            source: 'ai',
+            is_persistent: false,
+            geometry_type: 'circle',
+            circle_center: { lat: 6.418, lng: 80.942 },
+            circle_radius_meters: 3500,
+            threat_level: 'TIER_2_ALERT',
+            target_species: 'Asian Elephant',
+            created_at: new Date(Date.now() - 25200000).toISOString(),
+            reason: 'High-sucrose volatile spikes from commercial sugarcane fields drawing breeding elephant herds across southern buffer'
+          },
+          {
             id: 'geo-manual-debug-01',
             name: 'Ranger Station 4 Patrol Perimeter',
             source: 'manual',
@@ -890,6 +903,32 @@ export class AdminApiService {
             active_season: 'Year-round',
             photo_urls: [],
             last_updated: new Date(Date.now() - 259200000).toISOString()
+          },
+          {
+            id: 'env-crop-09',
+            category: 'CROP_PHENOLOGY',
+            name: 'Minneriya-Polonnaruwa Maha Paddy Agro-Belt',
+            location_desc: 'Irrigated paddy fields along Batticaloa railway line and Habarana corridor',
+            geometry_type: 'circle',
+            circle_center: { lat: 8.045, lng: 80.932 },
+            radius_meters: 4500,
+            risk_weight: 0.94,
+            active_season: 'December - March (Maha Harvest Peak Ripening)',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_srilanka_paddy.jpg'],
+            last_updated: new Date(Date.now() - 3600000).toISOString()
+          },
+          {
+            id: 'env-crop-10',
+            category: 'CROP_PHENOLOGY',
+            name: 'Udawalawe Sevenagala Sugarcane Plantation',
+            location_desc: 'Commercial sugarcane and banana cultivation adjacent to national park boundary',
+            geometry_type: 'circle',
+            circle_center: { lat: 6.418, lng: 80.942 },
+            radius_meters: 3800,
+            risk_weight: 0.89,
+            active_season: 'Year-round (Intensive Harvesting Cycles)',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_sugarcane_field.jpg'],
+            last_updated: new Date(Date.now() - 7200000).toISOString()
           }
         ];
         this.environmental.set(fallback);

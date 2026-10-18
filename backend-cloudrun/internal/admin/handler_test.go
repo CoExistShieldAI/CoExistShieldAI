@@ -483,8 +483,8 @@ func TestLiveOpenMeteoWeatherSync(t *testing.T) {
 		t.Errorf("Expected status 'synced', got %v", syncResult["status"])
 	}
 	updatedCount := int(syncResult["updated_count"].(float64))
-	if updatedCount != 40 {
-		t.Errorf("Expected 40 stations updated, got %d", updatedCount)
+	if updatedCount != 44 {
+		t.Errorf("Expected 44 stations updated, got %d", updatedCount)
 	}
 
 	// Verify store data was updated with mock values

@@ -313,12 +313,46 @@ func (s *Store) seedDefaultData() {
 		Reason:             "Manual field team patrol perimeter: Night thermal camera deployment",
 	}
 
+	// Tier 3 Circle - Minneriya-Polonnaruwa Agricultural & Rail Corridor (Sri Lanka - Global HEC Hotspot)
+	centerMinneriya := Coordinate{Lat: 8.045, Lng: 80.932}
+	geo6 := AdminGeofence{
+		ID:                 "geo-ai-srilanka-06",
+		Name:               "Minneriya-Polonnaruwa Agricultural & Rail Corridor (HEC Hotspot)",
+		Source:             "ai",
+		IsPersistent:       false,
+		GeometryType:       "circle",
+		CircleCenter:       &centerMinneriya,
+		CircleRadiusMeters: 4200,
+		ThreatLevel:        "TIER_3_CRITICAL",
+		TargetSpecies:      "Asian Elephant",
+		CreatedAt:          now.Add(-3 * time.Hour),
+		Reason:             "Maha paddy harvest maturity coupling with elephant herd migration across Batticaloa railway line; extreme night clash risk",
+	}
+
+	// Tier 2 Circle - Udawalawe-Sevenagala Sugar Basin (Sri Lanka)
+	centerUdawalawe := Coordinate{Lat: 6.418, Lng: 80.942}
+	geo7 := AdminGeofence{
+		ID:                 "geo-ai-srilanka-07",
+		Name:               "Udawalawe-Sevenagala Sugar Basin Defense Buffer",
+		Source:             "ai",
+		IsPersistent:       false,
+		GeometryType:       "circle",
+		CircleCenter:       &centerUdawalawe,
+		CircleRadiusMeters: 3500,
+		ThreatLevel:        "TIER_2_ALERT",
+		TargetSpecies:      "Asian Elephant",
+		CreatedAt:          now.Add(-5 * time.Hour),
+		Reason:             "High-sucrose volatile spikes from commercial sugarcane fields drawing breeding elephant herds across southern buffer",
+	}
+
 	s.geofences[geo1.ID] = geo1
 	s.geofences[geo2.ID] = geo2
 	s.geofences[geo3.ID] = geo3
 	s.geofences[geo4.ID] = geo4
 	s.geofences[geo5.ID] = geo5
 	s.geofences[geoManual.ID] = geoManual
+	s.geofences[geo6.ID] = geo6
+	s.geofences[geo7.ID] = geo7
 
 	s.upsertGraduatedBuffersLocked(geo1, now)
 	s.upsertGraduatedBuffersLocked(geo2, now)
@@ -326,6 +360,8 @@ func (s *Store) seedDefaultData() {
 	s.upsertGraduatedBuffersLocked(geo4, now)
 	s.upsertGraduatedBuffersLocked(geo5, now)
 	s.upsertGraduatedBuffersLocked(geoManual, now)
+	s.upsertGraduatedBuffersLocked(geo6, now)
+	s.upsertGraduatedBuffersLocked(geo7, now)
 
 	// 2. Wildlife Sightings (Empirical Web Data across Thailand, Sumatra, India, Japan)
 	wList := []AdminWildlifeIncident{
@@ -438,6 +474,50 @@ func (s *Store) seedDefaultData() {
 			Description: "Tigress recorded using agricultural irrigation canal as travel corridor between forest patches.",
 			PhotoURLs:   []string{},
 			ReportedAt:  now.Add(-20 * 24 * time.Hour), // 20 days ago
+		},
+		{
+			ID:          "wildlife-011",
+			Species:     "Asian Elephant",
+			Location:    IncidentLocation{Lat: 8.035, Lng: 80.915, RoadName: "Habarana-Polonnaruwa Highway A11", Region: "Minneriya / Polonnaruwa, Sri Lanka"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "VERIFIED",
+			Reporter:    "Sri Lanka DWC Elephant Response Unit",
+			Description: "Matriarch herd of 11 Sri Lankan elephants crossing railway line and entering ripening paddy fields.",
+			PhotoURLs:   []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_srilanka_elephant.jpg"},
+			ReportedAt:  now.Add(-2 * time.Hour),
+		},
+		{
+			ID:          "wildlife-012",
+			Species:     "Sloth Bear",
+			Location:    IncidentLocation{Lat: 8.355, Lng: 80.205, RoadName: "Wilpattu Buffer Access Track", Region: "Anuradhapura / Wilpattu, Sri Lanka"},
+			ThreatLevel: "TIER_2_ALERT",
+			Status:      "VERIFIED",
+			Reporter:    "Community Forest Patrol",
+			Description: "Adult sloth bear startled near termite mound along firewood collection path; defensive charge repelled without injury.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-4 * time.Hour),
+		},
+		{
+			ID:          "wildlife-013",
+			Species:     "Saltwater Crocodile",
+			Location:    IncidentLocation{Lat: -2.125, Lng: 106.115, RoadName: "Batu Belubang Estuary Creek", Region: "Bangka Belitung, Indonesia"},
+			ThreatLevel: "TIER_3_CRITICAL",
+			Status:      "VERIFIED",
+			Reporter:    "Marine & Fisheries Coastal Guard",
+			Description: "4.5m estuarine crocodile sighted stalking near community artisanal fishing pier and abandoned tin-mine pool.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-7 * time.Hour),
+		},
+		{
+			ID:          "wildlife-014",
+			Species:     "Indian Leopard",
+			Location:    IncidentLocation{Lat: 10.325, Lng: 76.955, RoadName: "Waterfall Estate Sector 3", Region: "Valparai Plateau, Tamil Nadu, India"},
+			ThreatLevel: "TIER_2_ALERT",
+			Status:      "VERIFIED",
+			Reporter:    "Nature Conservation Foundation Field Team",
+			Description: "Adult leopard daytime resting in tea bushes within 50m of tea estate worker labour residential quarters.",
+			PhotoURLs:   []string{},
+			ReportedAt:  now.Add(-11 * time.Hour),
 		},
 	}
 	for _, w := range wList {
@@ -680,6 +760,32 @@ func (s *Store) seedDefaultData() {
 			ActiveSeason: "Year-round",
 			PhotoURLs:    []string{},
 			LastUpdated:  now.Add(-72 * time.Hour),
+		},
+		{
+			ID:           "env-crop-09",
+			Category:     "CROP_PHENOLOGY",
+			Name:         "Minneriya-Polonnaruwa Maha Paddy Agro-Belt",
+			LocationDesc: "Irrigated paddy fields along Batticaloa railway line and Habarana corridor",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 8.045, Lng: 80.932},
+			RadiusMeters: 4500,
+			RiskWeight:   0.94,
+			ActiveSeason: "December - March (Maha Harvest Peak Ripening)",
+			PhotoURLs:    []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_srilanka_paddy.jpg"},
+			LastUpdated:  now.Add(-1 * time.Hour),
+		},
+		{
+			ID:           "env-crop-10",
+			Category:     "CROP_PHENOLOGY",
+			Name:         "Udawalawe Sevenagala Sugarcane Plantation",
+			LocationDesc: "Commercial sugarcane and banana cultivation adjacent to national park boundary",
+			GeometryType: "circle",
+			CircleCenter: &Coordinate{Lat: 6.418, Lng: 80.942},
+			RadiusMeters: 3800,
+			RiskWeight:   0.89,
+			ActiveSeason: "Year-round (Intensive Harvesting Cycles)",
+			PhotoURLs:    []string{"https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_sugarcane_field.jpg"},
+			LastUpdated:  now.Add(-2 * time.Hour),
 		},
 	}
 	for _, env := range envList {
@@ -1423,6 +1529,80 @@ func (s *Store) seedDefaultData() {
 			WeatherCondition:   "CLEAR",
 			Notes:              "Adjacent west of Sapporo Teine/Minami mountains; steep coastal bluff residences with fruit trees and garbage foraging",
 			LastUpdated:        now.Add(-4 * time.Hour),
+		},
+
+		// --- SRI LANKA (Global HEC Epicenter & High Conflict Zone) ---
+		{
+			ID:                 "weather-srilanka-21",
+			StationName:        "Minneriya / Polonnaruwa Buffer",
+			Region:             "Sri Lanka (North Central / Minneriya)",
+			Latitude:           8.045,
+			Longitude:          80.932,
+			TemperatureCelsius: 29.5,
+			HumidityPct:        83.0,
+			WindSpeedKmh:       12.5,
+			WindDirectionDeg:   240.0,
+			PrecipitationMmH:   2.0,
+			MoonIllumination:   0.15,
+			MoonPhase:          "WANING_CRESCENT",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "RAIN",
+			Notes:              "Maha harvest paddy fields; breeding elephant herd crossing railway line with acute nocturnal collision risk",
+			LastUpdated:        now.Add(-20 * time.Minute),
+		},
+		{
+			ID:                 "weather-srilanka-22",
+			StationName:        "Udawalawe / Sevenagala Sugar Basin",
+			Region:             "Sri Lanka (Uva / Sevenagala)",
+			Latitude:           6.418,
+			Longitude:          80.942,
+			TemperatureCelsius: 31.0,
+			HumidityPct:        78.0,
+			WindSpeedKmh:       14.0,
+			WindDirectionDeg:   220.0,
+			PrecipitationMmH:   0.0,
+			MoonIllumination:   0.15,
+			MoonPhase:          "WANING_CRESCENT",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "CLEAR",
+			Notes:              "Large commercial sugarcane estate; nocturnal herd raids causing severe infrastructure & crop ruin",
+			LastUpdated:        now.Add(-30 * time.Minute),
+		},
+		{
+			ID:                 "weather-srilanka-23",
+			StationName:        "Wilpattu / Anuradhapura Fringe",
+			Region:             "Sri Lanka (North Central / Wilpattu)",
+			Latitude:           8.350,
+			Longitude:          80.200,
+			TemperatureCelsius: 28.8,
+			HumidityPct:        80.0,
+			WindSpeedKmh:       9.0,
+			WindDirectionDeg:   260.0,
+			PrecipitationMmH:   0.0,
+			MoonIllumination:   0.15,
+			MoonPhase:          "WANING_CRESCENT",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "CLEAR",
+			Notes:              "Dry zone scrub forest interface; surprise encounters with aggressive Sri Lankan sloth bears and elephants",
+			LastUpdated:        now.Add(-45 * time.Minute),
+		},
+		{
+			ID:                 "weather-srilanka-24",
+			StationName:        "Yala / Buttala Pelwatte Sector",
+			Region:             "Sri Lanka (Monaragala / Buttala)",
+			Latitude:           6.635,
+			Longitude:          81.240,
+			TemperatureCelsius: 30.2,
+			HumidityPct:        76.0,
+			WindSpeedKmh:       11.5,
+			WindDirectionDeg:   210.0,
+			PrecipitationMmH:   0.5,
+			MoonIllumination:   0.15,
+			MoonPhase:          "WANING_CRESCENT",
+			IsFloodedRiverRisk: false,
+			WeatherCondition:   "OVERCAST",
+			Notes:              "Protected wildlife corridor meeting Pelwatte sugarcane agro-complex; elephant herd & leopard activity",
+			LastUpdated:        now.Add(-55 * time.Minute),
 		},
 	}
 	for _, w := range weatherList {

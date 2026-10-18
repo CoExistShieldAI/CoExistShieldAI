@@ -144,6 +144,11 @@ func (e *Engine) seedMacroDatasets() {
 		{OccurrenceID: "gbif_id_01", Species: "TIGER", ScientificName: "Panthera tigris sumatrae", CommonName: "Sumatran Tiger", Latitude: 0.8250, Longitude: 101.5300, EventDate: "2025-07-14", CountryCode: "ID", BasisOfRecord: "MACHINE_OBSERVATION"},
 		{OccurrenceID: "gbif_id_02", Species: "TIGER", ScientificName: "Panthera tigris sumatrae", CommonName: "Sumatran Tiger", Latitude: 0.8310, Longitude: 101.5210, EventDate: "2025-08-20", CountryCode: "ID", BasisOfRecord: "HUMAN_OBSERVATION"},
 		{OccurrenceID: "gbif_id_03", Species: "TIGER", ScientificName: "Panthera tigris sumatrae", CommonName: "Sumatran Tiger", Latitude: 3.5120, Longitude: 97.4520, EventDate: "2025-09-12", CountryCode: "ID", BasisOfRecord: "MACHINE_OBSERVATION"},
+
+		// Sri Lanka: Asian Elephant (Elephas maximus maximus) and Sloth Bear occurrences
+		{OccurrenceID: "gbif_lk_01", Species: "ELEPHANT", ScientificName: "Elephas maximus maximus", CommonName: "Sri Lankan Elephant", Latitude: 8.0450, Longitude: 80.9320, EventDate: "2025-08-15", CountryCode: "LK", BasisOfRecord: "HUMAN_OBSERVATION"},
+		{OccurrenceID: "gbif_lk_02", Species: "ELEPHANT", ScientificName: "Elephas maximus maximus", CommonName: "Sri Lankan Elephant", Latitude: 6.4180, Longitude: 80.9420, EventDate: "2025-09-02", CountryCode: "LK", BasisOfRecord: "MACHINE_OBSERVATION"},
+		{OccurrenceID: "gbif_lk_03", Species: "BEAR", ScientificName: "Melursus ursinus inornatus", CommonName: "Sri Lankan Sloth Bear", Latitude: 8.3550, Longitude: 80.2050, EventDate: "2025-10-05", CountryCode: "LK", BasisOfRecord: "HUMAN_OBSERVATION"},
 	}
 
 	e.firmsAnomalies = []FirmsThermalAnomaly{
@@ -667,6 +672,8 @@ func matchCountryToRegion(countryCode, region string) bool {
 		return countryCode == "TH"
 	case "INDONESIA":
 		return countryCode == "ID"
+	case "SRI LANKA", "SRILANKA":
+		return countryCode == "LK"
 	default:
 		return true
 	}

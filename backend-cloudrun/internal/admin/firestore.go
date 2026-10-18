@@ -414,12 +414,22 @@ func (p *FirestorePersistence) RestoreOrSeed(ctx context.Context, s *Store) erro
 			log.Printf("[FirestorePersistence] Warning: Failed to load wildlife from Firestore: %v", err)
 		} else if len(wildlifeList) > 0 {
 			s.mu.Lock()
-			s.wildlife = make(map[string]AdminWildlifeIncident)
+			existingIDs := make(map[string]bool)
 			for _, w := range wildlifeList {
 				s.wildlife[w.ID] = w
+				existingIDs[w.ID] = true
+			}
+			var toPersist []AdminWildlifeIncident
+			for id, w := range s.wildlife {
+				if !existingIDs[id] {
+					toPersist = append(toPersist, w)
+				}
 			}
 			s.mu.Unlock()
-			log.Printf("[FirestorePersistence] Restored %d wildlife incidents from Firestore", len(wildlifeList))
+			log.Printf("[FirestorePersistence] Restored %d wildlife incidents from Firestore (merged %d new defaults)", len(wildlifeList), len(toPersist))
+			for _, w := range toPersist {
+				_ = p.SaveWildlife(ctx, w)
+			}
 		} else {
 			// Seed default wildlife to Firestore
 			s.mu.RLock()
@@ -439,12 +449,28 @@ func (p *FirestorePersistence) RestoreOrSeed(ctx context.Context, s *Store) erro
 			log.Printf("[FirestorePersistence] Warning: Failed to load geofences from Firestore: %v", err)
 		} else if len(geoList) > 0 {
 			s.mu.Lock()
-			s.geofences = make(map[string]AdminGeofence)
+			existingIDs := make(map[string]bool)
 			for _, g := range geoList {
 				s.geofences[g.ID] = g
+				existingIDs[g.ID] = true
+				s.upsertGraduatedBuffersLocked(g, time.Now())
+			}
+			var toPersist []AdminGeofence
+			for id, g := range s.geofences {
+				if !existingIDs[id] {
+					toPersist = append(toPersist, g)
+					s.upsertGraduatedBuffersLocked(g, time.Now())
+				}
 			}
 			s.mu.Unlock()
-			log.Printf("[FirestorePersistence] Restored %d geofences from Firestore", len(geoList))
+			log.Printf("[FirestorePersistence] Restored %d geofences from Firestore (merged %d new defaults)", len(geoList), len(toPersist))
+			for _, g := range toPersist {
+				if err := p.SaveGeofence(ctx, g); err != nil {
+					log.Printf("[FirestorePersistence] Warning: Failed to seed new geofence %s to Firestore: %v", g.ID, err)
+				} else {
+					log.Printf("[FirestorePersistence] Auto-seeded new default geofence %s to Firestore", g.ID)
+				}
+			}
 		} else {
 			s.mu.RLock()
 			for _, g := range s.geofences {
@@ -463,12 +489,22 @@ func (p *FirestorePersistence) RestoreOrSeed(ctx context.Context, s *Store) erro
 			log.Printf("[FirestorePersistence] Warning: Failed to load roadkills from Firestore: %v", err)
 		} else if len(rkList) > 0 {
 			s.mu.Lock()
-			s.roadkills = make(map[string]AdminRoadkillRecord)
+			existingIDs := make(map[string]bool)
 			for _, rk := range rkList {
 				s.roadkills[rk.ID] = rk
+				existingIDs[rk.ID] = true
+			}
+			var toPersist []AdminRoadkillRecord
+			for id, rk := range s.roadkills {
+				if !existingIDs[id] {
+					toPersist = append(toPersist, rk)
+				}
 			}
 			s.mu.Unlock()
-			log.Printf("[FirestorePersistence] Restored %d roadkill records from Firestore", len(rkList))
+			log.Printf("[FirestorePersistence] Restored %d roadkill records from Firestore (merged %d new defaults)", len(rkList), len(toPersist))
+			for _, rk := range toPersist {
+				_ = p.SaveRoadkill(ctx, rk)
+			}
 		} else {
 			s.mu.RLock()
 			for _, rk := range s.roadkills {
@@ -487,12 +523,22 @@ func (p *FirestorePersistence) RestoreOrSeed(ctx context.Context, s *Store) erro
 			log.Printf("[FirestorePersistence] Warning: Failed to load environmental data from Firestore: %v", err)
 		} else if len(envList) > 0 {
 			s.mu.Lock()
-			s.environmental = make(map[string]AdminEnvironmentalData)
+			existingIDs := make(map[string]bool)
 			for _, env := range envList {
 				s.environmental[env.ID] = env
+				existingIDs[env.ID] = true
+			}
+			var toPersist []AdminEnvironmentalData
+			for id, env := range s.environmental {
+				if !existingIDs[id] {
+					toPersist = append(toPersist, env)
+				}
 			}
 			s.mu.Unlock()
-			log.Printf("[FirestorePersistence] Restored %d environmental features from Firestore", len(envList))
+			log.Printf("[FirestorePersistence] Restored %d environmental features from Firestore (merged %d new defaults)", len(envList), len(toPersist))
+			for _, env := range toPersist {
+				_ = p.SaveEnvironmental(ctx, env)
+			}
 		} else {
 			s.mu.RLock()
 			for _, env := range s.environmental {
@@ -511,12 +557,22 @@ func (p *FirestorePersistence) RestoreOrSeed(ctx context.Context, s *Store) erro
 			log.Printf("[FirestorePersistence] Warning: Failed to load weather data from Firestore: %v", err)
 		} else if len(weatherList) > 0 {
 			s.mu.Lock()
-			s.weather = make(map[string]AdminWeatherData)
+			existingIDs := make(map[string]bool)
 			for _, w := range weatherList {
 				s.weather[w.ID] = w
+				existingIDs[w.ID] = true
+			}
+			var toPersist []AdminWeatherData
+			for id, w := range s.weather {
+				if !existingIDs[id] {
+					toPersist = append(toPersist, w)
+				}
 			}
 			s.mu.Unlock()
-			log.Printf("[FirestorePersistence] Restored %d weather stations from Firestore", len(weatherList))
+			log.Printf("[FirestorePersistence] Restored %d weather stations from Firestore (merged %d new defaults)", len(weatherList), len(toPersist))
+			for _, w := range toPersist {
+				_ = p.SaveWeather(ctx, w)
+			}
 		} else {
 			s.mu.RLock()
 			for _, w := range s.weather {

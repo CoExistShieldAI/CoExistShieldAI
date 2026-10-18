@@ -69,10 +69,25 @@ export interface SelectedEntity {
             Clear Manual Fences
           </button>
 
+          <!-- Quick Region Jump Dropdown -->
+          <div class="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 text-xs">
+            <span class="text-slate-400 text-[11px] font-medium">Focus Region:</span>
+            <select
+              (change)="onRegionFocusChange($event)"
+              class="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer">
+              <option value="japac" class="bg-slate-900 text-white">🌏 JAPAC Pan-Regional</option>
+              <option value="srilanka" class="bg-slate-900 text-white">🇱🇰 Sri Lanka (Minneriya / Udawalawe)</option>
+              <option value="india" class="bg-slate-900 text-white">🇮🇳 India (Assam / Valparai)</option>
+              <option value="thailand" class="bg-slate-900 text-white">🇹🇭 Thailand (Kaeng Krachan)</option>
+              <option value="sumatra" class="bg-slate-900 text-white">🇮🇩 Indonesia (Sumatra / Bangka)</option>
+              <option value="japan" class="bg-slate-900 text-white">🇯🇵 Japan (Tohoku / Hokkaido)</option>
+            </select>
+          </div>
+
           <button
             (click)="resetToJapacView()"
             class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700">
-            Reset JAPAC View
+            Reset View
           </button>
         </div>
       </div>
@@ -1000,6 +1015,35 @@ export class GeofenceMapComponent implements OnInit {
   resetToJapacView() {
     this.center = { lat: 15.0, lng: 105.0 };
     this.zoom = 4;
+  }
+
+  onRegionFocusChange(event: Event) {
+    const val = (event.target as HTMLSelectElement).value;
+    switch (val) {
+      case 'srilanka':
+        this.center = { lat: 7.8731, lng: 80.7718 };
+        this.zoom = 8;
+        break;
+      case 'india':
+        this.center = { lat: 26.6, lng: 93.3 };
+        this.zoom = 8;
+        break;
+      case 'thailand':
+        this.center = { lat: 12.87, lng: 99.65 };
+        this.zoom = 9;
+        break;
+      case 'sumatra':
+        this.center = { lat: 0.5, lng: 101.5 };
+        this.zoom = 8;
+        break;
+      case 'japan':
+        this.center = { lat: 39.7, lng: 141.15 };
+        this.zoom = 7;
+        break;
+      default:
+        this.resetToJapacView();
+        break;
+    }
   }
 
   deleteSelectedGeofence(id: string) {
