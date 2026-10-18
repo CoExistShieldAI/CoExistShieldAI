@@ -134,7 +134,24 @@ Built specifically for field rangers, plantation workers, and rural residents us
 5. **Notification Hygiene & Duplicate Suppression:**
    - Mobile notifications use `setLocalOnly(true)` to suppress duplicate system mirroring, delegating to the watch's dedicated heads-up notification.
 
-### 4.3 CoExist Shield Web Admin Operations Portal (Angular 22 + Go)
+### 4.3 CoExist Shield Apple Watch Companion Application (watchOS 9.0+ / SwiftUI)
+Engineered natively for Apple Watch (Series 4+, SE, Ultra) to provide identical tactile awareness and tactical telemetry for iOS users:
+1. **High-Precision Modern Tactical Meter (SwiftUI):**
+   - Exact 1:1 visual fidelity with the Wear OS & Ionic meter: dynamic proximity arc (20% to 92% sweep, 360° closed in Safe mode), threat-pulsing radial glow, radar dashed inner ring, and centralized typography.
+2. **Taptic Engine Tier-Based Haptics:**
+   - **Safe:** Subtle confirming `.click`.
+   - **Tier 1 (Notice):** Gentle double tap-tap (`.directionUp` sequence).
+   - **Tier 2 (Warning):** Escalating 3-pulse ramp (`.directionUp` → `.retry` → `.warning`).
+   - **Tier 3 (Danger):** Continuous SOS emergency pulse looping (`.failure`) until silenced.
+3. **Apple WatchConnectivity Integration (`WCSession`):**
+   - `updateApplicationContext`: Real-time state synchronization (`/hud_state`) delivered reliably even across background/wake transitions.
+   - `sendMessage`: Ultra-low latency urgent alerts (`/alert/trigger`) causing immediate wrist vibration.
+4. **Wrist Tactical Quick-Actions & Reverse Mute:**
+   - Interactive on-screen tactical overlay: `SILENCE / ACK` silences iPhone acoustic deterrent sirens via reverse WCSession message (`/alert/dismiss`); `EVACUATE SOS` triggers emergency dispatch (`/alert/sos`).
+5. **Capacitor iOS Host Integration:**
+   - Native `WearSyncPlugin.swift` bridging Ionic/Capacitor on iOS to watchOS via WCSession.
+
+### 4.4 CoExist Shield Web Admin Operations Portal (Angular 22 + Go)
 Built for rangers, municipal wildlife control teams, plantation managers, and operations engineers:
 1. **JAPAC Dynamic Geofence Console:**
    - Full-theater Google Maps visualization covering Japan, Southeast Asia, and South Asia (`lat: 15.0, lng: 105.0, zoom: 4`).
@@ -313,7 +330,9 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 | **Compose Multiplatform (CMP)** | Declarative UI delivering unified Main HUD, Modern Tactical Meter, GIS Map, and Incident Reporter across Web & Android. |
 | **Wear OS 3.0+ (Compose for Wear OS)** | Companion smartwatch application (`:wearApp`) rendering the circular Modern Tactical Meter with tier-differentiated wrist haptics. |
 | **Wearable Data Layer API** | Low-latency state synchronization (`DataClient`) and instant incursion alerts / reverse mute (`MessageClient`) between Mobile & Watch. |
-| **Ionic & Capacitor (`ionic-app`)** | Mobile field application with native background geofencing and `WearSyncPlugin` companion bridge. |
+| **Apple Watch (watchOS 9.0+ / SwiftUI)** | Companion smartwatch application (`watchApp`) providing 1:1 visual parity Modern Tactical Meter and Taptic Engine haptics. |
+| **Apple WatchConnectivity (`WCSession`)** | Ultra-low latency state synchronization (`updateApplicationContext`) and urgent hazard alerts / reverse action (`sendMessage`) between iOS & Watch. |
+| **Ionic & Capacitor (`ionic-app`)** | Mobile field application with native background geofencing and universal `WearSyncPlugin` (Wear OS & watchOS) companion bridge. |
 | **Angular 22 (web-admin)** | High-density desktop operations portal with Google Maps JS API, 2-column Map-Picker tabs, and category wizards. |
 | **Google Maps JS API** | Interactive pin drop, reverse geocoding, geofence polygon/circle authoring, and cluster visualization. |
 | **Cloud Firestore** | Low-latency, offline-capable NoSQL database with 3-Role RBAC security rules and persistent repository layer. |
@@ -357,11 +376,17 @@ CoExistShieldAI/
 │   └── src/androidMain/            # MainActivity.kt, WearDataSyncManager.kt, resources
 ├── wearApp/                        # Wear OS Companion Application module (:wearApp)
 │   └── src/androidMain/            # WearMainActivity, WearHudScreen, WearDataListenerService, WatchHapticManager
+├── watchApp/                       # Apple Watch Companion Application module (watchOS / Swift Package)
+│   ├── Package.swift               # Swift Package configuration (macOS/watchOS/iOS)
+│   ├── Sources/WatchAppCore/       # CoExistShieldWatchApp, WatchHudView, ModernTacticalMeterView, WatchHapticManager
+│   └── Tests/WatchAppCoreTests/    # Swift XCTest suite for telemetry models & WatchConnectivity logic
 ├── ionic-app/                      # Ionic & Capacitor Mobile Application
 │   ├── android/app/src/main/       # Native GeofenceBridgePlugin, WearSyncPlugin, GeofenceBroadcastReceiver
+│   ├── ios/App/App/Plugins/        # Native WearSyncPlugin.swift, WCSessionDelegate
 │   └── src/app/                    # Angular Signals HUD, GIS Map, Camera Report, WearSync plugin
 ├── docs/                           # Architectural & design documentation
 │   ├── WEAR_OS_DESIGN.md           # Wear OS companion app, haptic waveforms & Data Layer protocol
+│   ├── APPLE_WATCH_DESIGN.md       # Apple Watch companion app, Taptic waveforms & WCSession protocol
 │   ├── DATA_MODEL.md               # Firestore & domain schemas
 │   └── IMPLEMENTATION_GUIDELINES.md# Development workflow, epic/feature branch rules
 ├── web-e2e/                        # Playwright E2E test suite for Compose Web app
@@ -422,7 +447,20 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew :wearApp:assembleDebug
 ```
 
-### 9.4 Mobile Field Application (Ionic & Capacitor)
+### 9.4 Apple Watch Companion Application (watchOS / Swift Package)
+```bash
+# Run Apple Watch unit tests & verify Swift build
+swift test --package-path watchApp
+
+# Synchronize Capacitor iOS project (includes WearSyncPlugin)
+cd ionic-app
+npx cap sync ios
+
+# Open iOS & Apple Watch workspace in Xcode
+npx cap open ios
+```
+
+### 9.5 Mobile Field Application (Ionic & Capacitor)
 ```bash
 cd ionic-app
 
@@ -437,7 +475,7 @@ npm test -- --watch=false --browsers=ChromeHeadless
 npm run cap:sync
 ```
 
-### 9.5 Operations Admin Portal (Angular 22)
+### 9.6 Operations Admin Portal (Angular 22)
 ```bash
 # Navigate to web-admin directory
 cd web-admin

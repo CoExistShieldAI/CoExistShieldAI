@@ -5,6 +5,8 @@
 **Companion Host Apps:** `ionic-app` (Capacitor/Angular) & `composeApp` (Compose Multiplatform)  
 **Package / Application ID:** `ai.coexistshield.ionic` / `ai.coexistshield`  
 
+> 💡 **Related Architecture:** For the companion Apple Watch (watchOS) implementation and WCSession protocol, see [APPLE_WATCH_DESIGN.md](file:///Users/kat/Projects/CoExistShieldAI/docs/APPLE_WATCH_DESIGN.md).
+
 ---
 
 ## 1. Overview & Operational Vision

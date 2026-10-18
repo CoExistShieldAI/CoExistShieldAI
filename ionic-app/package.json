@@ -25,6 +25,7 @@
     "@capacitor/core": "^8.5.0",
     "@capacitor/geolocation": "^8.2.0",
     "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.5.3",
     "@capacitor/local-notifications": "^8.3.0",
     "@ionic/angular": "^9.0.8",
     "@types/google.maps": "^3.66.6",
