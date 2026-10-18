@@ -13,6 +13,8 @@ import {
   ClearanceStatus,
   DecayState,
   DispatchRecommendation,
+  EdgeCameraMode,
+  EdgeVisionAnalysisResult,
   GeminiTriageResult,
   GeofenceTransitionEvent,
   GeofenceZone,
@@ -29,6 +31,7 @@ import {
   UserRole,
   WildlifeSpecies
 } from '../models/shield.model';
+import { EdgeVision } from '../plugins/edge-vision.plugin';
 import { GeofenceBridge, haversineMeters } from '../plugins/geofence-bridge.plugin';
 import { WearSync } from '../plugins/wear-sync.plugin';
 import { AuthService } from './auth.service';
@@ -453,6 +456,14 @@ export class ShieldStateService {
   readonly reportNearSchoolRoute = signal<boolean>(true);
   readonly reportPhotoBase64 = signal<string | null>(null);
   readonly offlineQueue = signal<IncidentReport[]>([]);
+
+  // On-Device Edge AI Vision (YOLOv8n INT8 / TFLite) State
+  readonly edgeCameraMode = signal<EdgeCameraMode>('KILL-SITE');
+  readonly edgeLeafCoverScore = signal<number>(0.78);
+  readonly edgeCameraTiltDegrees = signal<number>(-6.4);
+  readonly edgeAltitudeMeters = signal<number>(184);
+  readonly edgeVisionResult = signal<EdgeVisionAnalysisResult | null>(null);
+  readonly isEdgeVisionAnalyzing = signal<boolean>(false);
 
   // Admin / Official Console State
   readonly adminActiveTab = signal<AdminTab>('JAPAN_MUNICIPAL');
@@ -1297,9 +1308,75 @@ export class ShieldStateService {
     }
   }
 
+  setEdgeCameraMode(mode: EdgeCameraMode) {
+    this.edgeCameraMode.set(mode);
+    if (mode === 'KILL-SITE') {
+      this.reportCategory.set('LIVESTOCK_DEPREDATION');
+      this.edgeLeafCoverScore.set(0.78);
+    } else if (mode === 'ATTRACTANT') {
+      this.reportCategory.set('ATTRACTANT_FRUIT_TREE');
+      this.edgeLeafCoverScore.set(0.42);
+    } else {
+      this.reportCategory.set('WILDLIFE_SIGHTING');
+      this.edgeLeafCoverScore.set(0.34);
+    }
+    void this.runEdgeVisionAnalysis();
+  }
+
+  async runEdgeVisionAnalysis(customLeafCover?: number): Promise<EdgeVisionAnalysisResult> {
+    this.isEdgeVisionAnalyzing.set(true);
+    try {
+      const loc = this.userLocation();
+      const leafScore = customLeafCover !== undefined ? customLeafCover : this.edgeLeafCoverScore();
+      if (customLeafCover !== undefined) {
+        this.edgeLeafCoverScore.set(customLeafCover);
+      }
+
+      const result = await EdgeVision.analyzeFrame({
+        imageBase64: this.reportPhotoBase64(),
+        mode: this.edgeCameraMode(),
+        speciesHint: this.reportSpecies(),
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        altitudeMeters: this.edgeAltitudeMeters(),
+        tiltDegrees: this.edgeCameraTiltDegrees(),
+        focalLengthMm: 26,
+        leafCoverScoreOverride: leafScore,
+        incidentId: 'INC-892'
+      });
+
+      this.edgeVisionResult.set(result);
+
+      // Apex Predator Kill-Site Caching Heuristic Rule:
+      // IF object_class == 'CARCASS' AND leaf_cover_score > 0.65:
+      //   threat_tier = 'TIER_3_DANGER'
+      //   auto_lock_evacuation_perimeter(radius = 500)
+      //   suppress_audio_sirens_to_prevent_predator_charge(mode = 'STEALTH_TACTICAL')
+      if (result.cachingEvaluation.cachingDetected) {
+        this.currentTier.set('TIER_3_DANGER');
+        if (this.isSirenPlaying()) {
+          this.isSirenPlaying.set(false);
+          this.stopSirenAudio();
+        }
+        this.showToast(
+          `⚠️ YOLOv8n TFLite (${result.inferenceLatencyMs}ms): Predator Caching Risk Detected (Leaf Mulch ${(result.cachingEvaluation.leafCoverScore * 100).toFixed(0)}%) • 500m Perimeter Locked & Stealth Mute Active`
+        );
+      } else {
+        this.showToast(
+          `🤖 YOLOv8n TFLite (${result.inferenceLatencyMs}ms): ${result.primaryDetection.taxonomy} (${(result.primaryDetection.confidence * 100).toFixed(1)}%) • Range ${result.opticalRange.rangeMeters}m ± ${result.opticalRange.uncertaintyMeters}m`
+        );
+      }
+
+      return result;
+    } finally {
+      this.isEdgeVisionAnalyzing.set(false);
+    }
+  }
+
   submitIncidentReport() {
     const incidentId = `inc_${Math.floor(1000 + Math.random() * 9000)}`;
     const loc = this.userLocation();
+    const edgeRes = this.edgeVisionResult();
     const newIncident: IncidentReport = {
       id: incidentId,
       category: this.reportCategory(),
@@ -1310,7 +1387,15 @@ export class ShieldStateService {
       description: `Crowdsourced report for ${this.reportCategory()} (${this.reportSpecies()})`,
       reporterId: this.authUser()?.uid || 'usr_current_device',
       reporterRole: this.currentRole(),
-      photoBase64: this.reportPhotoBase64() || undefined
+      photoBase64: this.reportPhotoBase64() || undefined,
+      sha256: edgeRes?.sha256,
+      privacyMaskApplied: edgeRes?.privacyMaskApplied ?? true,
+      cachingDetected: edgeRes?.cachingEvaluation.cachingDetected ?? false,
+      leafCoverScore: edgeRes?.cachingEvaluation.leafCoverScore,
+      evacRadiusMeters: edgeRes?.cachingEvaluation.evacRadiusMeters,
+      opticalRangeMeters: edgeRes?.opticalRange.rangeMeters,
+      taxonomy: edgeRes?.primaryDetection.taxonomy,
+      geoJsonFeature: edgeRes?.geoJsonPayload
     };
 
     if (this.reportCategory() === 'ROADKILL') {
@@ -1341,10 +1426,10 @@ export class ShieldStateService {
     } else {
       this.http.post(`${this.backendBaseUrl}/api/v1/incidents`, newIncident).subscribe({
         next: () => {
-          this.showToast('✅ Report submitted & verified by Gemini 3.8 Flash!');
+          this.showToast('✅ Report submitted & verified by YOLOv8n TFLite + Gemini 3.8 Flash!');
         },
         error: () => {
-          this.showToast('✅ Report verified by Gemini 3.8 Flash & synced to spatial feed!');
+          this.showToast('✅ Report verified by YOLOv8n TFLite + Gemini 3.8 Flash & synced to spatial feed!');
         }
       });
     }

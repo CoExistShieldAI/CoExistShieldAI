@@ -7,6 +7,7 @@ class MainActivity : BridgeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(GeofenceBridgePlugin::class.java)
         registerPlugin(WearSyncPlugin::class.java)
+        registerPlugin(EdgeVisionPlugin::class.java)
         super.onCreate(savedInstanceState)
     }
 }

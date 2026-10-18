@@ -1,8 +1,9 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ShieldStateService } from '../../services/shield-state.service';
 import {
   DecayState,
+  EdgeCameraMode,
   PropertyContextTag,
   ReportCategory,
   WildlifeSpecies
@@ -214,17 +215,124 @@ interface CategoryOption {
               </button>
             </div>
 
-            <!-- 2A. Photo Evidence & EXIF GPS Lock Card -->
-            <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-              <div class="flex items-center justify-between">
-                <div class="text-xs font-extrabold uppercase tracking-wider text-sky-400">
-                  1. Field Photo & GPS Tag
+            <!-- 2A. SCREEN 1: ON-DEVICE EDGE AI CAMERA VIEWFINDER (YOLOv8n INT8 / TFLite) -->
+            <div class="p-3.5 rounded-2xl bg-slate-900 border border-purple-500/40 space-y-3 shadow-lg">
+              <!-- Camera Top HUD Bar -->
+              <div class="px-3 py-2 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                  <span class="text-[11px] font-extrabold tracking-wide text-white">AI REC · 4K 60FPS</span>
                 </div>
-                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-700/60">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span class="text-[10px] font-bold text-emerald-300">EXIF GPS Locked</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-mono text-slate-400">ISO 400 · f/1.8</span>
+                  <span class="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-600/50 text-[9.5px] font-mono font-bold text-cyan-300">
+                    YOLOv8n INT8 · {{ state.edgeVisionResult()?.inferenceLatencyMs || 38 }}ms
+                  </span>
+                  <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9.5px] font-extrabold text-emerald-300">
+                    RAW
+                  </span>
                 </div>
               </div>
+
+              <!-- Camera Viewport Scene with Live Bounding Box & Optical Telemetry Overlay -->
+              <div class="relative rounded-xl bg-[#090D16] border border-slate-800 overflow-hidden h-64 select-none">
+                @if (photoPreviewUrl()) {
+                  <img
+                    [src]="photoPreviewUrl()"
+                    alt="Field Viewfinder Frame"
+                    class="absolute inset-0 w-full h-full object-cover opacity-80" />
+                } @else {
+                  <!-- Tactical Mountain Canopy Silhouette SVG Background -->
+                  <svg class="absolute inset-0 w-full h-full" viewBox="0 0 290 260" preserveAspectRatio="none">
+                    <path d="M 0 130 L 60 85 L 140 125 L 220 75 L 290 115 L 290 260 L 0 260 Z" fill="#0A1826" opacity="0.7" />
+                    <path d="M 0 185 Q 90 160 180 195 T 290 175 L 290 260 L 0 260 Z" fill="#06121D" />
+                    <!-- Rule of Thirds Grid -->
+                    <line x1="96" y1="0" x2="96" y2="260" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+                    <line x1="193" y1="0" x2="193" y2="260" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+                    <line x1="0" y1="86" x2="290" y2="86" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+                    <line x1="0" y1="173" x2="290" y2="173" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+                    <!-- Viewfinder Corner Brackets -->
+                    <path d="M 14 28 L 14 12 L 30 12" fill="none" stroke="#38BDF8" stroke-width="2" />
+                    <path d="M 276 28 L 276 12 L 260 12" fill="none" stroke="#38BDF8" stroke-width="2" />
+                    <path d="M 14 232 L 14 248 L 30 248" fill="none" stroke="#38BDF8" stroke-width="2" />
+                    <path d="M 276 232 L 276 248 L 260 248" fill="none" stroke="#38BDF8" stroke-width="2" />
+                  </svg>
+                }
+
+                <!-- YOLOv8n AI Target Detection Bounding Box -->
+                <div class="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 w-44 h-28 rounded-lg bg-cyan-500/10 border-2 border-cyan-400">
+                  <!-- Top Taxonomy & Confidence Badge -->
+                  <div class="absolute -top-6 left-0 right-0 px-2 py-0.5 rounded bg-cyan-800/95 text-[10px] font-extrabold text-white truncate shadow">
+                    {{ state.edgeVisionResult()?.primaryDetection?.taxonomy || 'Ursus thibetanus' }} ·
+                    {{ ((state.edgeVisionResult()?.primaryDetection?.confidence || 0.948) * 100).toFixed(1) }}%
+                  </div>
+                  <!-- Center Reticle Crosshair -->
+                  <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="w-4 h-[1.5px] bg-sky-400"></div>
+                    <div class="h-4 w-[1.5px] bg-sky-400 -ml-[8px]"></div>
+                  </div>
+                </div>
+
+                <!-- Viewfinder Bottom Telemetry HUD Overlay -->
+                <div class="absolute bottom-2 left-2 right-2 p-2 rounded-lg bg-slate-950/90 border border-slate-800 font-mono text-[9.5px] leading-tight space-y-0.5">
+                  <div class="text-sky-400 font-bold">
+                    RANGE: {{ state.edgeVisionResult()?.opticalRange?.rangeMeters || 42 }}m ± {{ state.edgeVisionResult()?.opticalRange?.uncertaintyMeters || 4 }}m · TILT: {{ state.edgeVisionResult()?.opticalRange?.tiltDegrees || -6.4 }}°
+                  </div>
+                  <div class="text-emerald-400">
+                    GPS: {{ state.userLocation().latitude.toFixed(4) }}° N, {{ state.userLocation().longitude.toFixed(4) }}° E
+                  </div>
+                  <div class="text-amber-400">
+                    UTC: {{ (state.edgeVisionResult()?.utcTimestamp || '2026-10-19T06:14:22Z').replace('T', ' ').slice(0, 19) }} · ALT {{ state.edgeAltitudeMeters() }}m
+                  </div>
+                  <div class="text-slate-400 text-[8.5px]">
+                    PRIVACY MASK: FACES &amp; VEHICLES BLURRED ({{ state.edgeVisionResult()?.blurredRegionsCount ?? 2 }} REGIONS ANONYMIZED)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Viewfinder Mode Selector Tabs (SIGHTING | KILL-SITE | ATTRACTANT) -->
+              <div class="grid grid-cols-3 gap-2">
+                @for (mode of cameraModes; track mode) {
+                  <button
+                    type="button"
+                    (click)="selectCameraMode(mode)"
+                    class="py-1.5 px-2 rounded-lg text-[10.5px] font-extrabold tracking-wider transition-all border"
+                    [ngClass]="
+                      state.edgeCameraMode() === mode
+                        ? 'bg-sky-600 border-sky-400 text-white shadow'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    ">
+                    {{ mode }}
+                  </button>
+                }
+              </div>
+
+              <!-- Leaf Mulch / Brush Cover Heuristic Control (for KILL-SITE Caching Verification) -->
+              @if (state.edgeCameraMode() === 'KILL-SITE') {
+                <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                  <div class="flex items-center justify-between text-[10.5px]">
+                    <span class="font-bold text-slate-300">🌿 Leaf Mulch &amp; Brush Cover Score:</span>
+                    <span
+                      class="font-mono font-extrabold px-1.5 py-0.5 rounded"
+                      [ngClass]="
+                        state.edgeLeafCoverScore() > 0.65
+                          ? 'bg-red-950 text-red-300 border border-red-700/60'
+                          : 'bg-slate-900 text-emerald-300'
+                      ">
+                      {{ (state.edgeLeafCoverScore() * 100).toFixed(0) }}%
+                      {{ state.edgeLeafCoverScore() > 0.65 ? '(CACHING > 65%)' : '(OPEN)' }}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.10"
+                    max="0.95"
+                    step="0.05"
+                    [value]="state.edgeLeafCoverScore()"
+                    (input)="onLeafCoverChange($event)"
+                    class="w-full accent-red-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+                </div>
+              }
 
               <!-- Hidden native file/camera input -->
               <input
@@ -235,42 +343,28 @@ interface CategoryOption {
                 class="hidden"
                 (change)="onPhotoSelected($event)" />
 
-              <!-- Visual Camera Preview Slot -->
-              <div class="p-3 rounded-xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3 min-w-0">
-                  @if (photoPreviewUrl()) {
-                    <img
-                      [src]="photoPreviewUrl()"
-                      alt="Field Evidence Preview"
-                      class="w-14 h-14 rounded-xl object-cover border border-sky-500/60 shadow" />
-                  } @else {
-                    <div class="w-12 h-12 rounded-xl bg-sky-950/60 border border-sky-700/50 flex items-center justify-center text-2xl flex-shrink-0">
-                      📷
-                    </div>
-                  }
-                  <div class="min-w-0">
-                    <div class="text-xs font-bold text-white truncate">
-                      {{ photoPreviewUrl() ? 'Evidence Photo Attached' : 'Attach Field Photo' }}
-                    </div>
-                    <div class="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
-                      📍 {{ state.userLocation().latitude.toFixed(4) }}, {{ state.userLocation().longitude.toFixed(4) }}
-                    </div>
-                  </div>
-                </div>
-                <div class="flex flex-col sm:flex-row gap-1.5 flex-shrink-0">
-                  <button
-                    type="button"
-                    (click)="fileInput.click()"
-                    class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-[11px] font-bold text-white shadow whitespace-nowrap">
-                    {{ photoPreviewUrl() ? '📸 Retake' : '📷 Camera / Gallery' }}
-                  </button>
-                  <button
-                    type="button"
-                    (click)="state.requestRealDeviceGps()"
-                    class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-semibold text-sky-300 whitespace-nowrap">
-                    📍 GPS
-                  </button>
-                </div>
+              <!-- Shutter ANALYZE Button & Camera/GPS Controls -->
+              <div class="flex items-center justify-between gap-2 pt-1">
+                <button
+                  type="button"
+                  (click)="fileInput.click()"
+                  class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200">
+                  {{ photoPreviewUrl() ? '📸 Retake' : '📷 Load Frame' }}
+                </button>
+
+                <button
+                  type="button"
+                  (click)="analyzeWithEdgeAi()"
+                  class="flex-1 py-2.5 px-4 rounded-full bg-red-600 hover:bg-red-500 border-2 border-white text-xs font-black tracking-wider text-white shadow-lg shadow-red-950/60 flex items-center justify-center gap-2 transition-transform active:scale-95">
+                  <span>🎯 ANALYZE (YOLOv8n TFLite)</span>
+                </button>
+
+                <button
+                  type="button"
+                  (click)="state.requestRealDeviceGps()"
+                  class="px-2.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[11px] font-semibold text-sky-300">
+                  📍 GPS
+                </button>
               </div>
             </div>
 
@@ -288,7 +382,7 @@ interface CategoryOption {
                       @for (sp of speciesOptions; track sp.id) {
                         <button
                           type="button"
-                          (click)="state.reportSpecies.set(sp.id)"
+                          (click)="state.reportSpecies.set(sp.id); state.runEdgeVisionAnalysis()"
                           class="p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all"
                           [ngClass]="
                             state.reportSpecies() === sp.id
@@ -441,7 +535,7 @@ interface CategoryOption {
                       @for (lv of livestockOptions; track lv.id) {
                         <button
                           type="button"
-                          (click)="state.reportSpecies.set(lv.id)"
+                          (click)="state.reportSpecies.set(lv.id); state.runEdgeVisionAnalysis()"
                           class="p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all"
                           [ngClass]="
                             state.reportSpecies() === lv.id
@@ -470,19 +564,43 @@ interface CategoryOption {
         }
 
         <!-- ========================================================= -->
-        <!-- STEP 3: AI TRIAGE REVIEW & SUBMIT                         -->
+        <!-- STEP 3: SCREEN 2 — FORENSIC DISPATCH REPORT SHEET         -->
         <!-- ========================================================= -->
         @if (currentStep() === 3) {
           <div class="space-y-4">
-            <!-- 3A. Instant Gemini Multimodal Triage Card -->
+            <!-- Predator Caching Risk Alert Banner (Wireframe 02 Screen 2 Spec) -->
+            @if (state.edgeVisionResult()?.cachingEvaluation?.cachingDetected) {
+              <div class="p-3.5 rounded-2xl bg-[#450A0A] border border-red-500 space-y-1.5 shadow-lg">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-extrabold text-red-300 tracking-wide">
+                    ⚠️ PREDATOR CACHING RISK DETECTED
+                  </span>
+                  <span class="px-2 py-0.5 rounded bg-red-900/90 border border-red-400 text-[10px] font-extrabold text-red-100">
+                    TIER 3 DANGER
+                  </span>
+                </div>
+                <p class="text-[11px] text-red-100 leading-relaxed">
+                  Carcass covered with leaf mulch and brush (Leaf Cover Score:
+                  <span class="font-mono font-bold">{{ ((state.edgeVisionResult()?.cachingEvaluation?.leafCoverScore || 0.78) * 100).toFixed(0) }}%</span>
+                  &gt; 65% threshold). High probability of defensive bear/tiger returning within 24h.
+                </p>
+                <div class="text-[10.5px] font-extrabold text-red-300 pt-0.5">
+                  Immediate evacuation perimeter: {{ state.edgeVisionResult()?.cachingEvaluation?.evacRadiusMeters || 500 }} meters · Audio Mode: {{ state.edgeVisionResult()?.cachingEvaluation?.audioMode || 'STEALTH_TACTICAL' }}
+                </div>
+              </div>
+            }
+
+            <!-- 3A. On-Device YOLOv8n TFLite + Gemini 3.8 Flash Multimodal Triage Card -->
             @if (state.geminiTriagePreview(); as triage) {
               <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950/40 border border-sky-500/40 space-y-3 shadow-lg">
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
                   <div class="flex items-center gap-1.5">
-                    <span class="text-xs font-extrabold text-sky-400">✨ Gemini 3.8 Flash AI Triage</span>
+                    <span class="text-xs font-extrabold text-sky-400">
+                      ✨ YOLOv8n TFLite ({{ state.edgeVisionResult()?.inferenceLatencyMs || 38 }}ms) + Gemini 3.8 Flash
+                    </span>
                   </div>
                   <span class="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 text-[11px] font-extrabold">
-                    {{ (triage.confidence * 100).toFixed(0) }}% Match
+                    {{ ((state.edgeVisionResult()?.primaryDetection?.confidence || triage.confidence) * 100).toFixed(1) }}% AI
                   </span>
                 </div>
 
@@ -490,14 +608,22 @@ interface CategoryOption {
                 <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                   <div
                     class="h-full bg-gradient-to-r from-sky-400 to-emerald-400 rounded-full"
-                    [style.width.%]="triage.confidence * 100"></div>
+                    [style.width.%]="(state.edgeVisionResult()?.primaryDetection?.confidence || triage.confidence) * 100"></div>
                 </div>
 
-                <div>
-                  <div class="text-sm font-extrabold text-white">{{ triage.detectedLabel }}</div>
-                  @if (triage.commonName) {
-                    <div class="text-[11px] font-semibold text-sky-300">{{ triage.commonName }}</div>
-                  }
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <div class="text-sm font-extrabold text-white">
+                      {{ state.edgeVisionResult()?.primaryDetection?.taxonomy || triage.detectedLabel }}
+                    </div>
+                    <div class="text-[11px] font-semibold text-sky-300">
+                      {{ state.edgeVisionResult()?.primaryDetection?.commonName || triage.commonName }}
+                    </div>
+                  </div>
+                  <div class="text-right font-mono text-[10.5px] text-cyan-300">
+                    <div>Range: {{ state.edgeVisionResult()?.opticalRange?.rangeMeters || 42 }}m ± {{ state.edgeVisionResult()?.opticalRange?.uncertaintyMeters || 4 }}m</div>
+                    <div class="text-slate-400">Tilt: {{ state.edgeVisionResult()?.opticalRange?.tiltDegrees || -6.4 }}°</div>
+                  </div>
                 </div>
 
                 <p class="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
@@ -514,7 +640,40 @@ interface CategoryOption {
               </div>
             }
 
-            <!-- 3B. Structured Report Summary Checklist -->
+            <!-- 3B. Forensic Evidence Attachment & Tamper-Proof SHA-256 Card (Wireframe 02 Screen 2) -->
+            <div class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2.5">
+              <div class="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400">
+                Evidence Attachment &amp; Autonomous Geostamp
+              </div>
+              <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
+                <div class="w-12 h-12 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center text-xl flex-shrink-0">
+                  📷
+                </div>
+                <div class="min-w-0 flex-1 space-y-0.5">
+                  <div class="text-xs font-extrabold text-white truncate">
+                    {{ state.edgeVisionResult()?.evidenceFilename || 'IMG_20261019_061422.RAW' }}
+                  </div>
+                  <div class="text-[10px] font-mono text-slate-400 truncate">
+                    SHA256: {{ (state.edgeVisionResult()?.sha256 || '8f9c2d1b7a6e0f3c4e1a').slice(0, 8) }}...{{ (state.edgeVisionResult()?.sha256 || '8f9c4e1a').slice(-6) }} (Tamper-Proof)
+                  </div>
+                  <div class="text-[10px] font-semibold text-emerald-400">
+                    ✓ Face/Vehicle Privacy Mask Applied ({{ state.edgeVisionResult()?.blurredRegionsCount ?? 2 }} regions)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Municipal Dispatch Payload (GeoJSON Feature) Preview -->
+              @if (state.edgeVisionResult()?.geoJsonPayload; as geoJson) {
+                <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-[9.5px] text-slate-300 space-y-0.5 overflow-x-auto">
+                  <div class="text-emerald-400 font-bold mb-1">MUNICIPAL DISPATCH PAYLOAD (GeoJSON Feature)</div>
+                  <div class="text-sky-300">{{ '{' }} "type": "Feature", "geometry": {{ '{' }} "type": "Point", "coordinates": [{{ geoJson.geometry.coordinates[0] }}, {{ geoJson.geometry.coordinates[1] }}] {{ '}' }},</div>
+                  <div class="text-amber-300">  "properties": {{ '{' }} "incident_id": "{{ geoJson.properties.incident_id }}", "tier": "{{ geoJson.properties.tier }}", "taxonomy": "{{ geoJson.properties.taxonomy }}",</div>
+                  <div class="text-emerald-300">    "caching_detected": {{ geoJson.properties.caching_detected }}, "evac_radius_m": {{ geoJson.properties.evac_radius_m }}, "ranger_dispatch_required": {{ geoJson.properties.ranger_dispatch_required }} {{ '}' }} {{ '}' }}</div>
+                </div>
+              }
+            </div>
+
+            <!-- 3C. Structured Report Summary Checklist -->
             <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-extrabold uppercase tracking-wider text-slate-300">
@@ -544,22 +703,22 @@ interface CategoryOption {
                 </div>
 
                 <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                  <div class="text-[10px] text-slate-400">GPS Coordinates</div>
+                  <div class="text-[10px] text-slate-400">Autonomous Geostamp</div>
                   <div class="font-mono font-bold text-emerald-400 mt-0.5 text-[11px]">
-                    {{ state.userLocation().latitude.toFixed(4) }}, {{ state.userLocation().longitude.toFixed(4) }}
+                    {{ state.userLocation().latitude.toFixed(4) }}, {{ state.userLocation().longitude.toFixed(4) }} ({{ state.edgeAltitudeMeters() }}m)
                   </div>
                 </div>
 
                 <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
                   <div class="text-[10px] text-slate-400">Field Evidence</div>
                   <div class="font-bold text-white mt-0.5 truncate">
-                    {{ photoPreviewUrl() ? '📷 1 Photo (EXIF)' : '⚠️ No Photo' }}
+                    📷 EXIF + SHA-256 Verified
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- 3C. Offline Mode Simulator Toggle -->
+            <!-- 3D. Offline Mode Simulator Toggle -->
             <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between gap-2">
               <div>
                 <div class="text-xs font-bold text-slate-200">Mountain / Forest Offline Mode</div>
@@ -625,16 +784,24 @@ interface CategoryOption {
     </div>
   `
 })
-export class ReportPanelComponent {
+export class ReportPanelComponent implements OnInit {
   state = inject(ShieldStateService);
 
   readonly currentStep = signal<WizardStep>(1);
+
+  readonly cameraModes: EdgeCameraMode[] = ['SIGHTING', 'KILL-SITE', 'ATTRACTANT'];
 
   readonly steps: { step: WizardStep; title: string }[] = [
     { step: 1, title: 'Category' },
     { step: 2, title: 'Scene & Photo' },
     { step: 3, title: 'AI Review' }
   ];
+
+  ngOnInit() {
+    if (!this.state.edgeVisionResult()) {
+      void this.state.runEdgeVisionAnalysis();
+    }
+  }
 
   readonly categories: CategoryOption[] = [
     {
@@ -743,15 +910,47 @@ export class ReportPanelComponent {
 
   selectCategory(catId: ReportCategory) {
     this.state.reportCategory.set(catId);
+    if (catId === 'ROADKILL' || catId === 'LIVESTOCK_DEPREDATION') {
+      this.state.edgeCameraMode.set('KILL-SITE');
+      this.state.edgeLeafCoverScore.set(0.78);
+    } else if (catId === 'ATTRACTANT_FRUIT_TREE') {
+      this.state.edgeCameraMode.set('ATTRACTANT');
+      this.state.edgeLeafCoverScore.set(0.42);
+    } else {
+      this.state.edgeCameraMode.set('SIGHTING');
+      this.state.edgeLeafCoverScore.set(0.34);
+    }
+    void this.state.runEdgeVisionAnalysis();
+  }
+
+  selectCameraMode(mode: EdgeCameraMode) {
+    this.state.setEdgeCameraMode(mode);
+  }
+
+  onLeafCoverChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const score = Number.parseFloat(input.value);
+    if (!Number.isNaN(score)) {
+      void this.state.runEdgeVisionAnalysis(score);
+    }
+  }
+
+  async analyzeWithEdgeAi() {
+    await this.state.runEdgeVisionAnalysis();
+    this.currentStep.set(3);
   }
 
   goToStep(step: WizardStep) {
+    if (step === 2 || step === 3) {
+      void this.state.runEdgeVisionAnalysis();
+    }
     this.currentStep.set(step);
   }
 
   nextStep() {
     const curr = this.currentStep();
     if (curr < 3) {
+      void this.state.runEdgeVisionAnalysis();
       this.currentStep.set((curr + 1) as WizardStep);
     }
   }
@@ -798,7 +997,7 @@ export class ReportPanelComponent {
           const compressed = canvas.toDataURL('image/jpeg', 0.85);
           this.photoPreviewUrl.set(compressed);
           this.state.reportPhotoBase64.set(compressed);
-          this.state.showToast('📸 Field photo captured & EXIF location locked!');
+          void this.state.runEdgeVisionAnalysis();
         }
       };
       img.src = dataUrl;

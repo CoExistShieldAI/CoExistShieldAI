@@ -1,5 +1,8 @@
 package ai.coexistshield.ui.report
 
+import ai.coexistshield.edge.EdgeCameraMode
+import ai.coexistshield.edge.EdgeVisionAnalysisResult
+import ai.coexistshield.edge.EdgeVisionEngine
 import ai.coexistshield.model.DecayState
 import ai.coexistshield.model.FruitLoadLevel
 import ai.coexistshield.model.FruitType
@@ -77,6 +80,7 @@ data class IncidentReportUiState(
         fruitLoadLevel = "ABUNDANT",
         notes = "High-calorie bear attractant cluster detected within 500m of residential structure."
     ),
+    val edgeVisionResult: EdgeVisionAnalysisResult = EdgeVisionEngine.analyzeFrame(),
     val isAnalyzing: Boolean = false,
     val isOfflineMode: Boolean = false,
     val offlineQueueCount: Int = 0,
@@ -102,6 +106,18 @@ fun IncidentReportScreen(
     onSubmitReportClick: () -> Unit = {}
 ) {
     var currentStep by remember { mutableStateOf(1) }
+    val activeEdgeMode = when (state.selectedCategory) {
+        ReportCategory.ROADKILL, ReportCategory.LIVESTOCK_DEPREDATION -> EdgeCameraMode.KILL_SITE
+        ReportCategory.ATTRACTANT_FRUIT_TREE -> EdgeCameraMode.ATTRACTANT
+        else -> EdgeCameraMode.SIGHTING
+    }
+    val liveEdgeVision = remember(activeEdgeMode, state.selectedSpecies, state.location) {
+        EdgeVisionEngine.analyzeFrame(
+            mode = activeEdgeMode,
+            speciesHint = state.selectedSpecies,
+            location = state.location
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -262,6 +278,8 @@ fun IncidentReportScreen(
                     PhotoMetadataCard(
                         photoCount = state.photoCount,
                         location = state.location,
+                        edgeVision = liveEdgeVision,
+                        onAnalyzeClick = { currentStep = 3 },
                         onRetakePhotoClick = onRetakePhotoClick
                     )
 
@@ -304,12 +322,18 @@ fun IncidentReportScreen(
                 }
 
                 3 -> {
-                    // STEP 3: Instant Gemini Multimodal Triage + Summary + Offline Mode + Privacy
+                    // STEP 3: Predator Caching Risk + YOLOv8n/Gemini Triage + SHA-256 Evidence + Summary
+                    if (liveEdgeVision.cachingEvaluation.cachingDetected) {
+                        PredatorCachingRiskBanner(edgeVision = liveEdgeVision)
+                    }
+
                     GeminiTriageCard(
                         category = state.selectedCategory,
                         result = state.geminiTriageResult,
                         isAnalyzing = state.isAnalyzing
                     )
+
+                    ForensicEvidenceDispatchCard(edgeVision = liveEdgeVision)
 
                     ReportReviewSummaryCard(
                         state = state,
@@ -582,6 +606,8 @@ fun OfflineQueueBanner(
 fun PhotoMetadataCard(
     photoCount: Int,
     location: GeoLocation,
+    edgeVision: EdgeVisionAnalysisResult = EdgeVisionEngine.analyzeFrame(),
+    onAnalyzeClick: () -> Unit = {},
     onRetakePhotoClick: () -> Unit
 ) {
     Card(
@@ -589,7 +615,7 @@ fun PhotoMetadataCard(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -599,33 +625,147 @@ fun PhotoMetadataCard(
                     Box(
                         modifier = Modifier
                             .size(10.dp)
-                            .background(TierSafe, CircleShape)
+                            .background(TierDanger, CircleShape)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "GPS Coordinates Locked (EXIF)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TierSafe
+                        text = "AI REC · 4K 60FPS · YOLOv8n INT8 (${edgeVision.inferenceLatencyMs}ms)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
                 OutlinedButton(
                     onClick = onRetakePhotoClick,
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Retake Photo", fontSize = 11.sp)
+                    Text("Retake", fontSize = 11.sp)
                 }
             }
 
+            // Viewfinder Bounding Box & Optical Range Telemetry Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF090D16), RoundedCornerShape(10.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .padding(12.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🎯 ${edgeVision.primaryDetection.taxonomy} · ${(edgeVision.primaryDetection.confidence * 1000).toInt() / 10.0}%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF38BDF8)
+                        )
+                        Text(
+                            text = "RAW",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TierSafe
+                        )
+                    }
+                    Text(
+                        text = "RANGE: ${edgeVision.opticalRange.rangeMeters}m ± ${edgeVision.opticalRange.uncertaintyMeters}m · TILT: ${edgeVision.opticalRange.tiltDegrees}°",
+                        fontSize = 11.sp,
+                        color = Color(0xFF38BDF8),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "GPS: ${location.latitude}° N, ${location.longitude}° E · ALT ${edgeVision.altitudeMeters}m",
+                        fontSize = 11.sp,
+                        color = TierSafe
+                    )
+                    Text(
+                        text = "PRIVACY MASK: FACES & VEHICLES BLURRED (${edgeVision.blurredRegionsCount} regions)",
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            Button(
+                onClick = onAnalyzeClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TierDanger)
+            ) {
+                Text(
+                    text = "🎯 ANALYZE (YOLOv8n TFLite · ${edgeVision.modelName})",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PredatorCachingRiskBanner(edgeVision: EdgeVisionAnalysisResult) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.5.dp, TierDanger, RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF450A0A))
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "Lat: ${location.latitude}, Long: ${location.longitude}",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                text = "⚠️ PREDATOR CACHING RISK DETECTED",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFCA5A5)
             )
             Text(
-                text = "Evidence Photos Attached: $photoCount photo(s)",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+                text = "Carcass covered with leaf mulch and brush (Leaf Cover: ${(edgeVision.cachingEvaluation.leafCoverScore * 100).toInt()}% > 65% threshold). High probability of defensive bear returning within 24h.",
+                fontSize = 11.sp,
+                color = Color.White
+            )
+            Text(
+                text = "Immediate evacuation perimeter: ${edgeVision.cachingEvaluation.evacRadiusMeters} meters · Mode: ${edgeVision.cachingEvaluation.audioMode}",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFCA5A5)
+            )
+        }
+    }
+}
+
+@Composable
+fun ForensicEvidenceDispatchCard(edgeVision: EdgeVisionAnalysisResult) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "EVIDENCE ATTACHMENT & MUNICIPAL DISPATCH PAYLOAD",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "📷 ${edgeVision.evidenceFilename} · SHA256: ${edgeVision.sha256.take(8)}...${edgeVision.sha256.takeLast(6)} (Tamper-Proof)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "✓ Face/Vehicle Privacy Mask Applied (${edgeVision.blurredRegionsCount} regions blurred)",
+                fontSize = 11.sp,
+                color = TierSafe
+            )
+            Text(
+                text = edgeVision.geoJsonPayload,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
             )
         }
     }
