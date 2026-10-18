@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"ai.coexistshield/backend/internal/api"
@@ -68,17 +69,41 @@ func main() {
 
 		firestoreRepo := repository.NewFirestoreRepository(projectID)
 		router.SetRepositories(firestoreRepo, firestoreRepo)
-		router.InitAdminPersistence(projectID)
-		router.InitDomainPersistence(projectID)
-		router.InitMLPersistence(projectID)
-		log.Printf("Firestore persistence enabled for project %s (including admin datasets, domain models, and ML continuous retraining checkpoints)", projectID)
+
+		// Hydrate Firestore persistence asynchronously in background to achieve sub-100ms cold starts
+		go func(pid string) {
+			start := time.Now()
+			log.Printf("[Hydration] Starting background persistence hydration from Firestore (%s)...", pid)
+			var wg sync.WaitGroup
+			wg.Add(3)
+			go func() {
+				defer wg.Done()
+				router.InitAdminPersistence(pid)
+			}()
+			go func() {
+				defer wg.Done()
+				router.InitDomainPersistence(pid)
+			}()
+			go func() {
+				defer wg.Done()
+				router.InitMLPersistence(pid)
+			}()
+			wg.Wait()
+			log.Printf("[Hydration] Firestore persistence fully hydrated in %v for project %s", time.Since(start), pid)
+		}(projectID)
+		log.Printf("Firestore persistence enabled for project %s (background hydration active)", projectID)
 	} else if emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST"); emulatorHost != "" {
 		firestoreRepo := repository.NewFirestoreRepository("demo-coexist")
 		router.SetRepositories(firestoreRepo, firestoreRepo)
-		router.InitAdminPersistence("demo-coexist")
-		router.InitDomainPersistence("demo-coexist")
-		router.InitMLPersistence("demo-coexist")
-		log.Printf("Firestore persistence enabled via emulator at %s", emulatorHost)
+		go func() {
+			var wg sync.WaitGroup
+			wg.Add(3)
+			go func() { defer wg.Done(); router.InitAdminPersistence("demo-coexist") }()
+			go func() { defer wg.Done(); router.InitDomainPersistence("demo-coexist") }()
+			go func() { defer wg.Done(); router.InitMLPersistence("demo-coexist") }()
+			wg.Wait()
+			log.Printf("[Hydration] Firestore persistence enabled via emulator at %s", emulatorHost)
+		}()
 	} else {
 		log.Printf("AUTH_PROJECT_ID not set; running in open demo mode with in-memory persistence")
 	}

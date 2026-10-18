@@ -53,19 +53,23 @@ if [[ ${#SECRETS[@]} -gt 0 ]]; then
 fi
 
 MEDIA_BUCKET="${GCS_MEDIA_BUCKET:-corald-coexistshield-media}"
+MIN_INSTANCES="${MIN_INSTANCES:-0}"
+SERVICE_CPU="${CLOUD_RUN_CPU:-1}"
+SERVICE_MEMORY="${CLOUD_RUN_MEMORY:-512Mi}"
 
 # 1. Deploy Cloud Run Service (Microservice APIs & Ingestion Pipelines)
-echo "--> Deploying Cloud Run Service: ${SERVICE_NAME}..."
+echo "--> Deploying Cloud Run Service: ${SERVICE_NAME} (cpu-boost enabled, min-instances: ${MIN_INSTANCES})..."
 gcloud run deploy "${SERVICE_NAME}" \
   --source . \
   --platform managed \
   --region "${REGION}" \
   --project "${PROJECT_ID}" \
   --allow-unauthenticated \
-  --min-instances 0 \
+  --min-instances "${MIN_INSTANCES}" \
   --max-instances 10 \
-  --cpu 1 \
-  --memory 512Mi \
+  --cpu "${SERVICE_CPU}" \
+  --memory "${SERVICE_MEMORY}" \
+  --cpu-boost \
   --timeout 300 \
   --quiet \
   --set-env-vars="BIGQUERY_STREAMING_ENABLED=true,BIGQUERY_PROJECT_ID=${PROJECT_ID},BIGQUERY_DATASET=coexist_spatiotemporal_lake,BIGQUERY_TABLE=wildlife_incidents_streaming,GCP_PROJECT_ID=${PROJECT_ID},AUTH_PROJECT_ID=${PROJECT_ID},GCS_MEDIA_BUCKET=${MEDIA_BUCKET}" \

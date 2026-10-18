@@ -401,113 +401,132 @@ func (p *FirestorePersistence) LoadWeather(ctx context.Context) ([]AdminWeatherD
 // If Firestore has existing data, it populates the Store with Firestore records (preserving user modifications across deployments).
 // If Firestore is empty (first deployment), it writes the default seed records to Firestore so future instances load them.
 func (p *FirestorePersistence) RestoreOrSeed(ctx context.Context, s *Store) error {
-	log.Printf("[FirestorePersistence] Restoring admin datasets from project %s...", p.projectID)
+	log.Printf("[FirestorePersistence] Restoring admin datasets concurrently from project %s...", p.projectID)
+
+	var wg sync.WaitGroup
+	wg.Add(5)
 
 	// 1. Wildlife
-	wildlifeList, err := p.LoadWildlife(ctx)
-	if err != nil {
-		log.Printf("[FirestorePersistence] Warning: Failed to load wildlife from Firestore: %v", err)
-	} else if len(wildlifeList) > 0 {
-		s.mu.Lock()
-		s.wildlife = make(map[string]AdminWildlifeIncident)
-		for _, w := range wildlifeList {
-			s.wildlife[w.ID] = w
+	go func() {
+		defer wg.Done()
+		wildlifeList, err := p.LoadWildlife(ctx)
+		if err != nil {
+			log.Printf("[FirestorePersistence] Warning: Failed to load wildlife from Firestore: %v", err)
+		} else if len(wildlifeList) > 0 {
+			s.mu.Lock()
+			s.wildlife = make(map[string]AdminWildlifeIncident)
+			for _, w := range wildlifeList {
+				s.wildlife[w.ID] = w
+			}
+			s.mu.Unlock()
+			log.Printf("[FirestorePersistence] Restored %d wildlife incidents from Firestore", len(wildlifeList))
+		} else {
+			// Seed default wildlife to Firestore
+			s.mu.RLock()
+			for _, w := range s.wildlife {
+				_ = p.SaveWildlife(ctx, w)
+			}
+			s.mu.RUnlock()
+			log.Printf("[FirestorePersistence] Seeded default wildlife incidents to Firestore")
 		}
-		s.mu.Unlock()
-		log.Printf("[FirestorePersistence] Restored %d wildlife incidents from Firestore", len(wildlifeList))
-	} else {
-		// Seed default wildlife to Firestore
-		s.mu.RLock()
-		for _, w := range s.wildlife {
-			_ = p.SaveWildlife(ctx, w)
-		}
-		s.mu.RUnlock()
-		log.Printf("[FirestorePersistence] Seeded default wildlife incidents to Firestore")
-	}
+	}()
 
 	// 2. Geofences
-	geoList, err := p.LoadGeofences(ctx)
-	if err != nil {
-		log.Printf("[FirestorePersistence] Warning: Failed to load geofences from Firestore: %v", err)
-	} else if len(geoList) > 0 {
-		s.mu.Lock()
-		s.geofences = make(map[string]AdminGeofence)
-		for _, g := range geoList {
-			s.geofences[g.ID] = g
+	go func() {
+		defer wg.Done()
+		geoList, err := p.LoadGeofences(ctx)
+		if err != nil {
+			log.Printf("[FirestorePersistence] Warning: Failed to load geofences from Firestore: %v", err)
+		} else if len(geoList) > 0 {
+			s.mu.Lock()
+			s.geofences = make(map[string]AdminGeofence)
+			for _, g := range geoList {
+				s.geofences[g.ID] = g
+			}
+			s.mu.Unlock()
+			log.Printf("[FirestorePersistence] Restored %d geofences from Firestore", len(geoList))
+		} else {
+			s.mu.RLock()
+			for _, g := range s.geofences {
+				_ = p.SaveGeofence(ctx, g)
+			}
+			s.mu.RUnlock()
+			log.Printf("[FirestorePersistence] Seeded default geofences to Firestore")
 		}
-		s.mu.Unlock()
-		log.Printf("[FirestorePersistence] Restored %d geofences from Firestore", len(geoList))
-	} else {
-		s.mu.RLock()
-		for _, g := range s.geofences {
-			_ = p.SaveGeofence(ctx, g)
-		}
-		s.mu.RUnlock()
-		log.Printf("[FirestorePersistence] Seeded default geofences to Firestore")
-	}
+	}()
 
 	// 3. Roadkill
-	rkList, err := p.LoadRoadkills(ctx)
-	if err != nil {
-		log.Printf("[FirestorePersistence] Warning: Failed to load roadkills from Firestore: %v", err)
-	} else if len(rkList) > 0 {
-		s.mu.Lock()
-		s.roadkills = make(map[string]AdminRoadkillRecord)
-		for _, rk := range rkList {
-			s.roadkills[rk.ID] = rk
+	go func() {
+		defer wg.Done()
+		rkList, err := p.LoadRoadkills(ctx)
+		if err != nil {
+			log.Printf("[FirestorePersistence] Warning: Failed to load roadkills from Firestore: %v", err)
+		} else if len(rkList) > 0 {
+			s.mu.Lock()
+			s.roadkills = make(map[string]AdminRoadkillRecord)
+			for _, rk := range rkList {
+				s.roadkills[rk.ID] = rk
+			}
+			s.mu.Unlock()
+			log.Printf("[FirestorePersistence] Restored %d roadkill records from Firestore", len(rkList))
+		} else {
+			s.mu.RLock()
+			for _, rk := range s.roadkills {
+				_ = p.SaveRoadkill(ctx, rk)
+			}
+			s.mu.RUnlock()
+			log.Printf("[FirestorePersistence] Seeded default roadkill records to Firestore")
 		}
-		s.mu.Unlock()
-		log.Printf("[FirestorePersistence] Restored %d roadkill records from Firestore", len(rkList))
-	} else {
-		s.mu.RLock()
-		for _, rk := range s.roadkills {
-			_ = p.SaveRoadkill(ctx, rk)
-		}
-		s.mu.RUnlock()
-		log.Printf("[FirestorePersistence] Seeded default roadkill records to Firestore")
-	}
+	}()
 
 	// 4. Environmental
-	envList, err := p.LoadEnvironmental(ctx)
-	if err != nil {
-		log.Printf("[FirestorePersistence] Warning: Failed to load environmental data from Firestore: %v", err)
-	} else if len(envList) > 0 {
-		s.mu.Lock()
-		s.environmental = make(map[string]AdminEnvironmentalData)
-		for _, env := range envList {
-			s.environmental[env.ID] = env
+	go func() {
+		defer wg.Done()
+		envList, err := p.LoadEnvironmental(ctx)
+		if err != nil {
+			log.Printf("[FirestorePersistence] Warning: Failed to load environmental data from Firestore: %v", err)
+		} else if len(envList) > 0 {
+			s.mu.Lock()
+			s.environmental = make(map[string]AdminEnvironmentalData)
+			for _, env := range envList {
+				s.environmental[env.ID] = env
+			}
+			s.mu.Unlock()
+			log.Printf("[FirestorePersistence] Restored %d environmental features from Firestore", len(envList))
+		} else {
+			s.mu.RLock()
+			for _, env := range s.environmental {
+				_ = p.SaveEnvironmental(ctx, env)
+			}
+			s.mu.RUnlock()
+			log.Printf("[FirestorePersistence] Seeded default environmental data to Firestore")
 		}
-		s.mu.Unlock()
-		log.Printf("[FirestorePersistence] Restored %d environmental features from Firestore", len(envList))
-	} else {
-		s.mu.RLock()
-		for _, env := range s.environmental {
-			_ = p.SaveEnvironmental(ctx, env)
-		}
-		s.mu.RUnlock()
-		log.Printf("[FirestorePersistence] Seeded default environmental data to Firestore")
-	}
+	}()
 
 	// 5. Weather
-	weatherList, err := p.LoadWeather(ctx)
-	if err != nil {
-		log.Printf("[FirestorePersistence] Warning: Failed to load weather data from Firestore: %v", err)
-	} else if len(weatherList) > 0 {
-		s.mu.Lock()
-		s.weather = make(map[string]AdminWeatherData)
-		for _, w := range weatherList {
-			s.weather[w.ID] = w
+	go func() {
+		defer wg.Done()
+		weatherList, err := p.LoadWeather(ctx)
+		if err != nil {
+			log.Printf("[FirestorePersistence] Warning: Failed to load weather data from Firestore: %v", err)
+		} else if len(weatherList) > 0 {
+			s.mu.Lock()
+			s.weather = make(map[string]AdminWeatherData)
+			for _, w := range weatherList {
+				s.weather[w.ID] = w
+			}
+			s.mu.Unlock()
+			log.Printf("[FirestorePersistence] Restored %d weather stations from Firestore", len(weatherList))
+		} else {
+			s.mu.RLock()
+			for _, w := range s.weather {
+				_ = p.SaveWeather(ctx, w)
+			}
+			s.mu.RUnlock()
+			log.Printf("[FirestorePersistence] Seeded default weather data to Firestore")
 		}
-		s.mu.Unlock()
-		log.Printf("[FirestorePersistence] Restored %d weather stations from Firestore", len(weatherList))
-	} else {
-		s.mu.RLock()
-		for _, w := range s.weather {
-			_ = p.SaveWeather(ctx, w)
-		}
-		s.mu.RUnlock()
-		log.Printf("[FirestorePersistence] Seeded default weather data to Firestore")
-	}
+	}()
 
+	wg.Wait()
 	return nil
 }

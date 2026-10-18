@@ -1,16 +1,21 @@
 name: Deploy Backend to Google Cloud Run
 
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend-cloudrun/**'
+      - '.github/workflows/deploy-cloudrun.yml'
   workflow_dispatch:
     inputs:
       gcp_project_id:
         description: 'Google Cloud Project ID'
-        required: true
+        required: false
         default: 'coexistshield-ai'
       gcp_region:
         description: 'Cloud Run Region'
-        required: true
-        default: 'asia-northeast1'
+        required: false
+        default: 'asia-southeast1'
 
 jobs:
   deploy-cloud-run:
@@ -29,17 +34,21 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Build and Deploy to Cloud Run
+        env:
+          PROJECT_ID: ${{ github.event.inputs.gcp_project_id || secrets.GCP_PROJECT_ID || 'coexistshield-ai' }}
+          REGION: ${{ github.event.inputs.gcp_region || 'asia-southeast1' }}
         run: |
           cd backend-cloudrun
           gcloud run deploy coexistshield-backend \
             --source . \
             --platform managed \
-            --region ${{ github.event.inputs.gcp_region }} \
-            --project ${{ github.event.inputs.gcp_project_id }} \
+            --region "${REGION}" \
+            --project "${PROJECT_ID}" \
             --allow-unauthenticated \
-            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}",AUTH_PROJECT_ID="${{ github.event.inputs.gcp_project_id }}",GCP_PROJECT_ID="${{ github.event.inputs.gcp_project_id }}",BIGQUERY_STREAMING_ENABLED="true",BIGQUERY_PROJECT_ID="${{ github.event.inputs.gcp_project_id }}",BIGQUERY_DATASET="coexist_spatiotemporal_lake",BIGQUERY_TABLE="wildlife_incidents_streaming" \
+            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}",AUTH_PROJECT_ID="${PROJECT_ID}",GCP_PROJECT_ID="${PROJECT_ID}",BIGQUERY_STREAMING_ENABLED="true",BIGQUERY_PROJECT_ID="${PROJECT_ID}",BIGQUERY_DATASET="coexist_spatiotemporal_lake",BIGQUERY_TABLE="wildlife_incidents_streaming" \
             --min-instances 0 \
             --max-instances 10 \
             --cpu 1 \
-            --memory 512Mi
+            --memory 512Mi \
+            --cpu-boost
 

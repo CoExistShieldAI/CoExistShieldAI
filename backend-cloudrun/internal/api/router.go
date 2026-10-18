@@ -263,33 +263,39 @@ func (r *Router) InitDomainPersistence(projectID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	var wg sync.WaitGroup
+
 	// 1. Elephant Crop Plots
 	if r.elephantEngine != nil {
-		if rawPlots, err := firestoreRepo.ListCropPlots(ctx); err == nil && len(rawPlots) > 0 {
-			plots := make([]elephant.ElephantCropPlot, 0, len(rawPlots))
-			for _, m := range rawPlots {
-				p := elephant.ElephantCropPlot{
-					ID:                    fmt.Sprint(m["id"]),
-					Name:                  fmt.Sprint(m["name"]),
-					Province:              fmt.Sprint(m["province"]),
-					ParkBoundary:          fmt.Sprint(m["parkBoundary"]),
-					CropType:              fmt.Sprint(m["cropType"]),
-					GrowthStage:           fmt.Sprint(m["growthStage"]),
-					Latitude:              toFloat(m["latitude"]),
-					Longitude:             toFloat(m["longitude"]),
-					AreaHectares:          toFloat(m["areaHectares"]),
-					DistanceToForestEdgeM: toFloat(m["distanceToForestEdgeM"]),
-					AromaVolatilityIndex:  toFloat(m["aromaVolatilityIndex"]),
-					MaturityScore:         toFloat(m["maturityScore"]),
-					ActiveRiskScore:       toFloat(m["activeRiskScore"]),
-					ScentBufferMeters:     toFloat(m["scentBufferMeters"]),
-					UpdatedAt:             fmt.Sprint(m["updatedAt"]),
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if rawPlots, err := firestoreRepo.ListCropPlots(ctx); err == nil && len(rawPlots) > 0 {
+				plots := make([]elephant.ElephantCropPlot, 0, len(rawPlots))
+				for _, m := range rawPlots {
+					p := elephant.ElephantCropPlot{
+						ID:                    fmt.Sprint(m["id"]),
+						Name:                  fmt.Sprint(m["name"]),
+						Province:              fmt.Sprint(m["province"]),
+						ParkBoundary:          fmt.Sprint(m["parkBoundary"]),
+						CropType:              fmt.Sprint(m["cropType"]),
+						GrowthStage:           fmt.Sprint(m["growthStage"]),
+						Latitude:              toFloat(m["latitude"]),
+						Longitude:             toFloat(m["longitude"]),
+						AreaHectares:          toFloat(m["areaHectares"]),
+						DistanceToForestEdgeM: toFloat(m["distanceToForestEdgeM"]),
+						AromaVolatilityIndex:  toFloat(m["aromaVolatilityIndex"]),
+						MaturityScore:         toFloat(m["maturityScore"]),
+						ActiveRiskScore:       toFloat(m["activeRiskScore"]),
+						ScentBufferMeters:     toFloat(m["scentBufferMeters"]),
+						UpdatedAt:             fmt.Sprint(m["updatedAt"]),
+					}
+					plots = append(plots, p)
 				}
-				plots = append(plots, p)
+				r.elephantEngine.LoadPlots(plots)
+				log.Printf("[DomainPersistence] Loaded %d elephant crop plots from Firestore", len(plots))
 			}
-			r.elephantEngine.LoadPlots(plots)
-			log.Printf("[DomainPersistence] Loaded %d elephant crop plots from Firestore", len(plots))
-		}
+		}()
 		r.elephantEngine.SetPersistenceListener(func(plot elephant.ElephantCropPlot) {
 			pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer pCancel()
@@ -301,33 +307,37 @@ func (r *Router) InitDomainPersistence(projectID string) {
 
 	// 2. Tiger Livestock Enclosures
 	if r.tigerEngine != nil {
-		if rawEncs, err := firestoreRepo.ListLivestockEnclosures(ctx); err == nil && len(rawEncs) > 0 {
-			encs := make([]tiger.LivestockEnclosure, 0, len(rawEncs))
-			for _, m := range rawEncs {
-				enc := tiger.LivestockEnclosure{
-					ID:                    fmt.Sprint(m["id"]),
-					Name:                  fmt.Sprint(m["name"]),
-					Province:              fmt.Sprint(m["province"]),
-					Village:               fmt.Sprint(m["village"]),
-					LivestockType:         fmt.Sprint(m["livestockType"]),
-					HeadCount:             toInt(m["headCount"]),
-					HasNightCorral:        toBool(m["hasNightCorral"]),
-					IsActiveKillSite:      toBool(m["isActiveKillSite"]),
-					Latitude:              toFloat(m["latitude"]),
-					Longitude:             toFloat(m["longitude"]),
-					DistanceToForestEdgeM: toFloat(m["distanceToForestEdgeM"]),
-					HoursSinceKill:        toFloat(m["hoursSinceKill"]),
-					ReturnProbability:     toFloat(m["returnProbability"]),
-					ActiveThreatScore:     toFloat(m["activeThreatScore"]),
-					ScentBufferMeters:     toFloat(m["scentBufferMeters"]),
-					ForensicNotes:         fmt.Sprint(m["forensicNotes"]),
-					UpdatedAt:             fmt.Sprint(m["updatedAt"]),
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if rawEncs, err := firestoreRepo.ListLivestockEnclosures(ctx); err == nil && len(rawEncs) > 0 {
+				encs := make([]tiger.LivestockEnclosure, 0, len(rawEncs))
+				for _, m := range rawEncs {
+					enc := tiger.LivestockEnclosure{
+						ID:                    fmt.Sprint(m["id"]),
+						Name:                  fmt.Sprint(m["name"]),
+						Province:              fmt.Sprint(m["province"]),
+						Village:               fmt.Sprint(m["village"]),
+						LivestockType:         fmt.Sprint(m["livestockType"]),
+						HeadCount:             toInt(m["headCount"]),
+						HasNightCorral:        toBool(m["hasNightCorral"]),
+						IsActiveKillSite:      toBool(m["isActiveKillSite"]),
+						Latitude:              toFloat(m["latitude"]),
+						Longitude:             toFloat(m["longitude"]),
+						DistanceToForestEdgeM: toFloat(m["distanceToForestEdgeM"]),
+						HoursSinceKill:        toFloat(m["hoursSinceKill"]),
+						ReturnProbability:     toFloat(m["returnProbability"]),
+						ActiveThreatScore:     toFloat(m["activeThreatScore"]),
+						ScentBufferMeters:     toFloat(m["scentBufferMeters"]),
+						ForensicNotes:         fmt.Sprint(m["forensicNotes"]),
+						UpdatedAt:             fmt.Sprint(m["updatedAt"]),
+					}
+					encs = append(encs, enc)
 				}
-				encs = append(encs, enc)
+				r.tigerEngine.LoadEnclosures(encs)
+				log.Printf("[DomainPersistence] Loaded %d tiger livestock enclosures from Firestore", len(encs))
 			}
-			r.tigerEngine.LoadEnclosures(encs)
-			log.Printf("[DomainPersistence] Loaded %d tiger livestock enclosures from Firestore", len(encs))
-		}
+		}()
 		r.tigerEngine.SetPersistenceListener(func(enc tiger.LivestockEnclosure) {
 			pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer pCancel()
@@ -339,30 +349,34 @@ func (r *Router) InitDomainPersistence(projectID string) {
 
 	// 3. Municipal Kaki Trees & Felling Logs
 	if r.complianceEngine != nil {
-		if rawTrees, err := firestoreRepo.ListMunicipalKakiTrees(ctx); err == nil && len(rawTrees) > 0 {
-			trees := make([]compliance.MunicipalPriorityKakiTree, 0, len(rawTrees))
-			for _, m := range rawTrees {
-				tree := compliance.MunicipalPriorityKakiTree{
-					TreeID:                         fmt.Sprint(m["treeId"]),
-					Address:                        fmt.Sprint(m["address"]),
-					Latitude:                       toFloat(m["latitude"]),
-					Longitude:                      toFloat(m["longitude"]),
-					HazardScore:                    toFloat(m["hazardScore"]),
-					IsTop5Percent:                  toBool(m["isTop5Percent"]),
-					DistanceToSchoolRouteMeters:    toInt(m["distanceToSchoolRouteMeters"]),
-					EstimatedBearAttractantRadiusM: toInt(m["estimatedBearAttractantRadiusM"]),
-					OwnerConsentStatus:             fmt.Sprint(m["ownerConsentStatus"]),
-					PermitID:                       fmt.Sprint(m["permitId"]),
-					ManagementStatus:               fmt.Sprint(m["managementStatus"]),
-					RecommendedClearanceOrder:      toInt(m["recommendedClearanceOrder"]),
-					AssignedSquad:                  fmt.Sprint(m["assignedSquad"]),
-					FruitLoad:                      fmt.Sprint(m["fruitLoad"]),
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if rawTrees, err := firestoreRepo.ListMunicipalKakiTrees(ctx); err == nil && len(rawTrees) > 0 {
+				trees := make([]compliance.MunicipalPriorityKakiTree, 0, len(rawTrees))
+				for _, m := range rawTrees {
+					tree := compliance.MunicipalPriorityKakiTree{
+						TreeID:                         fmt.Sprint(m["treeId"]),
+						Address:                        fmt.Sprint(m["address"]),
+						Latitude:                       toFloat(m["latitude"]),
+						Longitude:                      toFloat(m["longitude"]),
+						HazardScore:                    toFloat(m["hazardScore"]),
+						IsTop5Percent:                  toBool(m["isTop5Percent"]),
+						DistanceToSchoolRouteMeters:    toInt(m["distanceToSchoolRouteMeters"]),
+						EstimatedBearAttractantRadiusM: toInt(m["estimatedBearAttractantRadiusM"]),
+						OwnerConsentStatus:             fmt.Sprint(m["ownerConsentStatus"]),
+						PermitID:                       fmt.Sprint(m["permitId"]),
+						ManagementStatus:               fmt.Sprint(m["managementStatus"]),
+						RecommendedClearanceOrder:      toInt(m["recommendedClearanceOrder"]),
+						AssignedSquad:                  fmt.Sprint(m["assignedSquad"]),
+						FruitLoad:                      fmt.Sprint(m["fruitLoad"]),
+					}
+					trees = append(trees, tree)
 				}
-				trees = append(trees, tree)
+				r.complianceEngine.LoadTrees(trees)
+				log.Printf("[DomainPersistence] Loaded %d municipal kaki trees from Firestore", len(trees))
 			}
-			r.complianceEngine.LoadTrees(trees)
-			log.Printf("[DomainPersistence] Loaded %d municipal kaki trees from Firestore", len(trees))
-		}
+		}()
 		r.complianceEngine.SetPersistenceListener(func(tree compliance.MunicipalPriorityKakiTree, logEntry *compliance.FellingAuditLog) {
 			pCtx, pCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer pCancel()
@@ -376,6 +390,8 @@ func (r *Router) InitDomainPersistence(projectID string) {
 			}
 		})
 	}
+
+	wg.Wait()
 	log.Printf("[DomainPersistence] Firestore listeners wired for elephant, tiger, and compliance engines (project: %s)", projectID)
 }
 
@@ -388,47 +404,63 @@ func (r *Router) InitMLPersistence(projectID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	var wg sync.WaitGroup
+
 	// 1. Restore latest promoted model checkpoint
-	if modelBytes, err := firestoreRepo.GetLatestMLModel(ctx); err == nil && len(modelBytes) > 0 {
-		if err := r.mlPipeline.LoadModelFromJSON(modelBytes); err == nil {
-			active := r.mlPipeline.ActiveModel()
-			log.Printf("[MLPersistence] Loaded active model checkpoint %s (AUC: %.3f) from Firestore", active.Version, active.Metrics.AucRoc)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if modelBytes, err := firestoreRepo.GetLatestMLModel(ctx); err == nil && len(modelBytes) > 0 {
+			if err := r.mlPipeline.LoadModelFromJSON(modelBytes); err == nil {
+				active := r.mlPipeline.ActiveModel()
+				log.Printf("[MLPersistence] Loaded active model checkpoint %s (AUC: %.3f) from Firestore", active.Version, active.Metrics.AucRoc)
+			} else {
+				log.Printf("[MLPersistence] Warning: Failed to parse Firestore model JSON: %v", err)
+			}
 		} else {
-			log.Printf("[MLPersistence] Warning: Failed to parse Firestore model JSON: %v", err)
+			log.Printf("[MLPersistence] No promoted model in Firestore yet; using baseline model (%s)", r.mlPipeline.ActiveModel().Version)
 		}
-	} else {
-		log.Printf("[MLPersistence] No promoted model in Firestore yet; using baseline model (%s)", r.mlPipeline.ActiveModel().Version)
-	}
+	}()
 
 	// 2. Restore historical retraining results
-	if rawHistory, err := firestoreRepo.ListMLRetrainHistory(ctx); err == nil && len(rawHistory) > 0 {
-		history := make([]ml.RetrainResult, 0, len(rawHistory))
-		for _, raw := range rawHistory {
-			var res ml.RetrainResult
-			if err := json.Unmarshal([]byte(raw), &res); err == nil {
-				history = append(history, res)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if rawHistory, err := firestoreRepo.ListMLRetrainHistory(ctx); err == nil && len(rawHistory) > 0 {
+			history := make([]ml.RetrainResult, 0, len(rawHistory))
+			for _, raw := range rawHistory {
+				var res ml.RetrainResult
+				if err := json.Unmarshal([]byte(raw), &res); err == nil {
+					history = append(history, res)
+				}
+			}
+			if len(history) > 0 {
+				r.mlPipeline.LoadHistory(history)
+				log.Printf("[MLPersistence] Loaded %d retraining history records from Firestore", len(history))
 			}
 		}
-		if len(history) > 0 {
-			r.mlPipeline.LoadHistory(history)
-			log.Printf("[MLPersistence] Loaded %d retraining history records from Firestore", len(history))
-		}
-	}
+	}()
 
 	// 3. Restore persisted training samples
-	if rawSamples, err := firestoreRepo.ListMLTrainingSamples(ctx); err == nil && len(rawSamples) > 0 {
-		samples := make([]ml.TrainingSample, 0, len(rawSamples))
-		for _, raw := range rawSamples {
-			var s ml.TrainingSample
-			if err := json.Unmarshal([]byte(raw), &s); err == nil {
-				samples = append(samples, s)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if rawSamples, err := firestoreRepo.ListMLTrainingSamples(ctx); err == nil && len(rawSamples) > 0 {
+			samples := make([]ml.TrainingSample, 0, len(rawSamples))
+			for _, raw := range rawSamples {
+				var s ml.TrainingSample
+				if err := json.Unmarshal([]byte(raw), &s); err == nil {
+					samples = append(samples, s)
+				}
+			}
+			if len(samples) > 0 {
+				total := r.mlPipeline.LoadSamples(samples)
+				log.Printf("[MLPersistence] Restored %d training samples from Firestore (total in store: %d)", len(samples), total)
 			}
 		}
-		if len(samples) > 0 {
-			total := r.mlPipeline.LoadSamples(samples)
-			log.Printf("[MLPersistence] Restored %d training samples from Firestore (total in store: %d)", len(samples), total)
-		}
-	}
+	}()
+
+	wg.Wait()
 
 	// 4. Register listener for new training samples
 	r.mlPipeline.SetSampleListener(func(sample ml.TrainingSample) {
