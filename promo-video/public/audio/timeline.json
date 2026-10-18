@@ -1,0 +1,154 @@
+[
+  {
+    "id": "p1_01_mist",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "Along the forest frontiers of Southeast Asia, an invisible conflict escalates between human expansion and wildlife.",
+    "file": "/audio/p1_01_mist.mp3",
+    "duration": 7.92
+  },
+  {
+    "id": "p1_02_tiger",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "Displaced apex predators, driven by territory loss, stalk the boundaries of villages and commercial plantations.",
+    "file": "/audio/p1_02_tiger.mp3",
+    "duration": 7.896
+  },
+  {
+    "id": "p1_03_elephant",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "Massive elephant herds, lured by ripe sugar crops, face frightened farmers in devastating night collisions.",
+    "file": "/audio/p1_03_elephant.mp3",
+    "duration": 7.176
+  },
+  {
+    "id": "p1_04_roadkill",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "And unmanaged roadside carcasses become deadly predatory magnets, threatening communities with fatal encounters and zoonotic spillover.",
+    "file": "/audio/p1_04_roadkill.mp3",
+    "duration": 8.616
+  },
+  {
+    "id": "p2_01_intro",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Hey APAC innovators! Ranger Tora here with CoExist Shield AI—our autonomous platform for human-wildlife coexistence!",
+    "file": "/audio/p2_01_intro.mp3",
+    "duration": 9.864
+  },
+  {
+    "id": "p2_02_geofence",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "First, what is geofencing? Think of it as an invisible virtual fence drawn on a map using GPS. Enter the zone, and your phone or watch triggers an alert! But traditional geofences are fixed and static—completely useless against moving wildlife! That is why CoExist Shield AI introduces Dynamic Predictive Geofencing: an autonomous AI safety shield that moves with animals, predicting paths and alerting communities before encounters ever happen!",
+    "file": "/audio/p2_02_geofence.mp3",
+    "duration": 31.584
+  },
+  {
+    "id": "p2_03_algorithm",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Look under the hood at our Geospatial Inference Brain! Ingesting crop phenology, carcass decay, wind scent plumes, and thermal hotspots, our neural risk engine synthesizes these priors into dynamic probability surfaces, projecting Tier 1 to Tier 3 geofences in real time!",
+    "file": "/audio/p2_03_algorithm.mp3",
+    "duration": 20.208
+  },
+  {
+    "id": "p3_01_dashboard",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Check out our live command dashboard! Here in southern Thailand, our causal model tracks crop harvest phenology.",
+    "file": "/audio/p3_01_dashboard.mp3",
+    "duration": 8.688
+  },
+  {
+    "id": "p3_02_elephant_map",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "See those glowing orange clusters? That's our Crop Attractant Map pinpointing ripening sugarcane and jackfruit. The AI forecasts elephant foraging corridors days in advance!",
+    "file": "/audio/p3_02_elephant_map.mp3",
+    "duration": 12.84
+  },
+  {
+    "id": "p3_03_tiger_corral",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Next up, Sumatra, Indonesia. Tigers don't wander randomly; they follow livestock grazing corrals and fresh roadkill carcasses.",
+    "file": "/audio/p3_03_tiger_corral.mp3",
+    "duration": 10.704
+  },
+  {
+    "id": "p3_04_geofence_alert",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Boom! A Tier 3 Danger Geofence triggers automatically around a fresh kill site! Field workers receive instant tactile alerts on their phones and smartwatches, completely avoiding ambush zones!",
+    "file": "/audio/p3_04_geofence_alert.mp3",
+    "duration": 14.4
+  },
+  {
+    "id": "p3_05_wearos_haptic",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "Walking near a sugarcane plantation at dusk, a young worker suddenly feels an intense haptic pulse on her wrist. Checking her Wear OS watch, the tactical HUD flashes red: Tier 3 Danger, Tiger 150 meters ahead!",
+    "file": "/audio/p3_05_wearos_haptic.mp3",
+    "duration": 15.288
+  },
+  {
+    "id": "p3_06_wearos_retreat",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "Cautious and alert, she immediately retreats down a safe detour route. Moments later, a wild tiger quietly crosses the empty road. Thanks to CoExist Shield AI, not a single person was harmed, and the tiger passed safely into the wild.",
+    "file": "/audio/p3_06_wearos_retreat.mp3",
+    "duration": 16.872
+  },
+  {
+    "id": "p4_01_japan_crisis",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "Our algorithm scales seamlessly across ecosystems. In depopulating rural Japan, human retreat and abandoned fruit trees have led to unprecedented bear encroachments into residential valleys.",
+    "file": "/audio/p4_01_japan_crisis.mp3",
+    "duration": 12.984
+  },
+  {
+    "id": "p4_02_bear_pm_joke",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "At this rate... Japan's next Prime Minister might just be a bear!",
+    "file": "/audio/p4_02_bear_pm_joke.mp3",
+    "duration": 5.376
+  },
+  {
+    "id": "p4_03_tora_reaction",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Whoa, hold on! As sharp as Madam Prime Minister looks, that's NOT our roadmap! Haha!",
+    "file": "/audio/p4_03_tora_reaction.mp3",
+    "duration": 8.568
+  },
+  {
+    "id": "p4_04_japan_dx",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "Jokes aside, our AI analyzes bear incident records to pinpoint the top five percent highest-risk abandoned persimmon trees, providing municipal teams with precision removal targets funded via Government Crowdfunding!",
+    "file": "/audio/p4_04_japan_dx.mp3",
+    "duration": 13.8
+  },
+  {
+    "id": "p5_01_onehealth",
+    "speaker": "Ranger Tora",
+    "voice": "en-SG-WayneNeural",
+    "text": "By clearing roadkill and stopping illegal bushmeat trade before it starts, CoExist Shield AI acts as an autonomous frontline shield against future zoonotic pandemics.",
+    "file": "/audio/p5_01_onehealth.mp3",
+    "duration": 10.944
+  },
+  {
+    "id": "p5_02_grand_finale",
+    "speaker": "Narrator",
+    "voice": "en-US-ChristopherNeural",
+    "text": "From tropical Asian jungles to temperate Japanese valleys, CoExist Shield AI protects biodiversity, safeguards human lives, and powers harmonious coexistence. Thank you, Singapore!",
+    "file": "/audio/p5_02_grand_finale.mp3",
+    "duration": 13.512
+  }
+]
