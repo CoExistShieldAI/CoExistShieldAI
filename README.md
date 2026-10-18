@@ -300,7 +300,7 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
                                              v
 +-----------------------------------------------------------------------------------------+
 |                                  Google Gemini API                                      |
-|  - Gemini 2.5 / 2.0 / 1.5 Flash: Multimodal classification of species, fruit load level, |
+|  - Gemini 3.8 Flash: Multimodal classification of species, fruit load level,            |
 |                          ripeness stages, and carcass decay forensic analysis           |
 |  - Gemini Structured Outputs: Zero-syntax-error JSON response schema contracts          |
 +-----------------------------------------------------------------------------------------+
@@ -318,7 +318,7 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 | **Google Maps JS API** | Interactive pin drop, reverse geocoding, geofence polygon/circle authoring, and cluster visualization. |
 | **Cloud Firestore** | Low-latency, offline-capable NoSQL database with 3-Role RBAC security rules and persistent repository layer. |
 | **Google Cloud Storage (GCS)** | Secure, scalable media bucket (`corald-coexistshield-media`) for forensic wildlife & roadkill photo attachments. |
-| **Google Gemini API** | Gemini 2.5 / 2.0 / 1.5 Flash for sub-2s multimodal photo triage (species, fruit load, decay state) with Structured JSON outputs. |
+| **Google Gemini API** | Gemini 3.8 Flash for sub-2s multimodal photo triage (species, fruit load, decay state) with Structured JSON outputs. |
 | **GitHub Actions CI/CD** | Automated multi-target test pipeline running Go unit tests, KMP JVM tests, Webpack bundling, and Android APK builds. |
 
 ---
@@ -331,7 +331,7 @@ CoExistShieldAI/
 │   ├── cmd/server/main.go          # Server entry point
 │   ├── internal/admin/             # Admin REST handlers, store, and GCS multi-photo uploader
 │   ├── internal/api/               # HTTP router, handlers, and integration tests
-│   ├── internal/gemini/            # Google Gemini 2.5/2.0/1.5 Flash client (Structured JSON)
+│   ├── internal/gemini/            # Google Gemini 3.8 Flash client (Structured JSON)
 │   ├── internal/geofence/          # Dynamic geofence recalculation & analytics engine
 │   ├── internal/repository/        # Cloud Firestore persistent storage layer
 │   ├── internal/model/             # Go DTOs matching Kotlin & Gemini schemas
@@ -501,7 +501,7 @@ For interactive evaluation by hackathon judges and rangers, two dedicated web ap
    - **URL:** **`https://corald.web.app`** (Mirror: `https://corald.firebaseapp.com`)
    - **Key Features:**
      - 3-Tier Dynamic Early-Warning Geofence HUD
-     - Multimodal Gemini 3.8 / 2.5 Flash Forensic Triage Card & Attribution
+     - Multimodal Gemini 3.8 Flash Forensic Triage Card & Attribution
      - GIS Hazard Map with Slippy Raster Tiles (ESRI Dark Canvas), Dynamic Marker Clustering with Click-to-Expand, and H3 Hexagonal Incursion Probability Layers
      - Decision-Support Console: Japan Municipal GCF, APAC Plantation RSPO Zero-Deforestation Auditing, and Cold-Start & NGO Bulk Patrol Ingestion
 

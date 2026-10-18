@@ -1513,14 +1513,14 @@ export class ShieldStateService {
               res?.locationHint || 'Morioka Takamatsu 2-chome'
             } (${Math.round((res?.confidence || 0.94) * 100)}%)`
           );
-          this.showToast('📡 Gemini Flash NLP extracted sighting & updated spatial risk grid!');
+          this.showToast('📡 Gemini 3.8 Flash NLP extracted sighting & updated spatial risk grid!');
         },
         error: () => {
           this.nlpExtractedSightingsCount.update((c) => c + 1);
           this.lastNlpExtractionResult.set(
             'Extracted: BEAR (TIER_2_WARNING) @ Morioka Takamatsu 2-chome (Confidence 96%)'
           );
-          this.showToast('📡 Gemini Flash NLP extracted sighting & updated spatial risk grid!');
+          this.showToast('📡 Gemini 3.8 Flash NLP extracted sighting & updated spatial risk grid!');
         }
       });
   }
