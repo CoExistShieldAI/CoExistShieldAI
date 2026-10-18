@@ -28,14 +28,14 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GCP_SA_KEY || secrets.FIREBASE_SERVICE_ACCOUNT_CORALD || secrets.FIREBASE_SERVICE_ACCOUNT_COEXISTSHIELD_AI }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Build and Deploy to Cloud Run
         env:
-          PROJECT_ID: ${{ github.event.inputs.gcp_project_id || secrets.GCP_PROJECT_ID || 'coexistshield-ai' }}
+          PROJECT_ID: ${{ github.event.inputs.gcp_project_id || secrets.GCP_PROJECT_ID || 'corald' }}
           REGION: ${{ github.event.inputs.gcp_region || 'asia-southeast1' }}
         run: |
           cd backend-cloudrun
