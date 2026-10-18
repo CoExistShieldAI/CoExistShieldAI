@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 432 432" width="432" height="432">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="50%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#3B82F6" />
+    </linearGradient>
+    <linearGradient id="shieldFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#020617" stop-opacity="0.98" />
+    </linearGradient>
+    <linearGradient id="checkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <filter id="coreGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Scaled down to fit within ~260x260 in center (216, 216) -->
+  <g transform="translate(216, 216) scale(0.62) translate(-256, -256)">
+    <!-- Shield Outline & Body -->
+    <path d="M256 46 L392 100 C392 238 334 372 256 456 C178 372 120 238 120 100 Z"
+          fill="url(#shieldFill)" stroke="url(#shieldGrad)" stroke-width="20" stroke-linejoin="round" />
+
+    <!-- Tactical Radar Arcs -->
+    <path d="M176 210 A 100 100 0 0 1 336 210" fill="none" stroke="#06B6D4" stroke-width="6" stroke-dasharray="8 10" opacity="0.5" />
+
+    <!-- Upper AI Pulse Core Node -->
+    <circle cx="256" cy="154" r="14" fill="#38BDF8" filter="url(#coreGlow)" />
+    <circle cx="256" cy="154" r="7" fill="#FFFFFF" />
+
+    <!-- Tactical Safety Checkmark -->
+    <path d="M184 266 L236 320 L332 208"
+          fill="none" stroke="url(#checkGrad)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"
+          filter="url(#coreGlow)" />
+
+    <!-- Nodes -->
+    <circle cx="256" cy="46" r="8" fill="#34D399" />
+    <circle cx="392" cy="100" r="7" fill="#06B6D4" />
+    <circle cx="120" cy="100" r="7" fill="#10B981" />
+    <circle cx="256" cy="456" r="7" fill="#3B82F6" />
+  </g>
+</svg>
