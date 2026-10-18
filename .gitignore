@@ -29,3 +29,11 @@ scripts/branding_assets/
 # Swift Package Manager
 .build/
 watchApp/.build/
+
+# Video Rendering Outputs & Office Temp Locks
+promo-video/out/
+~$*
+
+# Python cache
+__pycache__/
+*.pyc
