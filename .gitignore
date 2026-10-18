@@ -25,3 +25,7 @@ node_modules/
 
 # Temporary generation assets
 scripts/branding_assets/
+
+# Swift Package Manager
+.build/
+watchApp/.build/

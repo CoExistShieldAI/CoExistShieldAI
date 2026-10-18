@@ -711,8 +711,8 @@ export class ShieldStateService {
   }
 
   /**
-   * Initializes real-time synchronization with Wear OS smartwatches via WearSync plugin.
-   * Auto-syncs HUD meter presentation, alerts, and handles wrist actions.
+   * Initializes real-time synchronization with Wear OS and Apple Watch smartwatches via WearSync plugin.
+   * Auto-syncs HUD meter presentation, alerts, and handles wrist tactical actions.
    */
   private initWearSync() {
     // Continuous state sync effect: whenever HUD presentation or siren state changes, sync to watch
@@ -729,14 +729,14 @@ export class ShieldStateService {
       });
     });
 
-    // Listen for reverse actions from the Wear OS watch
+    // Listen for reverse actions from the connected smartwatch (Wear OS or Apple Watch)
     WearSync.addListener('onWatchAction', (event) => {
       if (event.action === 'DISMISS') {
         this.stopSiren();
-        this.showToast('Wear OS: Alert silenced & acknowledged from wrist');
+        this.showToast('Smartwatch: Alert silenced & acknowledged from wrist');
       } else if (event.action === 'SOS') {
         this.triggerEmergencySos();
-        this.showToast('Wear OS: Emergency SOS triggered from wrist');
+        this.showToast('Smartwatch: Emergency SOS triggered from wrist');
       }
     }).catch(() => {});
   }
@@ -1600,7 +1600,7 @@ export class ShieldStateService {
         }
       }
 
-      // 2. Wear OS Wrist Haptics (Instant trigger across all connected watches)
+      // 2. Smartwatch Wrist Haptics (Instant trigger across connected Wear OS and Apple Watch devices)
       WearSync.sendImmediateAlert({
         tier: targetTier,
         distanceMeters: hud.closestDistanceMeters,
