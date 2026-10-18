@@ -38,17 +38,6 @@ jobs:
           PROJECT_ID: ${{ github.event.inputs.gcp_project_id || secrets.GCP_PROJECT_ID || 'corald' }}
           REGION: ${{ github.event.inputs.gcp_region || 'asia-southeast1' }}
         run: |
-          cd backend-cloudrun
-          gcloud run deploy coexistshield-backend \
-            --source . \
-            --platform managed \
-            --region "${REGION}" \
-            --project "${PROJECT_ID}" \
-            --allow-unauthenticated \
-            --set-env-vars GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}",AUTH_PROJECT_ID="${PROJECT_ID}",GCP_PROJECT_ID="${PROJECT_ID}",BIGQUERY_STREAMING_ENABLED="true",BIGQUERY_PROJECT_ID="${PROJECT_ID}",BIGQUERY_DATASET="coexist_spatiotemporal_lake",BIGQUERY_TABLE="wildlife_incidents_streaming" \
-            --min-instances 0 \
-            --max-instances 10 \
-            --cpu 1 \
-            --memory 512Mi \
-            --cpu-boost
+          chmod +x ./scripts/deploy_cloudrun.sh
+          ./scripts/deploy_cloudrun.sh "${PROJECT_ID}" "${REGION}"
 
