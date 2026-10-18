@@ -1,6 +1,123 @@
+<div align="center">
+
+<img src="docs/branding/app_icon_master.svg" alt="CoExist Shield AI logo" width="110" />
+
 # CoExist Shield AI
 
+**Predictive geofencing and early-warning alerts that keep people and wildlife apart before conflict happens.**
+
+*Built on Google Cloud for the AI Builder Cup 2026 (JAPAC)*
+
+[![Cloud Run](https://img.shields.io/badge/Google_Cloud_Run-asia--southeast1-4285F4?logo=googlecloud&logoColor=white)](https://coexistshield-backend-4cerxfo4wq-as.a.run.app/health)
+[![Gemini](https://img.shields.io/badge/Gemini-3.8_Flash-8E75B2?logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash)
+[![Firebase](https://img.shields.io/badge/Firebase-Hosting_%7C_Firestore-FFCA28?logo=firebase&logoColor=black)](https://corald.web.app)
+[![BigQuery](https://img.shields.io/badge/BigQuery-GIS_%2B_ML-669DF6?logo=googlebigquery&logoColor=white)](#7-technology-stack--cloud-architecture-ai-builders-cup-2026)
+[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](backend-cloudrun)
+[![Angular](https://img.shields.io/badge/Angular-22-DD0031?logo=angular&logoColor=white)](web-admin)
+[![Kotlin](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?logo=kotlin&logoColor=white)](composeApp)
+[![Terraform](https://img.shields.io/badge/Terraform-IaC-844FBA?logo=terraform&logoColor=white)](infra)
+
+[**🌐 Field App**](https://corald.web.app) &nbsp;·&nbsp; [**🛠️ Admin Portal**](https://corald-admin.web.app) &nbsp;·&nbsp; [**⚡ Live API**](https://coexistshield-backend-4cerxfo4wq-as.a.run.app/health) &nbsp;·&nbsp; [**🎬 Demo Video**](https://youtu.be/F83EepRVbiQ)
+
+</div>
+
+<p align="center">
+  <img src="promo-video/public/cinematics/01_tropical_mist.jpg" alt="Rainforest meeting plantation land in Southeast Asia" width="100%" />
+</p>
+
 > **Autonomous AI-Driven Predictive Geofencing and Ecological Early-Warning Platform for Human-Wildlife Coexistence and Global One Health**
+
+---
+
+## 🎬 Demo Video
+
+<p align="center">
+  <a href="https://youtu.be/F83EepRVbiQ">
+    <img src="https://img.youtube.com/vi/F83EepRVbiQ/hqdefault.jpg" alt="Watch the CoExist Shield AI demo on YouTube" width="720" />
+  </a>
+  <br />
+  <sub>3 minute walkthrough: the conflict, wrist alerts on Wear OS and Apple Watch, roadkill triage and the JAPAC operations console. Click to play.</sub>
+</p>
+
+## 🐾 The Problem
+
+Wild animals do not enter villages at random. They follow food: ripening crops, unguarded livestock, roadkill and abandoned fruit trees. CoExist Shield AI tracks these attractants and warns people before an animal arrives.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="promo-video/public/cinematics/03_elephant_raid.jpg" alt="Elephant herd raiding a crop field at night" />
+      <br /><b>Elephants</b> raid sugarcane, paddy and fruit crops at harvest time (Sri Lanka, India, Thailand)
+    </td>
+    <td width="50%" align="center">
+      <img src="promo-video/public/cinematics/02_tiger_stalk.jpg" alt="Tiger in dense jungle" />
+      <br /><b>Tigers</b> are drawn to livestock corrals and return to kill sites for 24 to 72 hours (Sumatra, India)
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="promo-video/public/cinematics/04_roadkill_rain.jpg" alt="Roadkill on a rainy highway attracting scavengers" />
+      <br /><b>Roadkill</b> on new highways pulls predators toward roads and settlements
+    </td>
+    <td width="50%" align="center">
+      <img src="promo-video/public/cinematics/05_japan_bear_persimmon.jpg" alt="Black bear eating persimmons in a Japanese village" />
+      <br /><b>Bears</b> raid abandoned persimmon trees in depopulated Japanese villages
+    </td>
+  </tr>
+</table>
+
+## ⌚ How It Warns People
+
+<table>
+  <tr>
+    <td width="55%">
+      <img src="promo-video/public/cinematics/08_wearos_watch_closeup.jpg" alt="Wear OS watch showing a Tier 3 tiger danger alert" />
+    </td>
+    <td width="45%">
+
+**3-tier geofence alerts, felt on the wrist**
+
+- 🟢 **Tier 1 Notice:** gentle double tap, stay alert
+- 🟠 **Tier 2 Warning:** escalating pulses, take a detour
+- 🔴 **Tier 3 Danger:** looping SOS vibration and siren, leave now
+
+Field workers get eyes-free haptic alerts on **Wear OS** and **Apple Watch**, so they know the risk level without looking at a screen.
+
+</td>
+  </tr>
+</table>
+
+### Screen recordings
+
+| Mobile Field App | Operations Admin Portal | End-to-End System |
+| :---: | :---: | :---: |
+| [▶️ ionic_mobile_demo.mp4](promo-video/public/screen-recordings/ionic_mobile_demo.mp4) | [▶️ admin_demo.mp4](promo-video/public/screen-recordings/admin_demo.mp4) | [▶️ system_demo.mp4](promo-video/public/screen-recordings/system_demo.mp4) |
+
+<!-- To show these videos inline: edit this README on github.com, drag each .mp4 into the editor,
+     and replace the links above with the https://github.com/user-attachments/assets/... URLs GitHub generates. -->
+
+## 🚀 Try It Live
+
+| Surface | URL | What to try |
+| :--- | :--- | :--- |
+| 🌐 **Field Web App** (Kotlin Multiplatform) | [corald.web.app](https://corald.web.app) | 3-tier geofence HUD, hazard map, Gemini photo triage |
+| 🛠️ **Operations Admin Portal** (Angular 22) | [corald-admin.web.app](https://corald-admin.web.app) | JAPAC map console, manual geofences, roadkill registry |
+| ⚡ **Cloud Run API** (Go 1.24, Singapore) | [/health](https://coexistshield-backend-4cerxfo4wq-as.a.run.app/health) | [Active geofences (GeoJSON)](https://coexistshield-backend-4cerxfo4wq-as.a.run.app/api/v1/geofences/active?latitude=39.7&longitude=141.1&radiusKm=5000) |
+| 🎬 **Demo Video** | [youtu.be/F83EepRVbiQ](https://youtu.be/F83EepRVbiQ) | 3 minute product walkthrough |
+
+## 📚 Contents
+
+1. [Executive Summary & Vision](#1-executive-summary--vision)
+2. [Core Philosophy & Strategic Value](#2-core-philosophy--strategic-value)
+3. [Target Scope & Fauna](#3-target-scope--fauna-phase-1)
+4. [System Architecture & Core Capabilities](#4-system-architecture--core-capabilities)
+5. [Business Model & Global ROI](#5-business-model--global-roi)
+6. [Development & Project Roadmap](#6-development--project-roadmap)
+7. [Technology Stack & Cloud Architecture](#7-technology-stack--cloud-architecture-ai-builders-cup-2026)
+8. [Repository Structure & Modules](#8-repository-structure--modules)
+9. [Local Setup & Build Guide](#9-local-setup--build-guide)
+10. [Authentication Setup](#10-authentication-setup-terraform--cicd)
+11. [Team](#11-team)
 
 ---
 
@@ -179,7 +296,7 @@ Built for rangers, municipal wildlife control teams, plantation managers, and op
    - **Emergency Area Push Broadcast:** Immediate dispatch of audio sirens and push alerts to mobile devices within specific geofences.
    - **GIS Data Export:** One-click downloads of GeoJSON (RFC 7946) and CSV formats for QGIS, ArcGIS, and government reports.
 
-### 4.3 Autonomous AI Agent: Multi-Source Causal Data Ingestion
+### 4.5 Autonomous AI Agent: Multi-Source Causal Data Ingestion
 The AI Agent continuously gathers and learns from five critical causal data streams available via public APIs and real-time web scraping:
 
 1. **Agricultural Harvest & Crop Shipment Data:**
@@ -198,7 +315,7 @@ The AI Agent continuously gathers and learns from five critical causal data stre
    - *Causality:* Spikes in regional road traffic during holiday seasons increase roadkill frequency and sever wildlife migratory corridors, triggering disorientation and panic-driven incursions into populated areas.
    - *Sources:* Google Maps Traffic API and national highway agency real-time congestion feeds.
 
-### 4.4 Meteorological & Environmental Dynamics
+### 4.6 Meteorological & Environmental Dynamics
 The AI Agent models four crucial weather variables directly linked to animal behavior:
 
 1. **Precipitation & Snowpack (Real-time & Forecast):**
@@ -210,7 +327,7 @@ The AI Agent models four crucial weather variables directly linked to animal beh
 4. **Wind Direction & Wind Speed:**
    - *Causality:* Wildlife rely heavily on olfaction. When prevailing winds blow from residential areas (dumpsters, unharvested orchards) toward forest ridges, predators follow scent plumes directly downhill.
 
-### 4.5 Automated Continuous Learning & Agent Evolution Pipeline
+### 4.7 Automated Continuous Learning & Agent Evolution Pipeline
 
 To ensure the platform continuously adapts to changing ecological corridors and seasonal animal behaviors, CoExist Shield AI implements an end-to-end autonomous retraining and agent-grounding loop:
 
@@ -283,7 +400,7 @@ All issues, pull requests, and git commit messages follow the **Conventional Com
 
 ---
 
-### 7. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
+## 7. Technology Stack & Cloud Architecture (AI Builders Cup 2026)
 
 CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatform, Angular 22, and ultra-lightweight Go serverless technologies:
 
@@ -491,7 +608,7 @@ npm start
 npm run build
 ```
 
-### 9.6 E2E & Integration Tests (Playwright & Docker Compose)
+### 9.7 E2E & Integration Tests (Playwright & Docker Compose)
 The platform features automated Playwright End-to-End suites as well as containerized live backend integration tests:
 
 ```bash
@@ -504,7 +621,7 @@ npm test
 docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
 ```
 
-### 9.7 Deploy to Google Cloud Run & Firebase Hosting
+### 9.8 Deploy to Google Cloud Run & Firebase Hosting
 ```bash
 # Deploy Go microservice targeting Singapore (AI Builders Cup Demo Day region)
 ./scripts/deploy_cloudrun.sh corald asia-southeast1
@@ -516,7 +633,7 @@ firebase deploy --only hosting:app
 firebase deploy --only hosting:admin
 ```
 
-### 9.8 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
+### 9.9 Live Public Cloud Run Endpoints (Singapore `asia-southeast1`)
 The microservices and continuous retraining pipeline are deployed and actively running on Google Cloud Run:
 
 - **Public Base URL:** `https://coexistshield-backend-4cerxfo4wq-as.a.run.app`
@@ -532,7 +649,7 @@ The microservices and continuous retraining pipeline are deployed and actively r
   - `GET /api/v1/ngo/patrol-logs/templates` — Ranger field log standardized templates (CSV, GeoJSON, GPX)
 - **Continuous Retraining Cloud Run Job:** `coexistshield-retrain-job` (automated model retraining with statistical validation gate checks)
 
-### 9.7 Live Review Web Applications (Firebase Hosting)
+### 9.10 Live Review Web Applications (Firebase Hosting)
 For interactive evaluation by hackathon judges and rangers, two dedicated web applications are deployed live:
 
 1. **Public / Field Web App (Kotlin Multiplatform & Compose):**
@@ -553,7 +670,7 @@ For interactive evaluation by hackathon judges and rangers, two dedicated web ap
      - Tactical Dispatch: Area Emergency Siren & Push Broadcast, plus one-click RFC 7946 GeoJSON and CSV data exports
 
 
-## Authentication setup (Terraform + CI/CD)
+## 10. Authentication Setup (Terraform + CI/CD)
 
 The web Firebase API key (`COEXIST_FIREBASE_API_KEY`) is provisioned by Terraform and injected at deploy time; do not commit it.
 
@@ -561,3 +678,15 @@ The web Firebase API key (`COEXIST_FIREBASE_API_KEY`) is provisioned by Terrafor
 2. `Infra (Terraform)` workflow: `plan` on PRs, `apply` on `main` (`infra/terraform`). It enables Email/Password sign-in and creates a referrer-restricted API key.
 3. `Deploy Web Dashboard` reads `terraform output firebase_web_api_key` and writes `config.js` into the build (`scripts/render_web_config.sh`).
 4. Cloud Run deploy sets `AUTH_PROJECT_ID`, which enables Firebase ID token verification; privileged routes (dispatch, retrain, exports, ...) then require an `OFFICIAL`/`ADMIN` `role` claim. Without it, the API stays open (local/demo).
+
+
+---
+
+## 11. Team
+
+| Member | Role | GitHub |
+| :--- | :--- | :--- |
+| **Katsumi Honda** | Team Leader, Product & Full-Stack | [@CoExistShieldAI](https://github.com/CoExistShieldAI) |
+| **Theenuka Bandara** | DevOps & Cloud Infrastructure | [@theenuka](https://github.com/theenuka) |
+
+<p align="center"><sub>Built for the Google Cloud AI Builder Cup 2026 · Build in JAPAC. Build for the world.</sub></p>
