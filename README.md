@@ -307,7 +307,7 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
                                              v
 +-----------------------------------------------------------------------------------------+
 |                      Google Cloud Run Microservice (Go 1.24)                            |
-|  - Ultra-lightweight Go HTTP backend (distroless container, sub-10ms cold start)        |
+|  - Ultra-lightweight Go HTTP backend (distroless, sub-10ms in-memory geofence eval)     |
 |  - Admin REST API (/api/v1/admin/*) with GCS upload, manual geofences, and exports      |
 |  - Live External Connectors: GBIF occurrence API, NASA FIRMS thermal, Open-Meteo       |
 |  - BigQuery GIS streaming insertAll pipeline and dynamic geofence engine                |
@@ -325,7 +325,7 @@ CoExist Shield AI is built on modern Google Cloud, Firebase, Kotlin Multiplatfor
 
 | Technology | Role & Strategic Justification |
 | :--- | :--- |
-| **Go 1.24 (Cloud Run)** | Sub-10ms cold start, minimal memory footprint (<15MB distroless image), executing ultra-fast inference and analytics REST APIs. |
+| **Go 1.24 (Cloud Run)** | Sub-10ms in-memory geofence evaluation (289 ns/op benchmark), minimal memory footprint (<15MB distroless image), executing ultra-fast inference and analytics REST APIs. |
 | **Kotlin Multiplatform (KMP)** | Single shared codebase (`:shared`) powering both Android Mobile/Tablet and Web (JS/Wasm) with 100% UI and model code sharing. |
 | **Compose Multiplatform (CMP)** | Declarative UI delivering unified Main HUD, Modern Tactical Meter, GIS Map, and Incident Reporter across Web & Android. |
 | **Wear OS 3.0+ (Compose for Wear OS)** | Companion smartwatch application (`:wearApp`) rendering the circular Modern Tactical Meter with tier-differentiated wrist haptics. |
@@ -521,7 +521,7 @@ The microservices and continuous retraining pipeline are deployed and actively r
 
 - **Public Base URL:** `https://coexistshield-backend-4cerxfo4wq-as.a.run.app`
 - **Region:** `asia-southeast1` (Singapore — Demo Day host region)
-- **Container Footprint:** Ultra-lightweight ~4.6 MB Distroless binary with sub-10ms cold start
+- **Container Footprint:** Ultra-lightweight ~4.6 MB Distroless binary (measured 166-181 ms TTFB from Japan)
 - **Live Verification Endpoints:**
   - `GET /health` — Service health & uptime probe (`{"status":"healthy","service":"coexistshield-backend-cloudrun"}`)
   - `GET /api/v1/geofences/active?latitude=39.7&longitude=141.1&radiusKm=5000` — Dynamic multi-species GeoJSON geofences
