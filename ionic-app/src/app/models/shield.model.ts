@@ -137,6 +137,93 @@ export interface IncidentReport {
   reporterId: string;
   reporterRole: UserRole;
   photoBase64?: string;
+  sha256?: string;
+  privacyMaskApplied?: boolean;
+  cachingDetected?: boolean;
+  leafCoverScore?: number;
+  evacRadiusMeters?: number;
+  opticalRangeMeters?: number;
+  taxonomy?: string;
+  geoJsonFeature?: MunicipalDispatchGeoJsonFeature;
+}
+
+export type EdgeCameraMode = 'SIGHTING' | 'KILL-SITE' | 'ATTRACTANT';
+
+export type EdgeObjectClass =
+  | 'BEAR'
+  | 'TIGER'
+  | 'ELEPHANT'
+  | 'WILD_BOAR'
+  | 'DEER'
+  | 'CARCASS'
+  | 'ATTRACTANT'
+  | 'PERSON_FACE'
+  | 'VEHICLE_PLATE';
+
+export interface EdgeDetectionBox {
+  classId: number;
+  objectClass: EdgeObjectClass;
+  taxonomy: string;
+  commonName: string;
+  confidence: number;
+  /** Normalized [x, y, width, height] in 0.0 .. 1.0 */
+  bbox: [number, number, number, number];
+}
+
+export interface OpticalRangeEstimate {
+  rangeMeters: number;
+  uncertaintyMeters: number;
+  tiltDegrees: number;
+  focalLengthMm: number;
+}
+
+export interface KillSiteCachingEvaluation {
+  objectClass: EdgeObjectClass;
+  leafCoverScore: number;
+  cachingDetected: boolean;
+  threatTier: AlertTier;
+  evacRadiusMeters: number;
+  rangerDispatchRequired: boolean;
+  priority: 'IMMEDIATE' | 'HIGH' | 'STANDARD';
+  audioMode: 'STEALTH_TACTICAL' | 'NORMAL';
+}
+
+export interface MunicipalDispatchGeoJsonFeature {
+  type: 'Feature';
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number]; // [longitude, latitude]
+  };
+  properties: {
+    incident_id: string;
+    tier: string;
+    taxonomy: string;
+    confidence: number;
+    caching_detected: boolean;
+    leaf_cover_score: number;
+    evac_radius_m: number;
+    ranger_dispatch_required: boolean;
+    offline_capture_time: string;
+    sha256: string;
+  };
+}
+
+export interface EdgeVisionAnalysisResult {
+  modelName: string;
+  delegate: string;
+  inferenceLatencyMs: number;
+  primaryDetection: EdgeDetectionBox;
+  detections: EdgeDetectionBox[];
+  opticalRange: OpticalRangeEstimate;
+  cachingEvaluation: KillSiteCachingEvaluation;
+  privacyMaskApplied: boolean;
+  blurredRegionsCount: number;
+  sha256: string;
+  evidenceFilename: string;
+  altitudeMeters: number;
+  utcTimestamp: string;
+  anonymizedImageBase64?: string;
+  geoJsonPayload: MunicipalDispatchGeoJsonFeature;
 }
 
 export interface PriorityKakiItem {
