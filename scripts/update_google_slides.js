@@ -304,7 +304,7 @@ function populatePitchDeck() {
       "Layer 2: Serverless Microservices & Edge Intelligence\n" +
       "• Google Cloud Run: Go 1.24 ultra-lightweight distroless container with CPU boost & async hydration (sub-10ms in-memory geofence evaluation)\n" +
       "• Google Gemini 3.8 Flash: Sub-1s multimodal photo triage with zero-syntax Structured JSON outputs\n" +
-      "• Dynamic Geofencing Engine: Geospatial danger polygon calculation with Go spatial engine & Uber H3 hexagonal indexing",
+      "• Dynamic Geofencing Engine: Geospatial danger polygon calculation with Go spatial engine & H3-style hexagonal grid",
 
       "Layer 3: Cloud Storage & Spatio-Temporal Big Data\n" +
       "• Cloud Firestore: Low-latency NoSQL database with 3-Role RBAC security rules and offline queue sync\n" +
