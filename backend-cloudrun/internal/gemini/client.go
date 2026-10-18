@@ -435,30 +435,51 @@ func mockExtractEntities(text string, sourceChannel string, regionHint string, s
 	lower := strings.ToLower(text)
 	nowStr := time.Now().UTC().Format(time.RFC3339)
 
-	// Check Elephant / Thailand
-	if strings.Contains(text, "ช้าง") || strings.Contains(lower, "elephant") || strings.Contains(lower, "chachoengsao") || regionHint == "THAILAND" {
+	// Check Elephant / Thailand / Sri Lanka / India
+	if strings.Contains(text, "ช้าง") || strings.Contains(text, "අලියා") || strings.Contains(lower, "elephant") || strings.Contains(lower, "chachoengsao") || strings.Contains(lower, "sri lanka") || strings.Contains(lower, "polonnaruwa") || strings.Contains(lower, "minneriya") || strings.Contains(lower, "udawalawe") || regionHint == "THAILAND" || regionHint == "SRI_LANKA" || regionHint == "INDIA" {
 		count := 1
 		if strings.Contains(text, "3") || strings.Contains(lower, "three") {
 			count = 3
+		} else if strings.Contains(text, "7") || strings.Contains(lower, "seven") {
+			count = 7
 		}
+
+		locDesc := "Khao Ang Rue Nai forest border, Nong Khla sugarcane plot"
+		estLat := 13.5214
+		estLng := 101.4528
+		tags := []string{"elephant_herd", "sugarcane_raid", "khao_ang_rue_nai"}
+		sciName := "Elephas maximus"
+		commName := "Asian Elephant"
+		attractant := "Ripe sugarcane & pineapple plantation border"
+
+		if strings.Contains(lower, "sri lanka") || strings.Contains(lower, "polonnaruwa") || strings.Contains(lower, "minneriya") || strings.Contains(lower, "udawalawe") || strings.Contains(text, "අලියා") || regionHint == "SRI_LANKA" {
+			locDesc = "Minneriya-Polonnaruwa paddy corridor & railway crossing"
+			estLat = 8.0450
+			estLng = 80.9320
+			tags = []string{"sri_lankan_elephant", "paddy_raid", "railway_crossing", "polonnaruwa"}
+			sciName = "Elephas maximus maximus"
+			commName = "Sri Lankan Elephant"
+			attractant = "Maha harvest paddy fields & banana clusters along railway interface"
+		}
+
 		entity := &model.ExtractedIncidentEntity{
 			EntityId:            fmt.Sprintf("nlp-ent-%d", time.Now().UnixNano()%1000000),
 			SourceChannel:       sourceChannel,
 			RawText:             text,
 			Species:             "ELEPHANT",
-			ScientificName:      "Elephas maximus",
-			CommonName:          "Asian Elephant",
+			ScientificName:      sciName,
+			CommonName:          commName,
 			IncidentType:        "CROP_RAID",
-			LocationDescription: "Khao Ang Rue Nai forest border, Nong Khla sugarcane plot",
-			EstimatedLatitude:   13.5214,
-			EstimatedLongitude:  101.4528,
+			LocationDescription: locDesc,
+			EstimatedLatitude:   estLat,
+			EstimatedLongitude:  estLng,
 			IndividualCount:     count,
-			AttractantContext:   "Ripe sugarcane & pineapple plantation border",
+			AttractantContext:   attractant,
 			UrgencyLevel:        "HIGH",
-			Confidence:          0.94,
+			Confidence:          0.95,
 			ExtractedTimestamp:  nowStr,
-			CorroborationTags:   []string{"elephant_herd", "sugarcane_raid", "khao_ang_rue_nai"},
-			Notes:               "Gemini 3.8 Flash extracted herd movement toward harvestable crops.",
+			CorroborationTags:   tags,
+			Notes:               "Gemini 3.8 Flash extracted herd movement toward harvestable agricultural corridor.",
 			InferenceProvider:   source,
 		}
 		return entity

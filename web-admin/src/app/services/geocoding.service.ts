@@ -179,6 +179,33 @@ export class GeocodingService {
       return 'Kaziranga Buffer Zone, Assam';
     }
 
+    // 9. India - Valparai / Anamalai (Elephant & Leopard in Tea Plantations)
+    if (lat >= 10.2 && lat <= 10.5 && lng >= 76.8 && lng <= 77.15) {
+      return 'Valparai Tea Plateau Corridor, Tamil Nadu';
+    }
+
+    // 10. Sri Lanka - Major Human-Elephant & Sloth Bear Conflict Corridors
+    if (lat >= 5.8 && lat <= 9.9 && lng >= 79.5 && lng <= 82.0) {
+      if (lat >= 7.8 && lat <= 8.3 && lng >= 80.7 && lng <= 81.3) {
+        return 'Minneriya-Polonnaruwa Paddy Corridor, Sri Lanka';
+      }
+      if (lat >= 6.3 && lat <= 6.6 && lng >= 80.7 && lng <= 81.1) {
+        return 'Udawalawe-Sevenagala Sugar Basin, Sri Lanka';
+      }
+      if (lat >= 6.3 && lat <= 6.85 && lng >= 81.1 && lng <= 81.65) {
+        return 'Yala-Pelwatte Wildlife Buffer, Sri Lanka';
+      }
+      if (lat >= 8.2 && lat <= 8.7 && lng >= 80.0 && lng <= 80.6) {
+        return 'Wilpattu-Anuradhapura Forest Fringe, Sri Lanka';
+      }
+      return 'Sri Lanka Dry-Zone Wildlife Corridor';
+    }
+
+    // 11. Indonesia - Bangka Belitung Islands (Saltwater Crocodile Mining Estuary Hotspot)
+    if (lat >= -3.3 && lat <= -1.4 && lng >= 105.0 && lng <= 107.2) {
+      return 'Bangka-Belitung Estuary Crocodile Zone, Indonesia';
+    }
+
     return `Sector (Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)})`;
   }
 }

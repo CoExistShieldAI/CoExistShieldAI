@@ -183,8 +183,13 @@ export interface SelectedEntity {
             <option value="Asian Elephant">Asian Elephant</option>
             <option value="Sumatran Tiger">Sumatran Tiger</option>
             <option value="Bengal Tiger">Bengal Tiger</option>
+            <option value="Malayan Tiger">Malayan Tiger</option>
             <option value="Brown Bear">Brown Bear</option>
             <option value="Asian Black Bear">Asian Black Bear</option>
+            <option value="Sloth Bear">Sloth Bear</option>
+            <option value="Sun Bear">Sun Bear</option>
+            <option value="Indian Leopard">Indian Leopard</option>
+            <option value="Saltwater Crocodile">Saltwater Crocodile</option>
             <option value="Wild Boar">Wild Boar</option>
           </select>
 
@@ -532,11 +537,16 @@ export interface SelectedEntity {
                 <label class="block text-slate-300 font-medium mb-1">Target Species</label>
                 <select [(ngModel)]="newFence.target_species" name="target_species"
                   class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-purple-500">
-                  <option value="Asian Elephant">Asian Elephant (Thailand/India)</option>
-                  <option value="Sumatran Tiger">Sumatran Tiger (Indonesia)</option>
-                  <option value="Bengal Tiger">Bengal Tiger (India/Nepal)</option>
-                  <option value="Brown Bear">Brown Bear (Japan - Hokkaido)</option>
-                  <option value="Asian Black Bear">Asian Black Bear (Japan - Honshu)</option>
+                  <option value="Asian Elephant">Asian Elephant (Sri Lanka / India / Thailand / Sumatra)</option>
+                  <option value="Sumatran Tiger">Sumatran Tiger (Indonesia - Sumatra)</option>
+                  <option value="Bengal Tiger">Bengal Tiger (India / Bangladesh / Nepal)</option>
+                  <option value="Malayan Tiger">Malayan Tiger (Peninsular Malaysia)</option>
+                  <option value="Asian Black Bear">Asian Black Bear (Japan / India / Himalayas)</option>
+                  <option value="Brown Bear">Brown Bear (Japan - Hokkaido / Himalayas)</option>
+                  <option value="Sloth Bear">Sloth Bear (India / Sri Lanka / Nepal)</option>
+                  <option value="Sun Bear">Sun Bear (Indonesia / Malaysia / Thailand)</option>
+                  <option value="Indian Leopard">Indian Leopard (India / Sri Lanka / Nepal)</option>
+                  <option value="Saltwater Crocodile">Saltwater Crocodile (Indonesia / Australia / Malaysia)</option>
                   <option value="Apex Carnivore">Apex Carnivore (Multi-predator)</option>
                   <option value="Other / Multi">Other / Multi-species</option>
                 </select>

@@ -137,7 +137,7 @@ import { AdminApiService } from '../../services/admin-api.service';
           <div class="space-y-4">
             <div>
               <div class="flex justify-between text-xs text-slate-300 mb-1">
-                <span class="font-medium">Asian Elephant (Thailand/India)</span>
+                <span class="font-medium">Asian Elephant (Sri Lanka / India / Thailand)</span>
                 <span class="font-mono text-emerald-400">45%</span>
               </div>
               <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
@@ -147,7 +147,7 @@ import { AdminApiService } from '../../services/admin-api.service';
 
             <div>
               <div class="flex justify-between text-xs text-slate-300 mb-1">
-                <span class="font-medium">Sumatran & Bengal Tiger (ID/IN)</span>
+                <span class="font-medium">Bengal & Sumatran Tiger (IN / ID / MY)</span>
                 <span class="font-mono text-amber-400">35%</span>
               </div>
               <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
@@ -157,7 +157,7 @@ import { AdminApiService } from '../../services/admin-api.service';
 
             <div>
               <div class="flex justify-between text-xs text-slate-300 mb-1">
-                <span class="font-medium">Brown & Black Bear (Japan)</span>
+                <span class="font-medium">Bears & Apex Wildlife (JP / LK / IN)</span>
                 <span class="font-mono text-blue-400">20%</span>
               </div>
               <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">

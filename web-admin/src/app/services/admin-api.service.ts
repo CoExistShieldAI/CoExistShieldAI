@@ -56,11 +56,14 @@ export class AdminApiService {
           total_roadkills: 10,
           total_users: 1420,
           species_distribution: {
-            'Asian Elephant': 3,
+            'Asian Elephant': 5,
             'Asian Black Bear': 2,
             'Brown Bear': 2,
             'Sumatran Tiger': 2,
-            'Bengal Tiger': 1
+            'Bengal Tiger': 1,
+            'Sloth Bear': 1,
+            'Indian Leopard': 1,
+            'Saltwater Crocodile': 1
           }
         };
         this.stats.set(fallback);
@@ -153,6 +156,19 @@ export class AdminApiService {
             target_species: 'Brown Bear',
             created_at: new Date(Date.now() - 64800000).toISOString(),
             reason: 'Coastal salmon run and sika deer carcass presence drawing hyperphagic adult brown bears'
+          },
+          {
+            id: 'geo-ai-srilanka-06',
+            name: 'Minneriya-Polonnaruwa Agricultural & Rail Corridor (HEC Hotspot)',
+            source: 'ai',
+            is_persistent: false,
+            geometry_type: 'circle',
+            circle_center: { lat: 8.045, lng: 80.932 },
+            circle_radius_meters: 4200,
+            threat_level: 'TIER_3_CRITICAL',
+            target_species: 'Asian Elephant',
+            created_at: new Date(Date.now() - 18000000).toISOString(),
+            reason: 'Maha paddy harvest maturity coupling with elephant herd migration across Batticaloa railway line; extreme night clash risk'
           },
           {
             id: 'geo-manual-debug-01',
@@ -438,6 +454,70 @@ export class AdminApiService {
             description: 'Tigress recorded using agricultural irrigation canal as travel corridor between forest patches.',
             photo_urls: [],
             reported_at: new Date(Date.now() - 1728000000).toISOString()
+          },
+          {
+            id: 'wildlife-011',
+            species: 'Asian Elephant',
+            location: {
+              lat: 8.035,
+              lng: 80.915,
+              road_name: 'Habarana-Polonnaruwa Highway A11',
+              region: 'Minneriya / Polonnaruwa, Sri Lanka'
+            },
+            threat_level: 'TIER_3_CRITICAL',
+            status: 'VERIFIED',
+            reporter: 'Sri Lanka DWC Elephant Response Unit',
+            description: 'Matriarch herd of 11 Sri Lankan elephants crossing railway line and entering ripening paddy fields.',
+            photo_urls: ['https://storage.googleapis.com/corald-coexistshield-media/uploads/mock_srilanka_elephant.jpg'],
+            reported_at: new Date(Date.now() - 7200000).toISOString()
+          },
+          {
+            id: 'wildlife-012',
+            species: 'Sloth Bear',
+            location: {
+              lat: 8.355,
+              lng: 80.205,
+              road_name: 'Wilpattu Buffer Access Track',
+              region: 'Anuradhapura / Wilpattu, Sri Lanka'
+            },
+            threat_level: 'TIER_2_ALERT',
+            status: 'VERIFIED',
+            reporter: 'Community Forest Patrol',
+            description: 'Adult sloth bear startled near termite mound along firewood collection path; defensive charge repelled without injury.',
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 14400000).toISOString()
+          },
+          {
+            id: 'wildlife-013',
+            species: 'Saltwater Crocodile',
+            location: {
+              lat: -2.125,
+              lng: 106.115,
+              road_name: 'Batu Belubang Estuary Creek',
+              region: 'Bangka Belitung, Indonesia'
+            },
+            threat_level: 'TIER_3_CRITICAL',
+            status: 'VERIFIED',
+            reporter: 'Marine & Fisheries Coastal Guard',
+            description: '4.5m estuarine crocodile sighted stalking near community artisanal fishing pier and abandoned tin-mine pool.',
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 25200000).toISOString()
+          },
+          {
+            id: 'wildlife-014',
+            species: 'Indian Leopard',
+            location: {
+              lat: 10.325,
+              lng: 76.955,
+              road_name: 'Waterfall Estate Sector 3',
+              region: 'Valparai Plateau, Tamil Nadu, India'
+            },
+            threat_level: 'TIER_2_ALERT',
+            status: 'VERIFIED',
+            reporter: 'Nature Conservation Foundation Field Team',
+            description: 'Adult leopard daytime resting in tea bushes within 50m of tea estate worker labour residential quarters.',
+            photo_urls: [],
+            reported_at: new Date(Date.now() - 39600000).toISOString()
           }
         ];
         this.wildlife.set(fallback);

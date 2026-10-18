@@ -326,3 +326,28 @@ func TestGeminiHttpErrorHandling(t *testing.T) {
 		t.Errorf("expected Source == 'mock_fallback', got '%s'", res.Source)
 	}
 }
+
+func BenchmarkGeminiResponseParsing(b *testing.B) {
+	mockJSON := `{
+		"candidates": [{
+			"content": {
+				"parts": [{
+					"text": "{\"detected_species\":\"Ursus thibetanus\",\"confidence\":0.94,\"category\":\"PHYSICAL_TRACE\",\"attributes\":{\"trace_type\":\"CLAW_MARK_BARK_STRIPPING\",\"estimated_freshness\":\"FRESH_UNDER_24H\",\"risk_level\":\"HIGH\"},\"recommended_action\":\"Immediate Tier 2 Warning dispatch\"}"
+				}]
+			}
+		}]
+	}`
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var gemResp geminiResponse
+		if err := json.Unmarshal([]byte(mockJSON), &gemResp); err != nil {
+			b.Fatalf("unmarshal error: %v", err)
+		}
+		var forensic model.ForensicTriageResponse
+		if err := json.Unmarshal([]byte(gemResp.Candidates[0].Content.Parts[0].Text), &forensic); err != nil {
+			b.Fatalf("forensic unmarshal error: %v", err)
+		}
+	}
+}

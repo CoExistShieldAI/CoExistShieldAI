@@ -14,6 +14,7 @@ import (
 const (
 	AromaJackfruit = 1.00 // Intensely aromatic volatile esters (detectable by elephants >3km downwind)
 	AromaSugarcane = 0.85 // High-sucrose volatile spikes approaching harvest season
+	AromaPaddy     = 0.80 // Ripening rice grain volatiles (major trigger in Sri Lanka & India)
 	AromaBanana    = 0.75 // Dense calorie attractant, continuous ripening clusters
 	AromaMango     = 0.70 // Seasonal aromatic terpenes and sugars
 	AromaDefault   = 0.50
@@ -180,6 +181,54 @@ func (e *Engine) seedInitialPlots() {
 			ForestBearingDeg:      265.0,
 			AromaVolatilityIndex:  AromaMango,
 			MaturityScore:         0.05,
+			UpdatedAt:             now,
+		},
+		{
+			ID:                    "lk_plot_mn_01",
+			Name:                  "Minneriya-Hingurakgoda Paddy Field #1",
+			Province:              "Polonnaruwa (North Central)",
+			ParkBoundary:          "Minneriya National Park",
+			CropType:              "PADDY_RICE",
+			GrowthStage:           "READY_FOR_HARVEST",
+			Latitude:              8.0450,
+			Longitude:             80.9320,
+			AreaHectares:          35.0,
+			DistanceToForestEdgeM: 420.0,
+			ForestBearingDeg:      280.0,
+			AromaVolatilityIndex:  AromaPaddy,
+			MaturityScore:         1.00,
+			UpdatedAt:             now,
+		},
+		{
+			ID:                    "lk_plot_ud_02",
+			Name:                  "Sevenagala Commercial Sugar Estate #3",
+			Province:              "Monaragala / Uva",
+			ParkBoundary:          "Udawalawe National Park Buffer",
+			CropType:              "SUGARCANE",
+			GrowthStage:           "READY_FOR_HARVEST",
+			Latitude:              6.4180,
+			Longitude:             80.9420,
+			AreaHectares:          48.0,
+			DistanceToForestEdgeM: 350.0,
+			ForestBearingDeg:      295.0,
+			AromaVolatilityIndex:  AromaSugarcane,
+			MaturityScore:         1.00,
+			UpdatedAt:             now,
+		},
+		{
+			ID:                    "lk_plot_bt_03",
+			Name:                  "Pelwatte Sugar Agro-Industrial Sector",
+			Province:              "Buttala / Monaragala",
+			ParkBoundary:          "Yala-Lunugamvehera Wildlife Corridor",
+			CropType:              "SUGARCANE",
+			GrowthStage:           "RIPENING",
+			Latitude:              6.6350,
+			Longitude:             81.2400,
+			AreaHectares:          60.0,
+			DistanceToForestEdgeM: 520.0,
+			ForestBearingDeg:      210.0,
+			AromaVolatilityIndex:  AromaSugarcane,
+			MaturityScore:         0.85,
 			UpdatedAt:             now,
 		},
 	}

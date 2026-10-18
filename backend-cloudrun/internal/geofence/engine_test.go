@@ -358,3 +358,31 @@ func TestGraduatedConcentricBufferZones(t *testing.T) {
 	}
 }
 
+func BenchmarkEvaluateLocationTier(b *testing.B) {
+	engine := NewEngine()
+	core := model.ActiveGeofenceZone{
+		Id:                "bench_zone",
+		CausalExplanation: "Benchmark Zone",
+		Tier:              "TIER_3_DANGER",
+		TargetSpecies:     []string{"Asian Black Bear"},
+		RadiusMeters:      1000.0,
+		Centroid:          model.ActiveGeofencePoint{Latitude: 39.7020, Longitude: 141.1520},
+	}
+	engine.registerZoneWithGraduatedBuffers(core)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		engine.EvaluateLocationTier(39.7050, 141.1550)
+	}
+}
+
+func BenchmarkCalculateSolarPhase(b *testing.B) {
+	now := time.Now()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		CalculateSolarPhase(39.7020, 141.1520, now)
+	}
+}
+

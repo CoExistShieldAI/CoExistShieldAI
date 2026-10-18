@@ -218,9 +218,30 @@ func (e *Engine) seedDefaultGeofenceZones() {
 		GeneratedAt:          nowStr,
 	}
 
+	// 4. Sri Lanka Minneriya-Polonnaruwa Elephant Crop-Raid & Railway Corridor (Tier 3 Danger)
+	poly4 := generatePlumePolygon(8.0320, 80.9150, 2500.0, 1.6, 0.6, 4.88, false)
+	coords4 := extractCoordinatesFromPolygon(poly4)
+
+	zone4 := model.ActiveGeofenceZone{
+		Id:                   "geo_lk_elephant_04",
+		Tier:                 "TIER_3_DANGER",
+		TargetSpecies:        []string{"ELEPHANT"},
+		Coordinates:          coords4,
+		Centroid:             model.ActiveGeofencePoint{Latitude: 8.0320, Longitude: 80.9150},
+		RadiusMeters:         2500.0,
+		CausalExplanation:    "TIER 3 DANGER: Sri Lankan elephant breeding herd crossing railway line toward ripening paddy fields; extreme nocturnal clash & collision risk.",
+		PrimaryAttractantRef: "lk_plot_mn_01",
+		ActiveRiskScore:      0.95,
+		PolygonGeoJson:       poly4,
+		ValidFrom:            nowStr,
+		ValidUntil:           now.Add(48 * time.Hour).Format(time.RFC3339),
+		GeneratedAt:          nowStr,
+	}
+
 	e.registerZoneWithGraduatedBuffers(zone1)
 	e.registerZoneWithGraduatedBuffers(zone2)
 	e.registerZoneWithGraduatedBuffers(zone3)
+	e.registerZoneWithGraduatedBuffers(zone4)
 }
 
 // registerZoneWithGraduatedBuffers stores the core zone along with concentric lower-tier buffer zones

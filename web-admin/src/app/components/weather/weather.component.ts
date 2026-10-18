@@ -164,6 +164,12 @@ interface RegionPreset {
                 <option value="Wayanad">Kerala / Wayanad Sultan Bathery</option>
                 <option value="Dooars">West Bengal / Dooars Gorumara</option>
               </optgroup>
+              <optgroup label="Sri Lanka (Sri Lankan Elephant & Sloth Bear & Leopard)">
+                <option value="Minneriya">Minneriya / Polonnaruwa (Paddy & Rail)</option>
+                <option value="Udawalawe">Udawalawe / Sevenagala (Sugarcane & Banana)</option>
+                <option value="Wilpattu">Wilpattu / Anuradhapura (Dry Forest Fringe)</option>
+                <option value="Yala">Yala / Buttala Pelwatte (Sugarcane Basin)</option>
+              </optgroup>
               <optgroup label="Japan (Asian Black Bear & Brown Bear)">
                 <option value="Nagano">Nagano / Chikuma River Basin</option>
                 <option value="Karuizawa">Nagano / Karuizawa Asama</option>
@@ -1250,6 +1256,68 @@ export class WeatherComponent implements OnInit {
       condition: 'CLEAR',
       notes: 'Steep coastal bluff residences with fruit trees and garbage foraging near Sapporo border',
       targetWildlife: 'Brown Bear'
+    },
+
+    // --- SRI LANKA (Global HEC Epicenter & High Conflict Zone) ---
+    {
+      name: 'Minneriya / Polonnaruwa Buffer',
+      region: 'Sri Lanka (North Central / Minneriya)',
+      lat: 8.045,
+      lng: 80.932,
+      temp: 29.5,
+      humidity: 83,
+      windSpeed: 12.5,
+      windDir: 240,
+      precip: 2.0,
+      moon: 0.15,
+      condition: 'RAIN',
+      notes: 'Maha harvest paddy fields; breeding elephant herd crossing railway line with acute nocturnal collision risk',
+      targetWildlife: 'Sri Lankan Elephant'
+    },
+    {
+      name: 'Udawalawe / Sevenagala Sugar Basin',
+      region: 'Sri Lanka (Uva / Sevenagala)',
+      lat: 6.418,
+      lng: 80.942,
+      temp: 31.0,
+      humidity: 78,
+      windSpeed: 14.0,
+      windDir: 220,
+      precip: 0,
+      moon: 0.15,
+      condition: 'CLEAR',
+      notes: 'Large commercial sugarcane estate; nocturnal herd raids causing severe infrastructure & crop ruin',
+      targetWildlife: 'Sri Lankan Elephant'
+    },
+    {
+      name: 'Wilpattu / Anuradhapura Fringe',
+      region: 'Sri Lanka (North Central / Wilpattu)',
+      lat: 8.350,
+      lng: 80.200,
+      temp: 28.8,
+      humidity: 80,
+      windSpeed: 9.0,
+      windDir: 260,
+      precip: 0,
+      moon: 0.15,
+      condition: 'CLEAR',
+      notes: 'Dry zone scrub forest interface; surprise encounters with aggressive Sri Lankan sloth bears and elephants',
+      targetWildlife: 'Sri Lankan Elephant & Sloth Bear'
+    },
+    {
+      name: 'Yala / Buttala Pelwatte Sector',
+      region: 'Sri Lanka (Monaragala / Buttala)',
+      lat: 6.635,
+      lng: 81.240,
+      temp: 30.2,
+      humidity: 76,
+      windSpeed: 11.5,
+      windDir: 210,
+      precip: 0.5,
+      moon: 0.15,
+      condition: 'OVERCAST',
+      notes: 'Protected wildlife corridor meeting Pelwatte sugarcane agro-complex; elephant herd & leopard activity',
+      targetWildlife: 'Sri Lankan Elephant & Leopard'
     }
   ];
 
