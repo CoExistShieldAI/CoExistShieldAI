@@ -112,7 +112,7 @@ function populatePitchDeck() {
     var c3 = addCard(s2, 475, 95, 215, 275);
     c3.getText().setText(
       "3. Production Cloud & JAPAC GIS\n\n" +
-      "• Optimized Cloud Run Microservice:\nGo 1.24 distroless backend with CPU boost & async hydration (<10ms cold start) in Singapore.\n\n" +
+      "• Optimized Cloud Run Microservice:\nGo 1.24 distroless backend with CPU boost & async hydration (<10ms in-memory geofence evaluation) in Singapore.\n\n" +
       "• Angular 22 Admin Portal:\nFull JAPAC Google Maps console with manual geofencing, GCS photo uploads, and emergency broadcasts.\n\n" +
       "• BigQuery GIS ML Lake:\nContinuous event streaming and automated model retraining pipeline with statistical gate checks."
     );
@@ -175,7 +175,7 @@ function populatePitchDeck() {
     var c3 = addCard(s4, 475, 95, 215, 275);
     c3.getText().setText(
       "Core USP\n\n" +
-      "• Causal-Driven (Not Collar-Bound):\nForecasts 100% of wildlife movement without needing invasive, expensive GPS collars on every animal.\n\n" +
+      "• Causal-Driven (Not Collar-Bound):\nForecasts high-risk wildlife movement from causal signals, without needing invasive, expensive GPS collars on every animal.\n\n" +
       "• Dual Smartwatch Support:\nTactile wrist haptics on both Wear OS (Compose) & Apple Watch (SwiftUI Taptic) for zero-visibility awareness.\n\n" +
       "• Live Full-Stack Deployment:\nSub-10ms Go serverless backend + production Angular 22 admin + Gemini 3.8 Flash multimodal triage."
     );
@@ -302,9 +302,9 @@ function populatePitchDeck() {
       "• Web Admin Operations: Angular 22 high-density desktop console with Google Maps JS API",
 
       "Layer 2: Serverless Microservices & Edge Intelligence\n" +
-      "• Google Cloud Run: Go 1.24 ultra-lightweight distroless container with CPU boost & async hydration (<10ms cold start)\n" +
+      "• Google Cloud Run: Go 1.24 ultra-lightweight distroless container with CPU boost & async hydration (sub-10ms in-memory geofence evaluation)\n" +
       "• Google Gemini 3.8 Flash: Sub-1s multimodal photo triage with zero-syntax Structured JSON outputs\n" +
-      "• Dynamic Geofencing Engine: Geospatial danger polygon calculation & turf.js spatial intersections",
+      "• Dynamic Geofencing Engine: Geospatial danger polygon calculation with Go spatial engine & Uber H3 hexagonal indexing",
 
       "Layer 3: Cloud Storage & Spatio-Temporal Big Data\n" +
       "• Cloud Firestore: Low-latency NoSQL database with 3-Role RBAC security rules and offline queue sync\n" +
@@ -333,7 +333,7 @@ function populatePitchDeck() {
 
     var stacks = [
       ["AI & Machine Learning", "• Google Gemini 3.8 Flash: Sub-1s multimodal photo triage (species, decay stage, fruit ripening) with Structured JSON outputs.\n• Zero-Syntax Schema Contracts: Guaranteed JSON conformance via strict Gemini Structured Outputs schemas.\n• BigQuery GIS & ML: Spatial-temporal joins for autonomous retraining pipelines on Cloud Run Jobs."],
-      ["Cloud Infrastructure", "• Google Cloud Run (Go 1.24): Distroless container with CPU boost (<10ms cold start), deployed in Singapore (asia-southeast1).\n• Cloud Firestore & GCS: Offline-capable NoSQL repository with 3-Role RBAC rules and media asset bucket.\n• Terraform IaC: Declarative infrastructure provisioning for Firebase & GCP environments."],
+      ["Cloud Infrastructure", "• Google Cloud Run (Go 1.24): Distroless container with CPU boost (<10ms in-memory geofence evaluation), deployed in Singapore (asia-southeast1).\n• Cloud Firestore & GCS: Offline-capable NoSQL repository with 3-Role RBAC rules and media asset bucket.\n• Terraform IaC: Declarative infrastructure provisioning for Firebase & GCP environments."],
       ["Multiplatform & Wearables", "• Kotlin Multiplatform (KMP 2.1): Unified business logic and domain models shared across Android & Web.\n• Wear OS & Apple Watch: Compose for Wear OS & native SwiftUI watchOS 9.0+ app with Taptic Engine haptics.\n• Angular 22 & Google Maps JS: Enterprise operations portal with 2-column Map-Picker and category wizards."],
       ["Quality Assurance & CI/CD", "• GitHub Actions CI/CD: Automated multi-target testing (Go race detection, KMP JVM, Android APK build).\n• Swift XCTest Suite: Automated testing for Apple Watch telemetry models and WCSession connectivity in watchApp.\n• Playwright E2E Suite: Automated multi-viewport (Desktop & Pixel 7 Mobile) Canvas rendering tests."]
     ];
